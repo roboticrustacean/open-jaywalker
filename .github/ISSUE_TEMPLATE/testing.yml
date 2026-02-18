@@ -1,0 +1,24 @@
+name: Testing Task
+description: Validation or experimental evaluation task
+title: "[Testing] "
+labels: ["testing"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Testing Objective
+      description: What are you validating?
+    validations:
+      required: true
+
+  - type: textarea
+    id: method
+    attributes:
+      label: Method
+      description: How will it be tested?
+
+  - type: textarea
+    id: expected_result
+    attributes:
+      label: Expected Result
+      description: What outcome defines success?

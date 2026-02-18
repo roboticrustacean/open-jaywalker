@@ -1,0 +1,24 @@
+name: Design Task
+description: Architecture or system design decision
+title: "[Design] "
+labels: ["design"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Design Problem
+      description: What needs to be designed?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the design approach.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Other possible approaches.

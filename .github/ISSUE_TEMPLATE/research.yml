@@ -1,0 +1,24 @@
+name: Research Task
+description: Literature review or conceptual investigation
+title: "[Research] "
+labels: ["research"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Research Objective
+      description: What question are you investigating?
+    validations:
+      required: true
+
+  - type: textarea
+    id: findings
+    attributes:
+      label: Key Findings
+      description: Summarize important insights.
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact on Project
+      description: How does this influence design or implementation?
