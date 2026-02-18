@@ -39,17 +39,6 @@ body:
     validations:
       required: true
 
-  - type: textarea
-    id: findings
-    attributes:
-      label: Key Findings
-      description: Summarize important insights discovered during research.
-      placeholder: |
-        - Structural principle 1
-        - Constraint 2
-        - Ambiguity identified
-    validations:
-      required: true
 
   - type: textarea
     id: deliverables
@@ -64,14 +53,6 @@ body:
     validations:
       required: true
 
-  - type: textarea
-    id: impact
-    attributes:
-      label: Impact on Project
-      description: How does this influence design, architecture, or implementation?
-      placeholder: Describe implications for pipeline, data structures, or integration.
-    validations:
-      required: true
 
   - type: textarea
     id: acceptance
