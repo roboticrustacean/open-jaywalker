@@ -1,13 +1,41 @@
 name: Research Task
-description: Literature review or conceptual investigation
-title: "[Research] "
-labels: ["research"]
+description: Literature review, standards analysis, or conceptual investigation
+title: "[Research] <short description>"
+labels:
+  - research
+
 body:
   - type: textarea
     id: objective
     attributes:
       label: Research Objective
-      description: What question are you investigating?
+      description: What specific question, standard, or concept are you investigating?
+      placeholder: Clearly define the scope and boundaries of this research task.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and Sources
+      description: List standards, documents, or references being analyzed.
+      placeholder: |
+        - Standard / Specification name
+        - Version
+        - Sections reviewed
+    validations:
+      required: true
+
+  - type: textarea
+    id: tasks
+    attributes:
+      label: Research Tasks
+      description: Break the research into concrete investigation steps.
+      placeholder: |
+        - Extract structural requirements
+        - Identify mandatory vs optional elements
+        - Document naming conventions
+        - Identify integration constraints
     validations:
       required: true
 
@@ -15,10 +43,45 @@ body:
     id: findings
     attributes:
       label: Key Findings
-      description: Summarize important insights.
+      description: Summarize important insights discovered during research.
+      placeholder: |
+        - Structural principle 1
+        - Constraint 2
+        - Ambiguity identified
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables
+      description: What concrete artifacts will result from this research?
+      placeholder: |
+        - Structured summary document
+        - Node hierarchy diagram
+        - Compliance checklist
+        - Wiki page update
+    validations:
+      required: true
 
   - type: textarea
     id: impact
     attributes:
       label: Impact on Project
-      description: How does this influence design or implementation?
+      description: How does this influence design, architecture, or implementation?
+      placeholder: Describe implications for pipeline, data structures, or integration.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: When is this research considered complete?
+      placeholder: |
+        - All required sections reviewed
+        - Findings documented in wiki
+        - Deliverables created
+        - Open questions identified
+    validations:
+      required: true
