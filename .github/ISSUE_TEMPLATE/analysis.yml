@@ -1,0 +1,26 @@
+name: Analysis Task
+description: Task related to standards or requirement analysis
+title: "[Analysis] "
+labels: ["analysis"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: Task Description
+      description: Clearly describe what must be analyzed.
+      placeholder: Describe the analysis objective.
+    validations:
+      required: true
+
+  - type: textarea
+    id: references
+    attributes:
+      label: References
+      description: Relevant standards, documents, or links.
+      placeholder: List links or standard sections.
+
+  - type: textarea
+    id: expected_outcome
+    attributes:
+      label: Expected Outcome
+      description: What deliverable should result from this task?
