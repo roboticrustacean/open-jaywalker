@@ -1,0 +1,46 @@
+name: Documentation Task
+description: Wiki or repository documentation update
+title: "[Documentation] "
+labels: ["documentation"]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Documentation Objective
+      description: What needs to be documented or updated?
+      placeholder: Describe the page, section, or content to be created or revised.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What specific topics or sections must be covered?
+      placeholder: List subsections or bullet points to include.
+
+  - type: textarea
+    id: related_issues
+    attributes:
+      label: Related Issues or Milestones
+      description: Link related analysis, research, or implementation issues.
+      placeholder: Example: #12, Milestone 1
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: When is this documentation task considered complete?
+      placeholder: Page created in Wiki, linked from sidebar, reviewed for clarity.
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Completion Checklist
+      options:
+        - label: Content written clearly and technically accurate
+        - label: Proper internal links added
+        - label: Sidebar updated (if needed)
+        - label: Commit pushed with descriptive message
