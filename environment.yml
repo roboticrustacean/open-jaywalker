@@ -1,0 +1,9 @@
+name: open-jaywalker
+channels:
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - pip:
+    - bpy
+    - fake-bpy-module-latest>=20260207

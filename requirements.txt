@@ -1,0 +1,5 @@
+# Blender Python API (run scripts with this, or inside Blender)
+bpy
+
+# Stubs for IDE/type-checking (autocomplete, resolve "bpy" in editor)
+fake-bpy-module-latest>=20260207
