@@ -76,3 +76,6 @@ dmypy.json
 
 # Ruff
 .ruff_cache/
+
+# Output
+# output/ #Will include output from an example blend file 
