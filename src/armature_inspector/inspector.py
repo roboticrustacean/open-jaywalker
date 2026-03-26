@@ -528,6 +528,7 @@ def extract_bone_geometry(bone):
         "head": tuple(bone.head_local),
         "tail": tuple(bone.tail_local),
         "length": float(bone.length),
+        "matrix_local": [list(row) for row in bone.matrix_local],
     }
 
 
