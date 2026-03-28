@@ -646,6 +646,11 @@ def _get_output_dir():
     return output_dir
 
 
+def get_output_dir():
+    """Expose the resolved output directory for the current Blender file."""
+    return _get_output_dir()
+
+
 def export_armature_json(armature_obj):
     """
     Export bone geometry and detected chains to JSON files.
@@ -800,6 +805,16 @@ def inspect_scene():
     JSON files are exported for both filtered and unfiltered data.
     """
     armatures = get_armature_objects()
+    output_dir = _get_output_dir()
+    source_file = bpy.data.filepath or "(unsaved)"
+    result = {
+        "source_file": source_file,
+        "output_dir": output_dir,
+        "armature_count": len(armatures),
+        "armature_names": [],
+        "exported_files": [],
+        "diagnostics_ran": False,
+    }
 
     print("=" * 60)
     print("ARMATURE INSPECTOR REPORT")
@@ -811,7 +826,8 @@ def inspect_scene():
         print("No armature objects found.")
         print("Running full scene diagnostics...\n")
         run_diagnostics()
-        return
+        result["diagnostics_ran"] = True
+        return result
 
     print(f"Found {len(armatures)} armature(s).")
     print("-" * 60)
@@ -822,11 +838,14 @@ def inspect_scene():
         prefix_filter = default_prefix if _has_prefix_bones(obj, default_prefix) else None
         print_armature_hierarchy(obj, prefix_filter=prefix_filter)
         print_detected_chains(obj)
-        export_armature_json(obj)
+        all_path, filtered_path = export_armature_json(obj)
+        result["armature_names"].append(obj.name)
+        result["exported_files"].extend([all_path, filtered_path])
 
     print("\n" + "=" * 60)
     print("END OF REPORT")
     print("=" * 60)
+    return result
 
 
 def run_diagnostics():

@@ -1,0 +1,1325 @@
+"""
+Offline Phase 3 skeleton classifier.
+
+Consumes Phase 2 JSON exports and produces a deterministic OpenMATERIAL
+classification report without modifying Blender data.
+"""
+
+from __future__ import annotations
+
+import copy
+import json
+import math
+import re
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+
+
+CORE_TARGETS: List[str] = [
+    "Root",
+    "Hip",
+    "Lower_Spine",
+    "Upper_Spine",
+    "Neck",
+    "Head",
+    "Shoulder_Left",
+    "Upper_Arm_Left",
+    "Lower_Arm_Left",
+    "Hand_Left",
+    "Shoulder_Right",
+    "Upper_Arm_Right",
+    "Lower_Arm_Right",
+    "Hand_Right",
+    "Upper_Leg_Left",
+    "Lower_Leg_Left",
+    "Foot_Left",
+    "Upper_Leg_Right",
+    "Lower_Leg_Right",
+    "Foot_Right",
+]
+
+DEFERRED_TARGETS: List[str] = [
+    "Eye_Left",
+    "Eye_Right",
+    "Full_Thumb_Left",
+    "Full_Thumb_Right",
+    "Full_Fingers_Left",
+    "Full_Fingers_Right",
+    "Full_Toes_Left",
+    "Full_Toes_Right",
+]
+
+TARGET_PARENTS: Dict[str, str] = {
+    "Root": "Armature_{asset_name}",
+    "Hip": "Root",
+    "Lower_Spine": "Hip",
+    "Upper_Spine": "Lower_Spine",
+    "Neck": "Upper_Spine",
+    "Head": "Neck",
+    "Shoulder_Left": "Upper_Spine",
+    "Upper_Arm_Left": "Shoulder_Left",
+    "Lower_Arm_Left": "Upper_Arm_Left",
+    "Hand_Left": "Lower_Arm_Left",
+    "Shoulder_Right": "Upper_Spine",
+    "Upper_Arm_Right": "Shoulder_Right",
+    "Lower_Arm_Right": "Upper_Arm_Right",
+    "Hand_Right": "Lower_Arm_Right",
+    "Upper_Leg_Left": "Hip",
+    "Lower_Leg_Left": "Upper_Leg_Left",
+    "Foot_Left": "Lower_Leg_Left",
+    "Upper_Leg_Right": "Hip",
+    "Lower_Leg_Right": "Upper_Leg_Right",
+    "Foot_Right": "Lower_Leg_Right",
+}
+
+TARGET_PRIORITY: Dict[str, int] = {target: index for index, target in enumerate(CORE_TARGETS)}
+
+ROLE_PREFIXES = {"def": "deform", "org": "auxiliary", "mch": "mechanism"}
+CONTROL_TOKENS = {
+    "ctrl",
+    "control",
+    "ik",
+    "fk",
+    "pole",
+    "tweak",
+    "twist",
+    "heel",
+    "widget",
+    "wgt",
+    "vis",
+    "rot",
+    "str",
+    "mechanism",
+}
+EXTRA_TOKENS = {
+    "hair",
+    "cloth",
+    "cape",
+    "skirt",
+    "weapon",
+    "prop",
+    "ear",
+    "jaw",
+    "face",
+    "brow",
+    "lip",
+    "nose",
+    "breast",
+    "tail",
+    "accessory",
+}
+SIDE_WORDS = {"l": "left", "left": "left", "r": "right", "right": "right"}
+
+HEIGHT_BANDS: Dict[str, Tuple[float, float]] = {
+    "Root": (0.0, 0.40),
+    "Hip": (0.35, 0.70),
+    "Lower_Spine": (0.40, 0.78),
+    "Upper_Spine": (0.55, 0.93),
+    "Neck": (0.72, 0.98),
+    "Head": (0.82, 1.0),
+    "Shoulder": (0.58, 0.92),
+    "Upper_Arm": (0.45, 0.86),
+    "Lower_Arm": (0.28, 0.82),
+    "Hand": (0.18, 0.72),
+    "Upper_Leg": (0.28, 0.72),
+    "Lower_Leg": (0.08, 0.55),
+    "Foot": (0.0, 0.25),
+}
+
+CORE_FAMILY_BY_TARGET: Dict[str, str] = {
+    "Root": "root",
+    "Hip": "hip",
+    "Lower_Spine": "lower_spine",
+    "Upper_Spine": "upper_spine",
+    "Neck": "neck",
+    "Head": "head",
+    "Shoulder_Left": "shoulder",
+    "Upper_Arm_Left": "upper_arm",
+    "Lower_Arm_Left": "lower_arm",
+    "Hand_Left": "hand",
+    "Shoulder_Right": "shoulder",
+    "Upper_Arm_Right": "upper_arm",
+    "Lower_Arm_Right": "lower_arm",
+    "Hand_Right": "hand",
+    "Upper_Leg_Left": "upper_leg",
+    "Lower_Leg_Left": "lower_leg",
+    "Foot_Left": "foot",
+    "Upper_Leg_Right": "upper_leg",
+    "Lower_Leg_Right": "lower_leg",
+    "Foot_Right": "foot",
+}
+
+
+@dataclass
+class ArmatureInput:
+    armature_name: str
+    all_path: Optional[Path]
+    filtered_path: Optional[Path]
+    primary_path: Path
+    support_path: Optional[Path]
+    primary_data: dict
+    support_data: Optional[dict]
+
+
+@dataclass
+class BoneInfo:
+    name: str
+    parent: Optional[str]
+    head: Tuple[float, float, float]
+    tail: Tuple[float, float, float]
+    length: float
+    origin: str
+    normalized_name: str
+    compact_name: str
+    tokens: List[str]
+    side: Optional[str]
+    midpoint: Tuple[float, float, float]
+    min_point: Tuple[float, float, float]
+    max_point: Tuple[float, float, float]
+    role: str
+    role_modifier: float
+    family_tags: Set[str]
+    child_names: List[str] = field(default_factory=list)
+
+
+@dataclass
+class CandidateScore:
+    source_bone: str
+    source_origin: str
+    role: str
+    selection_score: float
+    confidence: float
+    name_evidence: float
+    hierarchy_evidence: float
+    geometry_evidence: float
+    notes: List[str]
+
+
+def discover_armatures(asset_dir: Path) -> List[ArmatureInput]:
+    groups: Dict[str, Dict[str, Path]] = {}
+    loaded: Dict[Path, dict] = {}
+
+    for json_path in sorted(asset_dir.glob("*.json")):
+        name = json_path.name
+        if name.endswith("_all.json"):
+            groups.setdefault(name[: -len("_all.json")], {})["all"] = json_path
+        elif name.endswith("_filtered.json"):
+            groups.setdefault(name[: -len("_filtered.json")], {})["filtered"] = json_path
+
+    armatures: List[ArmatureInput] = []
+    for armature_name in sorted(groups):
+        all_path = groups[armature_name].get("all")
+        filtered_path = groups[armature_name].get("filtered")
+        all_data = _load_json_cached(all_path, loaded) if all_path else None
+        filtered_data = _load_json_cached(filtered_path, loaded) if filtered_path else None
+
+        primary_path: Optional[Path] = None
+        primary_data: Optional[dict] = None
+        support_path: Optional[Path] = None
+        support_data: Optional[dict] = None
+
+        if filtered_data and filtered_data.get("filter") == "DEF-" and filtered_data.get("bone_count", 0) > 0:
+            primary_path = filtered_path
+            primary_data = filtered_data
+            support_path = all_path
+            support_data = all_data
+        elif all_data:
+            primary_path = all_path
+            primary_data = all_data
+        elif filtered_data:
+            primary_path = filtered_path
+            primary_data = filtered_data
+
+        if primary_path and primary_data:
+            armatures.append(
+                ArmatureInput(
+                    armature_name=armature_name,
+                    all_path=all_path,
+                    filtered_path=filtered_path,
+                    primary_path=primary_path,
+                    support_path=support_path,
+                    primary_data=primary_data,
+                    support_data=support_data,
+                )
+            )
+
+    return armatures
+
+
+def classify_asset_folder(asset_dir: Path) -> dict:
+    asset_dir = asset_dir.resolve()
+    if not asset_dir.is_dir():
+        raise FileNotFoundError("Asset directory does not exist: {0}".format(asset_dir))
+
+    armature_inputs = discover_armatures(asset_dir)
+    if not armature_inputs:
+        raise ValueError("No armature inspector JSON files were found in {0}".format(asset_dir))
+
+    armature_reports = [classify_armature(asset_dir.name, armature_input) for armature_input in armature_inputs]
+    ranked_reports = sorted(
+        armature_reports,
+        key=lambda report: (-report["summary"]["ranking_score"], report["armature_name"]),
+    )
+    recommended_report = ranked_reports[0]
+
+    return {
+        "asset_summary": {
+            "asset_name": asset_dir.name,
+            "asset_dir": str(asset_dir),
+            "armature_count": len(armature_reports),
+            "discovered_armatures": [report["armature_name"] for report in armature_reports],
+            "ranking": [
+                {
+                    "armature_name": report["armature_name"],
+                    "ranking_score": report["summary"]["ranking_score"],
+                    "mapped_core_targets": report["summary"]["mapped_core_targets"],
+                    "average_confidence": report["summary"]["average_confidence"],
+                    "primary_input": report["selected_inputs"]["primary"],
+                }
+                for report in ranked_reports
+            ],
+        },
+        "armatures": armature_reports,
+        "recommended_primary_armature": recommended_report["armature_name"],
+        "asam_targets": copy.deepcopy(recommended_report["asam_targets"]),
+        "proposed_asam_hierarchy": copy.deepcopy(recommended_report["proposed_asam_hierarchy"]),
+        "extras_preserved": copy.deepcopy(recommended_report["extras_preserved"]),
+        "unclassified_bones": copy.deepcopy(recommended_report["unclassified_bones"]),
+        "missing_core_targets": list(recommended_report["missing_core_targets"]),
+        "ambiguous_targets": copy.deepcopy(recommended_report["ambiguous_targets"]),
+        "review_flags": list(recommended_report["review_flags"]),
+        "deferred_targets": list(recommended_report["deferred_targets"]),
+    }
+
+
+def write_asset_report(asset_dir: Path) -> Tuple[dict, Path]:
+    report = classify_asset_folder(asset_dir)
+    report_path = asset_dir / "phase3_classification.json"
+    with report_path.open("w", encoding="utf-8") as handle:
+        json.dump(report, handle, indent=2)
+        handle.write("\n")
+    return report, report_path
+
+
+def print_console_summary(report: dict, report_path: Path) -> None:
+    asset_summary = report["asset_summary"]
+    print("Phase 3 classifier summary")
+    print("Asset folder: {0}".format(asset_summary["asset_dir"]))
+    print("Discovered armatures: {0}".format(", ".join(asset_summary["discovered_armatures"])))
+    print("")
+
+    for armature_report in sorted(report["armatures"], key=lambda item: item["armature_name"]):
+        summary = armature_report["summary"]
+        selected_inputs = armature_report["selected_inputs"]
+        print("- {0}".format(armature_report["armature_name"]))
+        print("  primary={0}  support={1}".format(selected_inputs["primary"], selected_inputs["support"] or "(none)"))
+        print(
+            "  mapped={0}/{1}  avg_conf={2:.3f}  direct={3}  alias={4}".format(
+                summary["mapped_core_targets"],
+                len(CORE_TARGETS),
+                summary["average_confidence"],
+                summary["direct_map_targets"],
+                summary["alias_map_targets"],
+            )
+        )
+        print(
+            "  missing={0}  ambiguous={1}  preserved_extras={2}".format(
+                len(armature_report["missing_core_targets"]),
+                len(armature_report["ambiguous_targets"]),
+                len(armature_report["extras_preserved"]),
+            )
+        )
+        if armature_report["review_flags"]:
+            print("  flags={0}".format(", ".join(armature_report["review_flags"])))
+
+    print("")
+    print("Recommended primary armature: {0}".format(report["recommended_primary_armature"]))
+    print("Missing targets: {0}".format(", ".join(report["missing_core_targets"]) or "(none)"))
+    print("Ambiguous targets: {0}".format(", ".join(item["target"] for item in report["ambiguous_targets"]) or "(none)"))
+    print("Preserved extras count: {0}".format(len(report["extras_preserved"])))
+    print("Report written to: {0}".format(report_path))
+
+
+def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
+    bones = _build_bone_index(armature_input.primary_data, armature_input.support_data)
+    context = _build_context(bones, armature_input.primary_data, armature_input.support_data)
+
+    target_candidates: Dict[str, List[CandidateScore]] = {}
+    for target_name in CORE_TARGETS:
+        candidates: List[CandidateScore] = []
+        for bone in bones.values():
+            candidate = _score_target_candidate(target_name, bone, context)
+            if candidate is not None:
+                candidates.append(candidate)
+        candidates.sort(key=lambda item: (-item.selection_score, -item.confidence, item.source_bone))
+        target_candidates[target_name] = candidates
+
+    resolved_targets = _resolve_targets(target_candidates)
+    mapped_bones = {
+        payload["source_bone"]
+        for payload in resolved_targets.values()
+        if payload["source_bone"] is not None and payload["action"] in {"direct_map", "alias_map"}
+    }
+
+    extras_preserved, unclassified_bones = _classify_non_mapped_bones(bones, context, mapped_bones)
+    review_flags = _build_review_flags(resolved_targets, context)
+    ambiguous_targets = [
+        {"target": target_name, "reason": payload["notes"], "confidence": payload["confidence"]}
+        for target_name, payload in resolved_targets.items()
+        if payload["action"] == "review"
+    ]
+    missing_targets = [
+        target_name
+        for target_name, payload in resolved_targets.items()
+        if payload["action"] == "create_in_builder"
+    ]
+
+    return {
+        "armature_name": armature_input.armature_name,
+        "selected_inputs": {
+            "primary": armature_input.primary_path.name,
+            "support": armature_input.support_path.name if armature_input.support_path else None,
+            "primary_filter": armature_input.primary_data.get("filter"),
+            "source_file": armature_input.primary_data.get("source_file"),
+        },
+        "summary": _build_armature_summary(resolved_targets, review_flags, armature_input.primary_data),
+        "asam_targets": resolved_targets,
+        "proposed_asam_hierarchy": _build_proposed_hierarchy(asset_name),
+        "extras_preserved": extras_preserved,
+        "unclassified_bones": unclassified_bones,
+        "missing_core_targets": missing_targets,
+        "ambiguous_targets": ambiguous_targets,
+        "review_flags": review_flags,
+        "deferred_targets": list(DEFERRED_TARGETS),
+    }
+
+
+def _build_context(bones: Dict[str, BoneInfo], primary_data: dict, support_data: Optional[dict]) -> dict:
+    children_map = {name: list(bone.child_names) for name, bone in bones.items()}
+    height_axis, lateral_axis = _infer_axes(bones.values())
+    centerline = _median([bone.midpoint[lateral_axis] for bone in bones.values()])
+    height_values = [bone.midpoint[height_axis] for bone in bones.values()]
+    lateral_values = [bone.midpoint[lateral_axis] for bone in bones.values()]
+    height_min = min(height_values) if height_values else 0.0
+    height_max = max(height_values) if height_values else 1.0
+    lateral_span = max(lateral_values) - min(lateral_values) if lateral_values else 1.0
+    if lateral_span <= 1e-6:
+        lateral_span = 1.0
+
+    side_signs = _calibrate_side_signs(bones.values(), lateral_axis)
+    return {
+        "bones": bones,
+        "children_map": children_map,
+        "height_axis": height_axis,
+        "lateral_axis": lateral_axis,
+        "centerline": centerline,
+        "height_min": height_min,
+        "height_span": max(height_max - height_min, 1e-6),
+        "lateral_span": lateral_span,
+        "side_signs": side_signs,
+        "spine_chain": _choose_spine_chain(primary_data, support_data),
+        "arm_chains": _choose_limb_chains(bones, primary_data, support_data, "arm", lateral_axis, centerline, side_signs),
+        "leg_chains": _choose_limb_chains(bones, primary_data, support_data, "leg", lateral_axis, centerline, side_signs),
+    }
+
+
+def _build_bone_index(primary_data: dict, support_data: Optional[dict]) -> Dict[str, BoneInfo]:
+    raw_bones: Dict[str, dict] = {}
+    origins: Dict[str, str] = {}
+
+    for bone_payload in (support_data or {}).get("bones", []):
+        raw_bones[bone_payload["name"]] = bone_payload
+        origins[bone_payload["name"]] = "support"
+
+    for bone_payload in primary_data.get("bones", []):
+        raw_bones[bone_payload["name"]] = bone_payload
+        origins[bone_payload["name"]] = "primary"
+
+    children_map: Dict[str, List[str]] = {name: [] for name in raw_bones}
+    for payload in raw_bones.values():
+        parent = payload.get("parent")
+        if parent in children_map:
+            children_map[parent].append(payload["name"])
+
+    bone_index: Dict[str, BoneInfo] = {}
+    for name in sorted(raw_bones):
+        payload = raw_bones[name]
+        normalized_name, compact_name, tokens, side = _normalize_bone_name(name)
+        family_tags = _detect_family_tags(normalized_name, compact_name, tokens)
+        role, role_modifier = _classify_bone_role(name, tokens)
+        head = _to_float_triplet(payload.get("head"))
+        tail = _to_float_triplet(payload.get("tail"))
+        midpoint = tuple((head[index] + tail[index]) / 2.0 for index in range(3))
+        min_point = tuple(min(head[index], tail[index]) for index in range(3))
+        max_point = tuple(max(head[index], tail[index]) for index in range(3))
+
+        bone_index[name] = BoneInfo(
+            name=name,
+            parent=payload.get("parent"),
+            head=head,
+            tail=tail,
+            length=float(payload.get("length", 0.0)),
+            origin=origins[name],
+            normalized_name=normalized_name,
+            compact_name=compact_name,
+            tokens=tokens,
+            side=side,
+            midpoint=midpoint,
+            min_point=min_point,
+            max_point=max_point,
+            role=role,
+            role_modifier=role_modifier,
+            family_tags=family_tags,
+            child_names=sorted(children_map.get(name, [])),
+        )
+
+    return bone_index
+
+
+def _score_target_candidate(target_name: str, bone: BoneInfo, context: dict) -> Optional[CandidateScore]:
+    family = CORE_FAMILY_BY_TARGET[target_name]
+    side = _target_side(target_name)
+    name_score = _name_evidence(target_name, bone)
+    hierarchy_score = _hierarchy_evidence(target_name, bone, context)
+    geometry_score = _geometry_evidence(target_name, bone, context)
+    confidence = round(_clamp(0.5 * name_score + 0.3 * hierarchy_score + 0.2 * geometry_score), 3)
+
+    if confidence < 0.10 and name_score < 0.20:
+        return None
+
+    source_modifier = 1.0 if bone.origin == "primary" else 0.90
+    family_modifier = 1.0 if family in bone.family_tags else 0.95
+    selection_score = round(confidence * bone.role_modifier * source_modifier * family_modifier, 4)
+
+    notes: List[str] = []
+    if bone.origin != "primary":
+        notes.append("support_fallback")
+    if bone.role in {"control", "mechanism"}:
+        notes.append("control_or_mechanism_bone")
+    if side and bone.side and bone.side != side:
+        notes.append("opposite_side_name")
+    if side and _side_geometry_conflict(side, bone, context):
+        notes.append("geometry_side_conflict")
+
+    return CandidateScore(
+        source_bone=bone.name,
+        source_origin=bone.origin,
+        role=bone.role,
+        selection_score=selection_score,
+        confidence=confidence,
+        name_evidence=round(name_score, 3),
+        hierarchy_evidence=round(hierarchy_score, 3),
+        geometry_evidence=round(geometry_score, 3),
+        notes=sorted(set(notes)),
+    )
+
+
+def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]]) -> Dict[str, dict]:
+    resolved: Dict[str, dict] = {}
+    provisional_choices: Dict[str, Optional[CandidateScore]] = {}
+
+    for target_name in CORE_TARGETS:
+        candidates = target_candidates.get(target_name, [])
+        provisional_choices[target_name] = candidates[0] if candidates else None
+
+    source_to_targets: Dict[str, List[str]] = {}
+    for target_name, candidate in provisional_choices.items():
+        if candidate is not None:
+            source_to_targets.setdefault(candidate.source_bone, []).append(target_name)
+
+    contested_targets: Set[str] = set()
+    for source_bone, targets in source_to_targets.items():
+        if len(targets) <= 1:
+            continue
+        ordered_targets = sorted(
+            targets,
+            key=lambda target: (-provisional_choices[target].confidence, TARGET_PRIORITY[target]),  # type: ignore[union-attr]
+        )
+        contested_targets.update(ordered_targets[1:])
+
+    for target_name in CORE_TARGETS:
+        candidate = provisional_choices[target_name]
+        if candidate is None:
+            resolved[target_name] = _missing_target_payload("no_plausible_candidate")
+            continue
+
+        if target_name in contested_targets:
+            notes = list(candidate.notes)
+            notes.append("candidate_conflict")
+            resolved[target_name] = {
+                "source_bone": None,
+                "confidence": round(candidate.confidence, 3),
+                "action": "review",
+                "evidence": {
+                    "name": candidate.name_evidence,
+                    "hierarchy": candidate.hierarchy_evidence,
+                    "geometry": candidate.geometry_evidence,
+                    "source_origin": candidate.source_origin,
+                    "role": candidate.role,
+                },
+                "notes": sorted(set(notes)),
+            }
+            continue
+
+        action = _action_for_candidate(candidate)
+        resolved[target_name] = {
+            "source_bone": candidate.source_bone if action != "create_in_builder" else None,
+            "confidence": round(candidate.confidence, 3),
+            "action": action,
+            "evidence": {
+                "name": candidate.name_evidence,
+                "hierarchy": candidate.hierarchy_evidence,
+                "geometry": candidate.geometry_evidence,
+                "source_origin": candidate.source_origin,
+                "role": candidate.role,
+            },
+            "notes": list(candidate.notes),
+        }
+
+    return resolved
+
+
+def _classify_non_mapped_bones(
+    bones: Dict[str, BoneInfo],
+    context: dict,
+    mapped_bones: Set[str],
+) -> Tuple[List[dict], List[dict]]:
+    preserved: List[dict] = []
+    unclassified: List[dict] = []
+
+    spine_chain = set(context["spine_chain"])
+    arm_chain_bones = set()
+    for chain in context["arm_chains"].values():
+        arm_chain_bones.update(chain)
+    leg_chain_bones = set()
+    for chain in context["leg_chains"].values():
+        leg_chain_bones.update(chain)
+
+    for bone_name in sorted(bones):
+        if bone_name in mapped_bones:
+            continue
+        bone = bones[bone_name]
+        reason: Optional[str] = None
+
+        if bone.role in {"control", "mechanism"}:
+            reason = "control_or_mechanism"
+        elif any(tag in bone.family_tags for tag in {"toe", "eye", "finger", "thumb"}):
+            reason = "deferred_semantic_detail"
+        elif bone_name in spine_chain or bone_name in arm_chain_bones or bone_name in leg_chain_bones:
+            reason = "supporting_chain_detail"
+        elif any(token in EXTRA_TOKENS for token in bone.tokens):
+            reason = "named_extra"
+
+        payload = {
+            "bone_name": bone.name,
+            "reason": reason or "unclassified",
+            "origin": bone.origin,
+            "role": bone.role,
+        }
+        if reason:
+            preserved.append(payload)
+        else:
+            unclassified.append(payload)
+
+    return preserved, unclassified
+
+
+def _build_review_flags(resolved_targets: Dict[str, dict], context: dict) -> List[str]:
+    flags: Set[str] = set()
+    actual_roots = [bone for bone in context["bones"].values() if bone.parent is None]
+
+    if len(actual_roots) > 1:
+        flags.add("multiple_roots")
+    if not context["spine_chain"] or any(
+        resolved_targets[target]["action"] == "create_in_builder" for target in ("Lower_Spine", "Upper_Spine")
+    ):
+        flags.add("missing_spine_chain")
+    if not context["leg_chains"].get("left") or not context["leg_chains"].get("right"):
+        flags.add("no_leg_chain")
+    if any(
+        payload["source_bone"] is not None and payload["evidence"]["role"] in {"control", "mechanism"}
+        for payload in resolved_targets.values()
+    ):
+        flags.add("control_bone_selected")
+    if any("geometry_side_conflict" in payload["notes"] for payload in resolved_targets.values()):
+        flags.add("side_conflict")
+    if resolved_targets["Head"]["action"] != "direct_map" or resolved_targets["Neck"]["action"] not in {"direct_map", "alias_map"}:
+        flags.add("insufficient_head_evidence")
+
+    return sorted(flags)
+
+
+def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: List[str], primary_data: dict) -> dict:
+    mapped = [payload for payload in resolved_targets.values() if payload["action"] in {"direct_map", "alias_map"}]
+    average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)
+    direct_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "direct_map")
+    alias_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "alias_map")
+    review_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "review")
+    missing_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "create_in_builder")
+    ranking_score = round(
+        (len(mapped) * 5.0)
+        + (average_confidence * 10.0)
+        + (2.0 if primary_data.get("filter") == "DEF-" else 0.0)
+        - (review_targets * 0.75)
+        - (missing_targets * 1.2)
+        - (len(review_flags) * 0.25),
+        3,
+    )
+
+    return {
+        "mapped_core_targets": len(mapped),
+        "direct_map_targets": direct_map_targets,
+        "alias_map_targets": alias_map_targets,
+        "review_targets": review_targets,
+        "missing_core_targets": missing_targets,
+        "average_confidence": average_confidence,
+        "ranking_score": ranking_score,
+    }
+
+
+def _build_proposed_hierarchy(asset_name: str) -> dict:
+    armature_name = "Armature_{0}".format(asset_name)
+    bone_parents = {
+        target: parent.format(asset_name=asset_name) if "{asset_name}" in parent else parent
+        for target, parent in TARGET_PARENTS.items()
+    }
+    return {
+        "object_nodes": [
+            {"name": "Grp_Root", "parent": None},
+            {"name": armature_name, "parent": "Grp_Root"},
+        ],
+        "bone_parents": bone_parents,
+    }
+
+
+def _missing_target_payload(note: str) -> dict:
+    return {
+        "source_bone": None,
+        "confidence": 0.0,
+        "action": "create_in_builder",
+        "evidence": {
+            "name": 0.0,
+            "hierarchy": 0.0,
+            "geometry": 0.0,
+            "source_origin": None,
+            "role": None,
+        },
+        "notes": [note],
+    }
+
+
+def _action_for_candidate(candidate: CandidateScore) -> str:
+    if candidate.confidence < 0.25 and candidate.name_evidence < 0.20:
+        return "create_in_builder"
+    if candidate.confidence >= 0.80:
+        return "direct_map"
+    if candidate.confidence >= 0.60:
+        return "alias_map"
+    return "review"
+
+
+def _target_side(target_name: str) -> Optional[str]:
+    if target_name.endswith("_Left"):
+        return "left"
+    if target_name.endswith("_Right"):
+        return "right"
+    return None
+
+
+def _name_evidence(target_name: str, bone: BoneInfo) -> float:
+    family = CORE_FAMILY_BY_TARGET[target_name]
+    side = _target_side(target_name)
+    base_score = _family_name_score(family, bone)
+
+    if side and bone.side and bone.side != side:
+        base_score *= 0.05
+    if side and bone.side == side:
+        base_score = min(1.0, base_score + 0.05)
+
+    return _clamp(base_score)
+
+
+def _family_name_score(family: str, bone: BoneInfo) -> float:
+    tokens = set(bone.tokens)
+    compact = bone.compact_name
+
+    if family == "root":
+        if compact in {"root", "master", "armatureroot"}:
+            return 1.0
+        if "root" in compact:
+            return 0.9
+        return 0.0
+
+    if family == "hip":
+        if compact in {"hip", "hips", "pelvis"}:
+            return 1.0
+        if "pelvis" in compact or "hips" in compact or "hip" in tokens:
+            return 0.95
+        return 0.0
+
+    if family == "lower_spine":
+        if compact == "lowerspine":
+            return 1.0
+        if "torso" in tokens or "abdomen" in tokens:
+            return 0.92
+        if compact.startswith("spine") or "spine" in tokens:
+            return 0.72
+        return 0.0
+
+    if family == "upper_spine":
+        if compact == "upperspine":
+            return 1.0
+        if "chest" in tokens or "thorax" in tokens:
+            return 0.98
+        if compact.startswith("spine") or "spine" in tokens:
+            return 0.72
+        return 0.0
+
+    if family == "neck":
+        return 1.0 if ("neck" in tokens or compact == "neck") else 0.0
+
+    if family == "head":
+        return 1.0 if ("head" in tokens or compact == "head") else 0.0
+
+    if family == "shoulder":
+        return 1.0 if {"shoulder", "clavicle", "collar"} & tokens else 0.0
+
+    if family == "upper_arm":
+        if "upperarm" in compact or "bicep" in compact:
+            return 1.0
+        if "upper" in tokens and "arm" in tokens:
+            return 0.96
+        if compact == "arm":
+            return 0.55
+        return 0.0
+
+    if family == "lower_arm":
+        if "forearm" in compact:
+            return 1.0
+        if "lower" in tokens and "arm" in tokens:
+            return 0.96
+        if compact == "arm":
+            return 0.42
+        return 0.0
+
+    if family == "hand":
+        if compact == "hand":
+            return 1.0
+        if "wrist" in tokens:
+            return 0.82
+        return 0.0
+
+    if family == "upper_leg":
+        if "thigh" in compact:
+            return 1.0
+        if "upper" in tokens and "leg" in tokens:
+            return 0.96
+        if compact == "leg":
+            return 0.55
+        return 0.0
+
+    if family == "lower_leg":
+        if "shin" in compact or "calf" in compact:
+            return 1.0
+        if "lower" in tokens and "leg" in tokens:
+            return 0.96
+        if compact == "leg":
+            return 0.42
+        return 0.0
+
+    if family == "foot":
+        if compact == "foot":
+            return 1.0
+        if "ankle" in tokens:
+            return 0.82
+        return 0.0
+
+    return 0.0
+
+
+def _hierarchy_evidence(target_name: str, bone: BoneInfo, context: dict) -> float:
+    family = CORE_FAMILY_BY_TARGET[target_name]
+    side = _target_side(target_name)
+    score = 0.0
+
+    parent = context["bones"].get(bone.parent) if bone.parent else None
+    children = [context["bones"][child_name] for child_name in bone.child_names if child_name in context["bones"]]
+
+    spine_chain = context["spine_chain"]
+    arm_chain = context["arm_chains"].get(side) if side else []
+    leg_chain = context["leg_chains"].get(side) if side else []
+
+    if family == "root":
+        if bone.parent is None:
+            score += 0.55
+        if _has_descendant_family(bone.name, context, {"hip", "lower_spine", "upper_spine"}):
+            score += 0.25
+        if _has_descendant_family(bone.name, context, {"upper_leg", "lower_leg", "foot"}):
+            score += 0.20
+
+    elif family == "hip":
+        if _has_descendant_family(bone.name, context, {"upper_leg", "lower_leg", "foot"}):
+            score += 0.45
+        if _has_descendant_family(bone.name, context, {"lower_spine", "upper_spine", "spine"}):
+            score += 0.30
+        if parent and "root" in parent.family_tags:
+            score += 0.15
+        if any("pelvis" in child.compact_name for child in children):
+            score += 0.10
+
+    elif family == "lower_spine":
+        score = max(score, _score_spine_position(bone.name, spine_chain, prefer_end=False))
+        if parent and ("hip" in parent.family_tags or "root" in parent.family_tags):
+            score += 0.25
+        if any("upper_spine" in child.family_tags or "neck" in child.family_tags or "spine" in child.family_tags for child in children):
+            score += 0.20
+
+    elif family == "upper_spine":
+        score = max(score, _score_spine_position(bone.name, spine_chain, prefer_end=True))
+        if parent and ("lower_spine" in parent.family_tags or "spine" in parent.family_tags):
+            score += 0.20
+        if any({"neck", "shoulder", "head"} & child.family_tags for child in children):
+            score += 0.30
+
+    elif family == "neck":
+        if parent and ("upper_spine" in parent.family_tags or "spine" in parent.family_tags):
+            score += 0.45
+        if any("head" in child.family_tags for child in children):
+            score += 0.40
+        if _is_highest_named_head_neighbor(bone, context):
+            score += 0.15
+
+    elif family == "head":
+        if parent and ("neck" in parent.family_tags or "upper_spine" in parent.family_tags):
+            score += 0.35
+        if not children or all({"eye", "face", "finger", "thumb"} & child.family_tags for child in children):
+            score += 0.35
+        if _is_highest_in_family_group(bone, context, {"head", "neck", "upper_spine"}):
+            score += 0.30
+
+    elif family == "shoulder":
+        if parent and ("upper_spine" in parent.family_tags or "spine" in parent.family_tags):
+            score += 0.30
+        if any("upper_arm" in child.family_tags for child in children):
+            score += 0.40
+        if _chain_side_match(arm_chain, bone.name):
+            score += 0.20
+
+    elif family == "upper_arm":
+        score = max(score, _score_limb_position(bone.name, arm_chain, "start"))
+        if parent and "shoulder" in parent.family_tags:
+            score += 0.20
+        if any({"lower_arm", "hand"} & child.family_tags for child in children):
+            score += 0.20
+
+    elif family == "lower_arm":
+        score = max(score, _score_limb_position(bone.name, arm_chain, "middle"))
+        if parent and ("upper_arm" in parent.family_tags or "shoulder" in parent.family_tags):
+            score += 0.20
+        if any("hand" in child.family_tags for child in children):
+            score += 0.20
+
+    elif family == "hand":
+        score = max(score, _score_limb_position(bone.name, arm_chain, "end"))
+        if parent and ("lower_arm" in parent.family_tags or "upper_arm" in parent.family_tags):
+            score += 0.20
+        if _has_descendant_family(bone.name, context, {"finger", "thumb"}):
+            score += 0.20
+
+    elif family == "upper_leg":
+        score = max(score, _score_limb_position(bone.name, leg_chain, "start"))
+        if parent and "hip" in parent.family_tags:
+            score += 0.20
+        if any({"lower_leg", "foot"} & child.family_tags for child in children):
+            score += 0.20
+
+    elif family == "lower_leg":
+        score = max(score, _score_limb_position(bone.name, leg_chain, "middle"))
+        if parent and ("upper_leg" in parent.family_tags or "hip" in parent.family_tags):
+            score += 0.20
+        if any("foot" in child.family_tags for child in children):
+            score += 0.20
+
+    elif family == "foot":
+        score = max(score, _score_limb_position(bone.name, leg_chain, "end"))
+        if parent and ("lower_leg" in parent.family_tags or "upper_leg" in parent.family_tags):
+            score += 0.20
+        if _has_descendant_family(bone.name, context, {"toe"}):
+            score += 0.20
+
+    return _clamp(score)
+
+
+def _geometry_evidence(target_name: str, bone: BoneInfo, context: dict) -> float:
+    family_label = target_name.rsplit("_", 1)[0] if target_name.endswith(("_Left", "_Right")) else target_name
+    side = _target_side(target_name)
+
+    if family_label == "Root":
+        center_score = _centerline_score(bone, context)
+        low_score = _band_score(_endpoint_ratio(bone, context, "low"), 0.0, 0.12)
+        return _clamp((0.55 * center_score) + (0.45 * low_score))
+
+    if family_label in {"Hip", "Lower_Spine", "Upper_Spine", "Neck", "Head"}:
+        height_score = _band_score(_height_ratio(bone, context), *HEIGHT_BANDS[family_label])
+        center_score = _centerline_score(bone, context)
+        return _clamp((0.6 * height_score) + (0.4 * center_score))
+
+    height_score = _band_score(_height_ratio(bone, context), *HEIGHT_BANDS[family_label])
+    side_score = _side_score(side, bone, context)
+    return _clamp((0.6 * height_score) + (0.4 * side_score))
+
+
+def _score_spine_position(bone_name: str, spine_chain: Sequence[str], prefer_end: bool) -> float:
+    if bone_name not in spine_chain:
+        return 0.0
+    if len(spine_chain) == 1:
+        return 0.70
+
+    index = spine_chain.index(bone_name)
+    position = index / float(len(spine_chain) - 1)
+    return _clamp(0.45 + (0.55 * (position if prefer_end else (1.0 - position))))
+
+
+def _score_limb_position(bone_name: str, chain: Sequence[str], desired_position: str) -> float:
+    if bone_name not in chain:
+        return 0.0
+    if len(chain) == 1:
+        return 0.60
+
+    index = chain.index(bone_name)
+    ratio = index / float(len(chain) - 1)
+
+    if desired_position == "start":
+        return _clamp(0.40 + (0.60 * (1.0 - ratio)))
+    if desired_position == "middle":
+        return _clamp(1.0 - (abs(ratio - 0.55) / 0.55))
+    return _clamp(0.40 + (0.60 * ratio))
+
+
+def _chain_side_match(chain: Sequence[str], bone_name: str) -> bool:
+    return bone_name in chain
+
+
+def _is_highest_named_head_neighbor(bone: BoneInfo, context: dict) -> bool:
+    head_related = [candidate for candidate in context["bones"].values() if {"head", "neck"} & candidate.family_tags]
+    if not head_related:
+        return False
+    highest = max(head_related, key=lambda item: item.midpoint[context["height_axis"]])
+    return highest.name != bone.name and bone.midpoint[context["height_axis"]] >= highest.midpoint[context["height_axis"]] - 0.15
+
+
+def _is_highest_in_family_group(bone: BoneInfo, context: dict, families: Set[str]) -> bool:
+    matches = [candidate for candidate in context["bones"].values() if candidate.family_tags & families]
+    if not matches:
+        return False
+    highest = max(matches, key=lambda item: item.midpoint[context["height_axis"]])
+    return highest.name == bone.name
+
+
+def _has_descendant_family(bone_name: str, context: dict, families: Set[str]) -> bool:
+    queue = list(context["children_map"].get(bone_name, []))
+    visited: Set[str] = set()
+    while queue:
+        current = queue.pop(0)
+        if current in visited or current not in context["bones"]:
+            continue
+        visited.add(current)
+        if context["bones"][current].family_tags & families:
+            return True
+        queue.extend(context["children_map"].get(current, []))
+    return False
+
+
+def _choose_spine_chain(primary_data: dict, support_data: Optional[dict]) -> List[str]:
+    chains = list(primary_data.get("chains", {}).get("spine", []))
+    if not chains and support_data:
+        chains = list(support_data.get("chains", {}).get("spine", []))
+    if not chains:
+        return []
+    return list(max(chains, key=lambda chain: (len(chain), tuple(chain))))
+
+
+def _choose_limb_chains(
+    bones: Dict[str, BoneInfo],
+    primary_data: dict,
+    support_data: Optional[dict],
+    limb_kind: str,
+    lateral_axis: int,
+    centerline: float,
+    side_signs: Dict[str, int],
+) -> Dict[str, List[str]]:
+    chain_groups = _flatten_limb_chains(primary_data.get("chains", {}).get(limb_kind, {}))
+    if not chain_groups and support_data:
+        chain_groups = _flatten_limb_chains(support_data.get("chains", {}).get(limb_kind, {}))
+
+    chosen: Dict[str, List[str]] = {"left": [], "right": []}
+    best_scores: Dict[str, Tuple[int, float]] = {"left": (-1, -1.0), "right": (-1, -1.0)}
+
+    for chain in chain_groups:
+        side = _infer_chain_side(chain["bones"], chain["declared_side"], bones, lateral_axis, centerline, side_signs)
+        if side not in {"left", "right"}:
+            continue
+        named_count = sum(1 for bone_name in chain["bones"] if bones.get(bone_name) and bones[bone_name].side == side)
+        chain_score = (named_count, float(len(chain["bones"])))
+        if chain_score > best_scores[side]:
+            best_scores[side] = chain_score
+            chosen[side] = list(chain["bones"])
+
+    return chosen
+
+
+def _flatten_limb_chains(limb_data: dict) -> List[dict]:
+    chains: List[dict] = []
+    if not isinstance(limb_data, dict):
+        return chains
+
+    for side_name in ("left", "right", "unsided"):
+        for chain in limb_data.get(side_name, []):
+            chains.append({"declared_side": None if side_name == "unsided" else side_name, "bones": list(chain)})
+    return chains
+
+
+def _infer_chain_side(
+    chain: Sequence[str],
+    declared_side: Optional[str],
+    bones: Dict[str, BoneInfo],
+    lateral_axis: int,
+    centerline: float,
+    side_signs: Dict[str, int],
+) -> Optional[str]:
+    if declared_side in {"left", "right"}:
+        return declared_side
+
+    side_votes = {"left": 0, "right": 0}
+    for bone_name in chain:
+        bone = bones.get(bone_name)
+        if bone and bone.side in side_votes:
+            side_votes[bone.side] += 1
+    if side_votes["left"] != side_votes["right"]:
+        return "left" if side_votes["left"] > side_votes["right"] else "right"
+
+    positions = [bones[bone_name].midpoint[lateral_axis] for bone_name in chain if bone_name in bones]
+    if not positions:
+        return None
+
+    offset = _mean(positions) - centerline
+    if abs(offset) <= 1e-6:
+        return None
+
+    left_sign = side_signs.get("left")
+    right_sign = side_signs.get("right")
+    if left_sign is not None and right_sign is not None:
+        if offset * left_sign > 0:
+            return "left"
+        if offset * right_sign > 0:
+            return "right"
+
+    return "left" if offset > 0 else "right"
+
+
+def _normalize_bone_name(name: str) -> Tuple[str, str, List[str], Optional[str]]:
+    transformed = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
+    transformed = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", transformed)
+    transformed = transformed.split(":")[-1].lower()
+    raw_tokens = [token for token in re.split(r"[^a-z0-9]+", transformed) if token]
+
+    cleaned_tokens: List[str] = []
+    role_tokens = set(ROLE_PREFIXES) | CONTROL_TOKENS
+    side: Optional[str] = None
+
+    for token in raw_tokens:
+        if token in SIDE_WORDS:
+            side = SIDE_WORDS[token]
+            continue
+        if token in role_tokens and not cleaned_tokens:
+            continue
+        cleaned_tokens.append(token)
+
+    return "_".join(cleaned_tokens), "".join(cleaned_tokens), cleaned_tokens, side
+
+
+def _detect_family_tags(normalized_name: str, compact_name: str, tokens: Sequence[str]) -> Set[str]:
+    family_tags: Set[str] = set()
+    token_set = set(tokens)
+
+    if "root" in compact_name or compact_name == "master":
+        family_tags.add("root")
+    if compact_name in {"hip", "hips", "pelvis"} or "pelvis" in compact_name or "hips" in compact_name:
+        family_tags.add("hip")
+    if compact_name.startswith("spine") or "spine" in token_set:
+        family_tags.add("spine")
+    if "torso" in token_set or "abdomen" in token_set:
+        family_tags.update({"spine", "lower_spine"})
+    if "chest" in token_set:
+        family_tags.update({"spine", "upper_spine"})
+    if "neck" in token_set:
+        family_tags.add("neck")
+    if "head" in token_set:
+        family_tags.add("head")
+    if {"shoulder", "clavicle", "collar"} & token_set:
+        family_tags.add("shoulder")
+    if "upperarm" in compact_name or ("upper" in token_set and "arm" in token_set) or "bicep" in compact_name:
+        family_tags.add("upper_arm")
+    if "forearm" in compact_name or ("lower" in token_set and "arm" in token_set):
+        family_tags.add("lower_arm")
+    if compact_name == "hand" or "wrist" in token_set:
+        family_tags.add("hand")
+    if "thigh" in compact_name or ("upper" in token_set and "leg" in token_set):
+        family_tags.add("upper_leg")
+    if "shin" in compact_name or "calf" in compact_name or ("lower" in token_set and "leg" in token_set):
+        family_tags.add("lower_leg")
+    if compact_name == "foot" or "ankle" in token_set:
+        family_tags.add("foot")
+    if "toe" in compact_name:
+        family_tags.add("toe")
+    if "eye" in compact_name:
+        family_tags.add("eye")
+    if "thumb" in compact_name:
+        family_tags.add("thumb")
+    if "finger" in compact_name or compact_name in {"index", "middle", "ring", "pinky"}:
+        family_tags.add("finger")
+    if "spine" in family_tags:
+        family_tags.update({"lower_spine", "upper_spine"})
+
+    return family_tags
+
+
+def _classify_bone_role(name: str, tokens: Sequence[str]) -> Tuple[str, float]:
+    lowered = name.lower()
+    prefix_match = re.match(r"^([a-z]+)[\\-_:.]", lowered)
+    prefix = prefix_match.group(1) if prefix_match else None
+
+    if prefix in ROLE_PREFIXES:
+        role_name = ROLE_PREFIXES[prefix]
+        if role_name == "deform":
+            return "deform", 1.08
+        if role_name == "auxiliary":
+            return "auxiliary", 0.96
+        return "mechanism", 0.45
+
+    if any(token in CONTROL_TOKENS for token in tokens):
+        return "control", 0.45
+
+    return "unknown", 1.0
+
+
+def _infer_axes(bones: Iterable[BoneInfo]) -> Tuple[int, int]:
+    points = [bone.midpoint for bone in bones]
+    if not points:
+        return 2, 0
+
+    spans = []
+    for axis in range(3):
+        axis_values = [point[axis] for point in points]
+        spans.append(max(axis_values) - min(axis_values))
+
+    height_axis = max(range(3), key=lambda axis: spans[axis])
+    remaining_axes = [axis for axis in range(3) if axis != height_axis]
+    lateral_axis = max(remaining_axes, key=lambda axis: spans[axis])
+    return height_axis, lateral_axis
+
+
+def _calibrate_side_signs(bones: Iterable[BoneInfo], lateral_axis: int) -> Dict[str, int]:
+    left_positions = [bone.midpoint[lateral_axis] for bone in bones if bone.side == "left"]
+    right_positions = [bone.midpoint[lateral_axis] for bone in bones if bone.side == "right"]
+    if not left_positions or not right_positions:
+        return {"left": 1, "right": -1}
+
+    left_mean = _mean(left_positions)
+    right_mean = _mean(right_positions)
+    if math.isclose(left_mean, right_mean, abs_tol=1e-6):
+        return {"left": 1, "right": -1}
+
+    left_sign = 1 if left_mean > right_mean else -1
+    return {"left": left_sign, "right": -left_sign}
+
+
+def _height_ratio(bone: BoneInfo, context: dict) -> float:
+    return _clamp((bone.midpoint[context["height_axis"]] - context["height_min"]) / context["height_span"])
+
+
+def _endpoint_ratio(bone: BoneInfo, context: dict, which: str) -> float:
+    axis = context["height_axis"]
+    value = bone.min_point[axis] if which == "low" else bone.max_point[axis]
+    return _clamp((value - context["height_min"]) / context["height_span"])
+
+
+def _centerline_score(bone: BoneInfo, context: dict) -> float:
+    offset = abs(bone.midpoint[context["lateral_axis"]] - context["centerline"])
+    tolerance = max(context["lateral_span"] * 0.20, 1e-6)
+    return _clamp(1.0 - (offset / tolerance))
+
+
+def _side_score(expected_side: Optional[str], bone: BoneInfo, context: dict) -> float:
+    if expected_side is None:
+        return 0.5
+
+    if bone.side == expected_side:
+        name_component = 1.0
+    elif bone.side is None:
+        name_component = 0.45
+    else:
+        name_component = 0.05
+
+    offset = bone.midpoint[context["lateral_axis"]] - context["centerline"]
+    expected_sign = context["side_signs"].get(expected_side)
+    if abs(offset) <= context["lateral_span"] * 0.05:
+        geometry_component = 0.20
+    elif expected_sign is None:
+        geometry_component = 0.60
+    else:
+        geometry_component = 1.0 if offset * expected_sign > 0 else 0.05
+
+    return _clamp((0.6 * name_component) + (0.4 * geometry_component))
+
+
+def _side_geometry_conflict(expected_side: str, bone: BoneInfo, context: dict) -> bool:
+    if bone.side not in {None, expected_side}:
+        return True
+    offset = bone.midpoint[context["lateral_axis"]] - context["centerline"]
+    if abs(offset) <= context["lateral_span"] * 0.05:
+        return False
+    expected_sign = context["side_signs"].get(expected_side)
+    return expected_sign is not None and offset * expected_sign < 0
+
+
+def _band_score(value: float, lower: float, upper: float) -> float:
+    if lower <= value <= upper:
+        return 1.0
+    span = max(upper - lower, 0.15)
+    if value < lower:
+        return _clamp(1.0 - ((lower - value) / span))
+    return _clamp(1.0 - ((value - upper) / span))
+
+
+def _to_float_triplet(values: Optional[Sequence[float]]) -> Tuple[float, float, float]:
+    values = values or (0.0, 0.0, 0.0)
+    return (float(values[0]), float(values[1]), float(values[2]))
+
+
+def _mean(values: Sequence[float]) -> float:
+    return sum(values) / float(len(values)) if values else 0.0
+
+
+def _median(values: Sequence[float]) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    midpoint = len(ordered) // 2
+    if len(ordered) % 2:
+        return ordered[midpoint]
+    return (ordered[midpoint - 1] + ordered[midpoint]) / 2.0
+
+
+def _clamp(value: float) -> float:
+    return max(0.0, min(1.0, value))
+
+
+def _load_json_cached(path: Optional[Path], cache: Dict[Path, dict]) -> dict:
+    if path is None:
+        raise ValueError("Path is required")
+    if path not in cache:
+        with path.open("r", encoding="utf-8") as handle:
+            cache[path] = json.load(handle)
+    return cache[path]
