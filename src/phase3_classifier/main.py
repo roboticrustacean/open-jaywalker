@@ -32,8 +32,8 @@ def main(argv=None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     asset_dir = Path(args.asset_dir).resolve()
-    report, report_path = write_asset_report(asset_dir)
-    print_console_summary(report, report_path)
+    classifier_report, build_plan, report_path, plan_path = write_asset_report(asset_dir)
+    print_console_summary(classifier_report, build_plan, report_path, plan_path)
     return 0
 
 

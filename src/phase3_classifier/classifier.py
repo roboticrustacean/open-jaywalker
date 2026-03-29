@@ -247,7 +247,7 @@ def discover_armatures(asset_dir: Path) -> List[ArmatureInput]:
     return armatures
 
 
-def classify_asset_folder(asset_dir: Path) -> dict:
+def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
     asset_dir = asset_dir.resolve()
     if not asset_dir.is_dir():
         raise FileNotFoundError("Asset directory does not exist: {0}".format(asset_dir))
@@ -263,7 +263,14 @@ def classify_asset_folder(asset_dir: Path) -> dict:
     )
     recommended_report = ranked_reports[0]
 
-    return {
+    actions: Dict[str, list] = {"rename": [], "create": []}
+    for target, payload in recommended_report["asam_targets"].items():
+        if payload["action"] in {"direct_map", "alias_map"} and payload["source_bone"]:
+            actions["rename"].append({"source": payload["source_bone"], "target": target})
+        elif payload["action"] == "create_in_builder":
+            actions["create"].append({"target": target, "parent": TARGET_PARENTS.get(target)})
+
+    classifier_report = {
         "asset_summary": {
             "asset_name": asset_dir.name,
             "asset_dir": str(asset_dir),
@@ -282,27 +289,42 @@ def classify_asset_folder(asset_dir: Path) -> dict:
         },
         "armatures": armature_reports,
         "recommended_primary_armature": recommended_report["armature_name"],
-        "asam_targets": copy.deepcopy(recommended_report["asam_targets"]),
-        "proposed_asam_hierarchy": copy.deepcopy(recommended_report["proposed_asam_hierarchy"]),
-        "extras_preserved": copy.deepcopy(recommended_report["extras_preserved"]),
-        "unclassified_bones": copy.deepcopy(recommended_report["unclassified_bones"]),
-        "missing_core_targets": list(recommended_report["missing_core_targets"]),
+        "semantic_mapping": copy.deepcopy(recommended_report["asam_targets"]),
+        "missing_targets": list(recommended_report["missing_core_targets"]),
         "ambiguous_targets": copy.deepcopy(recommended_report["ambiguous_targets"]),
+        "unclassified_bones": copy.deepcopy(recommended_report["unclassified_bones"]),
         "review_flags": list(recommended_report["review_flags"]),
         "deferred_targets": list(recommended_report["deferred_targets"]),
     }
 
+    build_plan = {
+        "asset_name": asset_dir.name,
+        "recommended_primary_armature": recommended_report["armature_name"],
+        "actions": actions,
+        "proposed_asam_hierarchy": copy.deepcopy(recommended_report["proposed_asam_hierarchy"]),
+        "extras_preserved": copy.deepcopy(recommended_report["extras_preserved"]),
+    }
 
-def write_asset_report(asset_dir: Path) -> Tuple[dict, Path]:
-    report = classify_asset_folder(asset_dir)
-    report_path = asset_dir / "phase3_classification.json"
+    return classifier_report, build_plan
+
+
+def write_asset_report(asset_dir: Path) -> Tuple[dict, dict, Path, Path]:
+    classifier_report, build_plan = classify_asset_folder(asset_dir)
+    report_path = asset_dir / "classifier_report.json"
+    plan_path = asset_dir / "build_plan.json"
+    
     with report_path.open("w", encoding="utf-8") as handle:
-        json.dump(report, handle, indent=2)
+        json.dump(classifier_report, handle, indent=2)
         handle.write("\n")
-    return report, report_path
+        
+    with plan_path.open("w", encoding="utf-8") as handle:
+        json.dump(build_plan, handle, indent=2)
+        handle.write("\n")
+        
+    return classifier_report, build_plan, report_path, plan_path
 
 
-def print_console_summary(report: dict, report_path: Path) -> None:
+def print_console_summary(report: dict, plan: dict, report_path: Path, plan_path: Path) -> None:
     asset_summary = report["asset_summary"]
     print("Phase 3 classifier summary")
     print("Asset folder: {0}".format(asset_summary["asset_dir"]))
@@ -335,10 +357,11 @@ def print_console_summary(report: dict, report_path: Path) -> None:
 
     print("")
     print("Recommended primary armature: {0}".format(report["recommended_primary_armature"]))
-    print("Missing targets: {0}".format(", ".join(report["missing_core_targets"]) or "(none)"))
+    print("Missing targets: {0}".format(", ".join(report["missing_targets"]) or "(none)"))
     print("Ambiguous targets: {0}".format(", ".join(item["target"] for item in report["ambiguous_targets"]) or "(none)"))
-    print("Preserved extras count: {0}".format(len(report["extras_preserved"])))
+    print("Preserved extras count: {0}".format(len(plan["extras_preserved"])))
     print("Report written to: {0}".format(report_path))
+    print("Build plan written to: {0}".format(plan_path))
 
 
 def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:

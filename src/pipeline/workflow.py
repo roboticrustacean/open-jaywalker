@@ -42,11 +42,13 @@ def run_combined_workflow(
     print("STARTING PHASE 3 CLASSIFIER")
     print("=" * 60 + "\n")
 
-    classifier_report, classifier_report_path = classify_fn(output_dir)
-    print_summary_fn(classifier_report, classifier_report_path)
+    classifier_report, build_plan, classifier_report_path, build_plan_path = classify_fn(output_dir)
+    print_summary_fn(classifier_report, build_plan, classifier_report_path, build_plan_path)
 
     return {
         "inspect_result": inspect_result,
         "classifier_report": classifier_report,
         "classifier_report_path": str(classifier_report_path),
+        "build_plan": build_plan,
+        "build_plan_path": str(build_plan_path),
     }
