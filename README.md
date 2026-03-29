@@ -32,7 +32,7 @@ The combined Blender pipeline will:
 - Traverse each armature’s bone hierarchy
 - Export the same Phase 2 JSON files under `src/armature_inspector/output/<asset>`
 - Run the Phase 3 classifier on that freshly exported folder
-- Write `phase3_classification.json` into the same asset folder
+- Write `classifier_report.json` and `build_plan.json` into the same asset folder
 
 The inspector-only entrypoint will:
 
@@ -40,6 +40,33 @@ The inspector-only entrypoint will:
 - Traverse each armature’s bone hierarchy
 - Print a clear, structured tree of bones, including OpenMATERIAL 3D–style skeletons.
 - Export the same Phase 2 JSON files under `src/armature_inspector/output/<asset>`
+
+#### Alternate Partial Executions
+
+You can run the pipeline in three different ways depending on what you want to do:
+
+1. Full Blender pipeline
+   Open `src/pipeline/main.py` in Blender or via the VSCode Blender extension and run it.
+   This performs analysis first, writes the Phase 2 JSON files, then immediately runs the Phase 3 classifier on that same asset folder.
+
+2. Analysis only
+   Open `src/armature_inspector/main.py` in Blender or via the VSCode Blender extension and run it.
+   This only performs the armature inspection and writes the Phase 2 JSON files under `src/armature_inspector/output/<asset>`.
+
+3. Classification only
+   First make sure the asset already has Phase 2 JSON output under `src/armature_inspector/output/<asset>`.
+   Then run the classifier separately from your project environment:
+
+   ```powershell
+   conda activate open-jaywalker
+   python src/phase3_classifier/main.py --asset-dir src/armature_inspector/output/<asset>
+   ```
+
+This split workflow is useful when you want to:
+
+- rerun only the classifier after changing classification rules
+- inspect exported JSON files manually before classification
+- keep Blender usage limited to the extraction/analysis step
 
 ### Phase 3 Offline Classifier
 
@@ -56,4 +83,4 @@ The classifier will:
 - Prefer `DEF-` filtered outputs when available and use unfiltered data as fallback evidence
 - Classify core ASAM human semantic targets into a structured report
 - Recommend one primary armature for later ASAM conversion work
-- Write `phase3_classification.json` back into the selected asset folder
+- Write `classifier_report.json` and `build_plan.json` back into the selected asset folder
