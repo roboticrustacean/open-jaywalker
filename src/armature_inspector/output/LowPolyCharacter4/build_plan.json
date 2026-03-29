@@ -1,0 +1,905 @@
+{
+  "asset_name": "LowPolyCharacter4",
+  "recommended_primary_armature": "rig",
+  "actions": {
+    "rename": [
+      {
+        "source": "root",
+        "target": "Root"
+      },
+      {
+        "source": "DEF-pelvis.L",
+        "target": "Hip"
+      },
+      {
+        "source": "DEF-spine.002",
+        "target": "Lower_Spine"
+      },
+      {
+        "source": "DEF-spine.004",
+        "target": "Upper_Spine"
+      },
+      {
+        "source": "MCH-ROT-neck",
+        "target": "Neck"
+      },
+      {
+        "source": "head",
+        "target": "Head"
+      },
+      {
+        "source": "ORG-shoulder.L",
+        "target": "Shoulder_Left"
+      },
+      {
+        "source": "DEF-upper_arm.L",
+        "target": "Upper_Arm_Left"
+      },
+      {
+        "source": "DEF-forearm.L",
+        "target": "Lower_Arm_Left"
+      },
+      {
+        "source": "DEF-hand.L",
+        "target": "Hand_Left"
+      },
+      {
+        "source": "ORG-shoulder.R",
+        "target": "Shoulder_Right"
+      },
+      {
+        "source": "DEF-upper_arm.R",
+        "target": "Upper_Arm_Right"
+      },
+      {
+        "source": "DEF-forearm.R",
+        "target": "Lower_Arm_Right"
+      },
+      {
+        "source": "DEF-hand.R",
+        "target": "Hand_Right"
+      },
+      {
+        "source": "DEF-thigh.L",
+        "target": "Upper_Leg_Left"
+      },
+      {
+        "source": "DEF-shin.L.001",
+        "target": "Lower_Leg_Left"
+      },
+      {
+        "source": "DEF-foot.L",
+        "target": "Foot_Left"
+      },
+      {
+        "source": "DEF-thigh.R",
+        "target": "Upper_Leg_Right"
+      },
+      {
+        "source": "DEF-shin.R.001",
+        "target": "Lower_Leg_Right"
+      },
+      {
+        "source": "DEF-foot.R",
+        "target": "Foot_Right"
+      }
+    ],
+    "create": []
+  },
+  "proposed_asam_hierarchy": {
+    "object_nodes": [
+      {
+        "name": "Grp_Root",
+        "parent": null
+      },
+      {
+        "name": "Armature_LowPolyCharacter4",
+        "parent": "Grp_Root"
+      }
+    ],
+    "bone_parents": {
+      "Root": "Armature_LowPolyCharacter4",
+      "Hip": "Root",
+      "Lower_Spine": "Hip",
+      "Upper_Spine": "Lower_Spine",
+      "Neck": "Upper_Spine",
+      "Head": "Neck",
+      "Shoulder_Left": "Upper_Spine",
+      "Upper_Arm_Left": "Shoulder_Left",
+      "Lower_Arm_Left": "Upper_Arm_Left",
+      "Hand_Left": "Lower_Arm_Left",
+      "Shoulder_Right": "Upper_Spine",
+      "Upper_Arm_Right": "Shoulder_Right",
+      "Lower_Arm_Right": "Upper_Arm_Right",
+      "Hand_Right": "Lower_Arm_Right",
+      "Upper_Leg_Left": "Hip",
+      "Lower_Leg_Left": "Upper_Leg_Left",
+      "Foot_Left": "Lower_Leg_Left",
+      "Upper_Leg_Right": "Hip",
+      "Lower_Leg_Right": "Upper_Leg_Right",
+      "Foot_Right": "Lower_Leg_Right"
+    }
+  },
+  "extras_preserved": [
+    {
+      "bone_name": "DEF-forearm.L.001",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-forearm.R.001",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-shin.L",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-shin.R",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-spine",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-spine.001",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-spine.003",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-spine.005",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-spine.006",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-thigh.L.001",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-thigh.R.001",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-toe.L",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-toe.R",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-upper_arm.L.001",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "DEF-upper_arm.R.001",
+      "reason": "supporting_chain_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "Hair_Front",
+      "reason": "named_extra",
+      "origin": "support",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "MCH-foot_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-foot_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-foot_ik.parent.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-foot_ik.parent.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-foot_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-foot_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-forearm_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-forearm_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-forearm_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-forearm_tweak.L.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-forearm_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-forearm_tweak.R.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-hand_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-hand_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-hand_ik.parent.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-hand_ik.parent.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-hand_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-hand_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-shin_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-shin_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-shin_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-shin_tweak.L.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-shin_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-shin_tweak.R.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_ik_swing.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_ik_swing.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_ik_target.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_ik_target.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_ik_target.parent.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_ik_target.parent.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_parent_widget.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_parent_widget.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_tweak.L.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-thigh_tweak.R.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-toe_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-toe_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-toe_ik_parent.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-toe_ik_parent.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_ik_swing.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_ik_swing.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_ik_target.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_ik_target.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_ik_target.parent.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_ik_target.parent.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_parent_widget.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_parent_widget.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_tweak.L.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "MCH-upper_arm_tweak.R.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "ORG-toe.L",
+      "reason": "deferred_semantic_detail",
+      "origin": "support",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "ORG-toe.R",
+      "reason": "deferred_semantic_detail",
+      "origin": "support",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "VIS_thigh_ik_pole.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "VIS_thigh_ik_pole.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "VIS_upper_arm_ik_pole.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "VIS_upper_arm_ik_pole.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_heel_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_heel_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_spin_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_spin_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "foot_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "forearm_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "forearm_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "forearm_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "forearm_tweak.L.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "forearm_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "forearm_tweak.R.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "hand_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "hand_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "hand_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "hand_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "hand_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "hand_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "shin_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "shin_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "shin_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "shin_tweak.L.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "shin_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "shin_tweak.R.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "spine_fk",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "spine_fk.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "spine_fk.002",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "spine_fk.003",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_ik_target.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_ik_target.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_tweak.L.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "thigh_tweak.R.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "toe_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "toe_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "toe_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "toe_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_fk.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_fk.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_ik.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_ik.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_ik_target.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_ik_target.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_tweak.L",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_tweak.L.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_tweak.R",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    },
+    {
+      "bone_name": "upper_arm_tweak.R.001",
+      "reason": "control_or_mechanism",
+      "origin": "support",
+      "role": "control"
+    }
+  ]
+}

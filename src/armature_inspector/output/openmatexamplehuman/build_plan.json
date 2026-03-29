@@ -1,0 +1,173 @@
+{
+  "asset_name": "openmatexamplehuman",
+  "recommended_primary_armature": "Armature",
+  "actions": {
+    "rename": [
+      {
+        "source": "Root",
+        "target": "Root"
+      },
+      {
+        "source": "Hip",
+        "target": "Hip"
+      },
+      {
+        "source": "Lower_Spine",
+        "target": "Lower_Spine"
+      },
+      {
+        "source": "Upper_Spine",
+        "target": "Upper_Spine"
+      },
+      {
+        "source": "Neck",
+        "target": "Neck"
+      },
+      {
+        "source": "Head",
+        "target": "Head"
+      },
+      {
+        "source": "Shoulder_Left",
+        "target": "Shoulder_Left"
+      },
+      {
+        "source": "Upper_Arm_Left",
+        "target": "Upper_Arm_Left"
+      },
+      {
+        "source": "Lower_Arm_Left",
+        "target": "Lower_Arm_Left"
+      },
+      {
+        "source": "Hand_Left",
+        "target": "Hand_Left"
+      },
+      {
+        "source": "Shoulder_Right",
+        "target": "Shoulder_Right"
+      },
+      {
+        "source": "Upper_Arm_Right",
+        "target": "Upper_Arm_Right"
+      },
+      {
+        "source": "Lower_Arm_Right",
+        "target": "Lower_Arm_Right"
+      },
+      {
+        "source": "Hand_Right",
+        "target": "Hand_Right"
+      },
+      {
+        "source": "Upper_Leg_Left",
+        "target": "Upper_Leg_Left"
+      },
+      {
+        "source": "Lower_Leg_Left",
+        "target": "Lower_Leg_Left"
+      },
+      {
+        "source": "Foot_Left",
+        "target": "Foot_Left"
+      },
+      {
+        "source": "Upper_Leg_Right",
+        "target": "Upper_Leg_Right"
+      },
+      {
+        "source": "Lower_Leg_Right",
+        "target": "Lower_Leg_Right"
+      },
+      {
+        "source": "Foot_Right",
+        "target": "Foot_Right"
+      }
+    ],
+    "create": []
+  },
+  "proposed_asam_hierarchy": {
+    "object_nodes": [
+      {
+        "name": "Grp_Root",
+        "parent": null
+      },
+      {
+        "name": "Armature_openmatexamplehuman",
+        "parent": "Grp_Root"
+      }
+    ],
+    "bone_parents": {
+      "Root": "Armature_openmatexamplehuman",
+      "Hip": "Root",
+      "Lower_Spine": "Hip",
+      "Upper_Spine": "Lower_Spine",
+      "Neck": "Upper_Spine",
+      "Head": "Neck",
+      "Shoulder_Left": "Upper_Spine",
+      "Upper_Arm_Left": "Shoulder_Left",
+      "Lower_Arm_Left": "Upper_Arm_Left",
+      "Hand_Left": "Lower_Arm_Left",
+      "Shoulder_Right": "Upper_Spine",
+      "Upper_Arm_Right": "Shoulder_Right",
+      "Lower_Arm_Right": "Upper_Arm_Right",
+      "Hand_Right": "Lower_Arm_Right",
+      "Upper_Leg_Left": "Hip",
+      "Lower_Leg_Left": "Upper_Leg_Left",
+      "Foot_Left": "Lower_Leg_Left",
+      "Upper_Leg_Right": "Hip",
+      "Lower_Leg_Right": "Upper_Leg_Right",
+      "Foot_Right": "Lower_Leg_Right"
+    }
+  },
+  "extras_preserved": [
+    {
+      "bone_name": "Eye_Left",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "Eye_Right",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "Full_Fingers_Left",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "Full_Fingers_Right",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "Full_Thumb_Left",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "Full_Thumb_Right",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "Full_Toes_Left",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    },
+    {
+      "bone_name": "Full_Toes_Right",
+      "reason": "deferred_semantic_detail",
+      "origin": "primary",
+      "role": "unknown"
+    }
+  ]
+}
