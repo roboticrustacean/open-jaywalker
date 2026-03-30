@@ -34,10 +34,15 @@ class PipelineWorkflowTests(unittest.TestCase):
 
         def classify_fn(path):
             classifier_calls.append(path)
-            return {"recommended_primary_armature": "Rig"}, path / "phase3_classification.json"
+            return (
+                {"recommended_primary_armature": "Rig"},
+                {"root_resolution": {"mode": "reuse_existing_root"}},
+                path / "phase3_classification.json",
+                path / "build_plan.json",
+            )
 
-        def print_summary_fn(report, report_path):
-            summary_calls.append((report, report_path))
+        def print_summary_fn(report, build_plan, report_path, plan_path):
+            summary_calls.append((report, build_plan, report_path, plan_path))
 
         result = run_combined_workflow(inspect_scene_fn, classify_fn, print_summary_fn)
 
@@ -89,9 +94,14 @@ class PipelineWorkflowTests(unittest.TestCase):
             }
 
         def classify_fn(path):
-            return {"recommended_primary_armature": "Rig"}, path / "phase3_classification.json"
+            return (
+                {"recommended_primary_armature": "Rig"},
+                {"root_resolution": {"mode": "reuse_existing_root"}},
+                path / "phase3_classification.json",
+                path / "build_plan.json",
+            )
 
-        def print_summary_fn(report, report_path):
+        def print_summary_fn(report, build_plan, report_path, plan_path):
             return None
 
         buffer = io.StringIO()

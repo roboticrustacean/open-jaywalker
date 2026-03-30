@@ -9,6 +9,7 @@ ASAM OpenMATERIAL 3D assets).
 
 import json
 import os
+import re
 
 import bpy
 
@@ -552,6 +553,234 @@ def extract_armature_geometry(armature_obj, prefix_filter=None):
     return result
 
 
+AXIS_NAMES = ("x", "y", "z")
+
+
+def _detect_bone_side(name):
+    """Infer left/right side markers from a bone name."""
+    lowered = name.lower()
+    raw_tokens = [token for token in re.split(r"[^a-z0-9]+", lowered) if token]
+    for token in raw_tokens:
+        if token in {"l", "left"}:
+            return "left"
+        if token in {"r", "right"}:
+            return "right"
+    return None
+
+
+def _detect_bone_tags(name):
+    """Extract coarse semantic tags from a bone name."""
+    lowered = name.lower()
+    compact = re.sub(r"[^a-z0-9]+", "", lowered)
+    tags = set()
+
+    if "head" in compact:
+        tags.add("head")
+    if "neck" in compact:
+        tags.add("neck")
+    if "spine" in compact or "chest" in compact or "torso" in compact:
+        tags.add("spine")
+    if "foot" in compact or "toe" in compact or "ankle" in compact:
+        tags.add("foot")
+    if "leg" in compact or "thigh" in compact or "shin" in compact or "calf" in compact:
+        tags.add("leg")
+
+    return tags
+
+
+def _mean(values):
+    return sum(values) / float(len(values)) if values else 0.0
+
+
+def _axis_cross_sign(axis_a, axis_b, axis_c):
+    """Return +1 when e_a x e_b == e_c, else -1."""
+    return 1 if ((axis_a + 1) % 3 == axis_b and (axis_b + 1) % 3 == axis_c) else -1
+
+
+def _infer_axis_metadata_from_bones(bones_data):
+    """
+    Infer semantic forward/side/up axes from bone geometry.
+
+    Returns:
+        dict: Semantic axis metadata with index and sign information.
+    """
+    if not bones_data:
+        return {
+            "forward_axis": {"index": 0, "name": "x", "sign": 1},
+            "side_axis": {"index": 1, "name": "y", "sign": 1},
+            "up_axis": {"index": 2, "name": "z", "sign": 1},
+        }
+
+    midpoints = []
+    side_groups = {"left": [], "right": []}
+    upper_points = []
+    lower_points = []
+
+    for bone in bones_data:
+        head = bone.get("head") or (0.0, 0.0, 0.0)
+        tail = bone.get("tail") or (0.0, 0.0, 0.0)
+        midpoint = [float((head[index] + tail[index]) / 2.0) for index in range(3)]
+        midpoints.append(midpoint)
+
+        side = _detect_bone_side(bone.get("name", ""))
+        if side in side_groups:
+            side_groups[side].append(midpoint)
+
+        tags = _detect_bone_tags(bone.get("name", ""))
+        if {"head", "neck", "spine"} & tags:
+            upper_points.append(midpoint)
+        if {"foot", "leg"} & tags:
+            lower_points.append(midpoint)
+
+    spans = []
+    for axis in range(3):
+        values = [point[axis] for point in midpoints]
+        spans.append(max(values) - min(values))
+
+    up_index = max(range(3), key=lambda axis: spans[axis])
+    remaining_axes = [axis for axis in range(3) if axis != up_index]
+
+    left_means = {
+        axis: _mean([point[axis] for point in side_groups["left"]]) if side_groups["left"] else None
+        for axis in remaining_axes
+    }
+    right_means = {
+        axis: _mean([point[axis] for point in side_groups["right"]]) if side_groups["right"] else None
+        for axis in remaining_axes
+    }
+
+    side_index = None
+    best_side_delta = -1.0
+    for axis in remaining_axes:
+        left_mean = left_means[axis]
+        right_mean = right_means[axis]
+        if left_mean is None or right_mean is None:
+            continue
+        delta = abs(left_mean - right_mean)
+        if delta > best_side_delta:
+            best_side_delta = delta
+            side_index = axis
+    if side_index is None:
+        side_index = max(remaining_axes, key=lambda axis: spans[axis])
+
+    forward_index = next(axis for axis in range(3) if axis not in {up_index, side_index})
+
+    up_sign = 1
+    if upper_points and lower_points:
+        upper_mean = _mean([point[up_index] for point in upper_points])
+        lower_mean = _mean([point[up_index] for point in lower_points])
+        if upper_mean < lower_mean:
+            up_sign = -1
+
+    side_sign = 1
+    left_mean = left_means.get(side_index)
+    right_mean = right_means.get(side_index)
+    if left_mean is not None and right_mean is not None and left_mean < right_mean:
+        side_sign = -1
+
+    forward_sign = up_sign * _axis_cross_sign(forward_index, side_index, up_index) * side_sign
+    return {
+        "forward_axis": {"index": forward_index, "name": AXIS_NAMES[forward_index], "sign": int(forward_sign)},
+        "side_axis": {"index": side_index, "name": AXIS_NAMES[side_index], "sign": int(side_sign)},
+        "up_axis": {"index": up_index, "name": AXIS_NAMES[up_index], "sign": int(up_sign)},
+    }
+
+
+def _build_bbox_metadata(points, axis_metadata):
+    """Build bounding box metadata from local-space points."""
+    if not points:
+        zero = [0.0, 0.0, 0.0]
+        return {
+            "bbox_min": list(zero),
+            "bbox_max": list(zero),
+            "bbox_height": 0.0,
+            "bbox_ground_center": list(zero),
+        }
+
+    bbox_min = [min(point[index] for point in points) for index in range(3)]
+    bbox_max = [max(point[index] for point in points) for index in range(3)]
+
+    up_axis = axis_metadata["up_axis"]["index"]
+    up_sign = axis_metadata["up_axis"]["sign"]
+    bbox_height = abs(bbox_max[up_axis] - bbox_min[up_axis])
+    bbox_ground_center = [(bbox_min[index] + bbox_max[index]) / 2.0 for index in range(3)]
+    bbox_ground_center[up_axis] = bbox_min[up_axis] if up_sign >= 0 else bbox_max[up_axis]
+
+    return {
+        "bbox_min": [float(value) for value in bbox_min],
+        "bbox_max": [float(value) for value in bbox_max],
+        "bbox_height": float(bbox_height),
+        "bbox_ground_center": [float(value) for value in bbox_ground_center],
+    }
+
+
+def build_armature_placement_metadata(bones_data, mesh_points=None, driven_meshes=None):
+    """
+    Build self-contained armature placement metadata from geometry inputs.
+
+    Args:
+        bones_data: List of exported bone payloads.
+        mesh_points: Optional list of local-space mesh bound-box corner points.
+        driven_meshes: Optional list of mesh object names contributing to the bounds.
+
+    Returns:
+        dict: Placement metadata for later classifier/builder steps.
+    """
+    axis_metadata = _infer_axis_metadata_from_bones(bones_data)
+
+    if mesh_points:
+        bounds_points = [[float(value) for value in point] for point in mesh_points]
+        bounds_source = "meshes"
+    else:
+        bounds_points = []
+        for bone in bones_data:
+            if bone.get("head"):
+                bounds_points.append([float(value) for value in bone["head"]])
+            if bone.get("tail"):
+                bounds_points.append([float(value) for value in bone["tail"]])
+        bounds_source = "bones_fallback"
+
+    metadata = {
+        "bounds_source": bounds_source,
+        "driven_meshes": sorted(set(driven_meshes or [])),
+    }
+    metadata.update(_build_bbox_metadata(bounds_points, axis_metadata))
+    metadata.update(axis_metadata)
+    return metadata
+
+
+def _collect_armature_mesh_bounds(armature_obj):
+    """
+    Collect mesh bound-box corner points in armature-local coordinates.
+    """
+    from mathutils import Vector
+
+    armature_inverse = armature_obj.matrix_world.inverted()
+    driven_meshes = []
+    local_points = []
+
+    for obj in bpy.data.objects:
+        if obj.type != "MESH":
+            continue
+
+        driven_by_armature = obj.parent == armature_obj
+        if not driven_by_armature:
+            for modifier in getattr(obj, "modifiers", []):
+                if modifier.type == "ARMATURE" and getattr(modifier, "object", None) == armature_obj:
+                    driven_by_armature = True
+                    break
+        if not driven_by_armature:
+            continue
+
+        driven_meshes.append(obj.name)
+        for corner in obj.bound_box:
+            world_point = obj.matrix_world @ Vector(corner)
+            local_point = armature_inverse @ world_point
+            local_points.append([float(local_point[0]), float(local_point[1]), float(local_point[2])])
+
+    return local_points, driven_meshes
+
+
 def _format_vec3(vec, precision=4):
     """Format a 3D vector for log output."""
     return f"({vec[0]:.{precision}f}, {vec[1]:.{precision}f}, {vec[2]:.{precision}f})"
@@ -670,6 +899,8 @@ def export_armature_json(armature_obj):
     
     source_file = bpy.data.filepath or "(unsaved)"
 
+    mesh_points, driven_meshes = _collect_armature_mesh_bounds(armature_obj)
+
     all_chains = {
         "spine": detect_spine_chains(armature_obj),
         "leg": detect_leg_chains(armature_obj),
@@ -685,6 +916,11 @@ def export_armature_json(armature_obj):
         "hierarchy": all_hierarchy,
         "bones": all_bones,
         "chains": all_chains,
+        "placement_metadata": build_armature_placement_metadata(
+            all_bones,
+            mesh_points=mesh_points,
+            driven_meshes=driven_meshes,
+        ),
     }
     
     all_path = os.path.join(output_dir, f"{safe_name}_all.json")
@@ -708,6 +944,11 @@ def export_armature_json(armature_obj):
         "hierarchy": filtered_hierarchy,
         "bones": filtered_bones,
         "chains": filtered_chains,
+        "placement_metadata": build_armature_placement_metadata(
+            filtered_bones,
+            mesh_points=mesh_points,
+            driven_meshes=driven_meshes,
+        ),
     }
     
     filtered_path = os.path.join(output_dir, f"{safe_name}_filtered.json")

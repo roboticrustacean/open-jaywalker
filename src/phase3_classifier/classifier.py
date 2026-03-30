@@ -127,6 +127,13 @@ HEIGHT_BANDS: Dict[str, Tuple[float, float]] = {
     "Foot": (0.0, 0.25),
 }
 
+AXIS_NAMES = ("x", "y", "z")
+RECOVERABLE_ACTIONS = {"direct_map", "alias_map", "repair_in_builder"}
+ROOT_CENTER_TOLERANCE_RATIO = 0.02
+ROOT_GROUND_TOLERANCE_RATIO = 0.01
+ROOT_TAIL_TO_HIP_TOLERANCE_RATIO = 0.05
+ROOT_UP_ALIGNMENT_COSINE = 0.95
+
 CORE_FAMILY_BY_TARGET: Dict[str, str] = {
     "Root": "root",
     "Hip": "hip",
@@ -265,6 +272,8 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
 
     actions: Dict[str, list] = {"rename": [], "create": []}
     for target, payload in recommended_report["asam_targets"].items():
+        if target == "Root":
+            continue
         if payload["action"] in {"direct_map", "alias_map"} and payload["source_bone"]:
             actions["rename"].append({"source": payload["source_bone"], "target": target})
         elif payload["action"] == "create_in_builder":
@@ -290,6 +299,8 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         "armatures": armature_reports,
         "recommended_primary_armature": recommended_report["armature_name"],
         "semantic_mapping": copy.deepcopy(recommended_report["asam_targets"]),
+        "root_resolution": copy.deepcopy(recommended_report["root_resolution"]),
+        "placement_metadata": copy.deepcopy(recommended_report["placement_metadata"]),
         "missing_targets": list(recommended_report["missing_core_targets"]),
         "ambiguous_targets": copy.deepcopy(recommended_report["ambiguous_targets"]),
         "unclassified_bones": copy.deepcopy(recommended_report["unclassified_bones"]),
@@ -301,6 +312,8 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         "asset_name": asset_dir.name,
         "recommended_primary_armature": recommended_report["armature_name"],
         "actions": actions,
+        "root_resolution": copy.deepcopy(recommended_report["root_resolution"]),
+        "placement_metadata": copy.deepcopy(recommended_report["placement_metadata"]),
         "proposed_asam_hierarchy": copy.deepcopy(recommended_report["proposed_asam_hierarchy"]),
         "extras_preserved": copy.deepcopy(recommended_report["extras_preserved"]),
     }
@@ -337,12 +350,13 @@ def print_console_summary(report: dict, plan: dict, report_path: Path, plan_path
         print("- {0}".format(armature_report["armature_name"]))
         print("  primary={0}  support={1}".format(selected_inputs["primary"], selected_inputs["support"] or "(none)"))
         print(
-            "  mapped={0}/{1}  avg_conf={2:.3f}  direct={3}  alias={4}".format(
+            "  mapped={0}/{1}  avg_conf={2:.3f}  direct={3}  alias={4}  repair={5}".format(
                 summary["mapped_core_targets"],
                 len(CORE_TARGETS),
                 summary["average_confidence"],
                 summary["direct_map_targets"],
                 summary["alias_map_targets"],
+                summary.get("repair_targets", 0),
             )
         )
         print(
@@ -357,6 +371,7 @@ def print_console_summary(report: dict, plan: dict, report_path: Path, plan_path
 
     print("")
     print("Recommended primary armature: {0}".format(report["recommended_primary_armature"]))
+    print("Root resolution: {0}".format(plan["root_resolution"]["mode"]))
     print("Missing targets: {0}".format(", ".join(report["missing_targets"]) or "(none)"))
     print("Ambiguous targets: {0}".format(", ".join(item["target"] for item in report["ambiguous_targets"]) or "(none)"))
     print("Preserved extras count: {0}".format(len(plan["extras_preserved"])))
@@ -379,14 +394,15 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
         target_candidates[target_name] = candidates
 
     resolved_targets = _resolve_targets(target_candidates)
+    root_resolution = _resolve_root_compliance(resolved_targets, target_candidates.get("Root", []), context)
     mapped_bones = {
         payload["source_bone"]
         for payload in resolved_targets.values()
-        if payload["source_bone"] is not None and payload["action"] in {"direct_map", "alias_map"}
+        if payload["source_bone"] is not None and payload["action"] in RECOVERABLE_ACTIONS
     }
 
     extras_preserved, unclassified_bones = _classify_non_mapped_bones(bones, context, mapped_bones)
-    review_flags = _build_review_flags(resolved_targets, context)
+    review_flags = _build_review_flags(resolved_targets, root_resolution, context)
     ambiguous_targets = [
         {"target": target_name, "reason": payload["notes"], "confidence": payload["confidence"]}
         for target_name, payload in resolved_targets.items()
@@ -408,6 +424,8 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
         },
         "summary": _build_armature_summary(resolved_targets, review_flags, armature_input.primary_data),
         "asam_targets": resolved_targets,
+        "root_resolution": root_resolution,
+        "placement_metadata": copy.deepcopy(context["placement_metadata"]),
         "proposed_asam_hierarchy": _build_proposed_hierarchy(asset_name),
         "extras_preserved": extras_preserved,
         "unclassified_bones": unclassified_bones,
@@ -420,30 +438,133 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
 
 def _build_context(bones: Dict[str, BoneInfo], primary_data: dict, support_data: Optional[dict]) -> dict:
     children_map = {name: list(bone.child_names) for name, bone in bones.items()}
-    height_axis, lateral_axis = _infer_axes(bones.values())
-    centerline = _median([bone.midpoint[lateral_axis] for bone in bones.values()])
-    height_values = [bone.midpoint[height_axis] for bone in bones.values()]
-    lateral_values = [bone.midpoint[lateral_axis] for bone in bones.values()]
-    height_min = min(height_values) if height_values else 0.0
-    height_max = max(height_values) if height_values else 1.0
-    lateral_span = max(lateral_values) - min(lateral_values) if lateral_values else 1.0
+    derived_height_axis, derived_lateral_axis = _infer_axes(bones.values())
+    derived_centerline = _median([bone.midpoint[derived_lateral_axis] for bone in bones.values()])
+    derived_side_signs = _calibrate_side_signs(bones.values(), derived_lateral_axis)
+    placement_metadata = _load_placement_metadata(
+        primary_data,
+        support_data,
+        bones,
+        derived_height_axis,
+        derived_lateral_axis,
+        derived_centerline,
+        derived_side_signs,
+    )
+
+    height_axis = int(placement_metadata["up_axis"]["index"])
+    lateral_axis = int(placement_metadata["side_axis"]["index"])
+    forward_axis = int(placement_metadata["forward_axis"]["index"])
+    height_sign = int(placement_metadata["up_axis"]["sign"])
+    centerline = float(placement_metadata["bbox_ground_center"][lateral_axis])
+    height_bounds_min = float(placement_metadata["bbox_min"][height_axis])
+    height_bounds_max = float(placement_metadata["bbox_max"][height_axis])
+    lateral_span = abs(float(placement_metadata["bbox_max"][lateral_axis]) - float(placement_metadata["bbox_min"][lateral_axis]))
     if lateral_span <= 1e-6:
         lateral_span = 1.0
+    side_signs = {
+        "left": int(placement_metadata["side_axis"]["sign"]),
+        "right": -int(placement_metadata["side_axis"]["sign"]),
+    }
 
-    side_signs = _calibrate_side_signs(bones.values(), lateral_axis)
     return {
         "bones": bones,
         "children_map": children_map,
+        "placement_metadata": placement_metadata,
         "height_axis": height_axis,
+        "forward_axis": forward_axis,
         "lateral_axis": lateral_axis,
+        "height_sign": height_sign,
         "centerline": centerline,
-        "height_min": height_min,
-        "height_span": max(height_max - height_min, 1e-6),
+        "height_bounds_min": height_bounds_min,
+        "height_bounds_max": height_bounds_max,
+        "height_span": max(abs(height_bounds_max - height_bounds_min), 1e-6),
         "lateral_span": lateral_span,
         "side_signs": side_signs,
         "spine_chain": _choose_spine_chain(primary_data, support_data),
         "arm_chains": _choose_limb_chains(bones, primary_data, support_data, "arm", lateral_axis, centerline, side_signs),
         "leg_chains": _choose_limb_chains(bones, primary_data, support_data, "leg", lateral_axis, centerline, side_signs),
+    }
+
+
+def _load_placement_metadata(
+    primary_data: dict,
+    support_data: Optional[dict],
+    bones: Dict[str, BoneInfo],
+    derived_height_axis: int,
+    derived_lateral_axis: int,
+    derived_centerline: float,
+    derived_side_signs: Dict[str, int],
+) -> dict:
+    for payload in (primary_data, support_data or {}):
+        placement = payload.get("placement_metadata")
+        if _placement_metadata_is_valid(placement):
+            return copy.deepcopy(placement)
+
+    return _derive_placement_metadata_from_bones(
+        bones,
+        derived_height_axis,
+        derived_lateral_axis,
+        derived_centerline,
+        derived_side_signs,
+    )
+
+
+def _placement_metadata_is_valid(placement: Optional[dict]) -> bool:
+    if not placement:
+        return False
+    required = {"bbox_min", "bbox_max", "bbox_ground_center", "forward_axis", "side_axis", "up_axis"}
+    return required.issubset(set(placement.keys()))
+
+
+def _derive_placement_metadata_from_bones(
+    bones: Dict[str, BoneInfo],
+    derived_height_axis: int,
+    derived_lateral_axis: int,
+    derived_centerline: float,
+    derived_side_signs: Dict[str, int],
+) -> dict:
+    points: List[Tuple[float, float, float]] = []
+    upper_candidates: List[float] = []
+    lower_candidates: List[float] = []
+
+    for bone in bones.values():
+        points.extend([bone.head, bone.tail])
+        if {"head", "neck", "upper_spine", "lower_spine", "spine"} & bone.family_tags:
+            upper_candidates.append(bone.midpoint[derived_height_axis])
+        if {"foot", "toe", "lower_leg", "upper_leg"} & bone.family_tags:
+            lower_candidates.append(bone.midpoint[derived_height_axis])
+
+    if points:
+        bbox_min = [min(point[index] for point in points) for index in range(3)]
+        bbox_max = [max(point[index] for point in points) for index in range(3)]
+    else:
+        bbox_min = [0.0, 0.0, 0.0]
+        bbox_max = [0.0, 0.0, 0.0]
+
+    height_sign = 1
+    if upper_candidates and lower_candidates and _mean(upper_candidates) < _mean(lower_candidates):
+        height_sign = -1
+
+    side_sign = int(derived_side_signs.get("left", 1))
+    forward_axis = next(axis for axis in range(3) if axis not in {derived_height_axis, derived_lateral_axis})
+    forward_sign = height_sign * _axis_cross_sign(forward_axis, derived_lateral_axis, derived_height_axis) * side_sign
+
+    forward_median = _median([bone.midpoint[forward_axis] for bone in bones.values()])
+    bbox_ground_center = [(bbox_min[index] + bbox_max[index]) / 2.0 for index in range(3)]
+    bbox_ground_center[forward_axis] = forward_median
+    bbox_ground_center[derived_lateral_axis] = derived_centerline
+    bbox_ground_center[derived_height_axis] = bbox_min[derived_height_axis] if height_sign >= 0 else bbox_max[derived_height_axis]
+
+    return {
+        "bounds_source": "bones_fallback",
+        "driven_meshes": [],
+        "bbox_min": [float(value) for value in bbox_min],
+        "bbox_max": [float(value) for value in bbox_max],
+        "bbox_height": float(abs(bbox_max[derived_height_axis] - bbox_min[derived_height_axis])),
+        "bbox_ground_center": [float(value) for value in bbox_ground_center],
+        "forward_axis": {"index": forward_axis, "name": AXIS_NAMES[forward_axis], "sign": int(forward_sign)},
+        "side_axis": {"index": derived_lateral_axis, "name": AXIS_NAMES[derived_lateral_axis], "sign": int(side_sign)},
+        "up_axis": {"index": derived_height_axis, "name": AXIS_NAMES[derived_height_axis], "sign": int(height_sign)},
     }
 
 
@@ -603,6 +724,189 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]]) -> Dict
     return resolved
 
 
+def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates: List[CandidateScore], context: dict) -> dict:
+    original_payload = copy.deepcopy(resolved_targets["Root"])
+    candidate = root_candidates[0] if root_candidates else None
+    candidate_bone = context["bones"].get(candidate.source_bone) if candidate is not None else None
+    hip_payload = resolved_targets.get("Hip", {})
+    hip_bone = context["bones"].get(hip_payload.get("source_bone")) if hip_payload.get("source_bone") else None
+    target_head, target_tail = _build_root_target_geometry(hip_bone, context)
+    failure_codes = _root_failure_codes(original_payload, candidate, hip_bone, context)
+    can_create_new_root = target_head is not None and target_tail is not None
+    source_bone = candidate.source_bone if candidate_bone is not None and "root" in candidate_bone.family_tags else None
+
+    if candidate is not None and not failure_codes:
+        action = "direct_map" if candidate.source_bone == "Root" and candidate.name_evidence >= 0.95 else "alias_map"
+        resolved_targets["Root"] = _target_payload_from_candidate(candidate, action, notes=[])
+        return {
+            "mode": "reuse_existing_root",
+            "target_bone": "Root",
+            "source_bone": candidate.source_bone,
+            "rename_source_to_target": candidate.source_bone != "Root",
+            "failure_codes": [],
+            "target_head": target_head,
+            "target_tail": target_tail,
+            "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
+            "use_connect": False,
+        }
+
+    if can_create_new_root:
+        notes = sorted(set(list(original_payload.get("notes", [])) + failure_codes))
+        resolved_targets["Root"] = _target_payload_from_candidate(candidate, "repair_in_builder", notes=notes)
+        return {
+            "mode": "create_new_root",
+            "target_bone": "Root",
+            "source_bone": source_bone,
+            "rename_source_to_target": False,
+            "failure_codes": failure_codes,
+            "target_head": target_head,
+            "target_tail": target_tail,
+            "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
+            "use_connect": False,
+        }
+
+    notes = sorted(set(list(original_payload.get("notes", [])) + failure_codes + ["insufficient_root_builder_inputs"]))
+    resolved_targets["Root"] = _target_payload_from_candidate(candidate, "review", notes=notes)
+    return {
+        "mode": "review",
+        "target_bone": "Root",
+        "source_bone": source_bone,
+        "rename_source_to_target": False,
+        "failure_codes": sorted(set(failure_codes + ["insufficient_root_builder_inputs"])),
+        "target_head": target_head,
+        "target_tail": target_tail,
+        "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
+        "use_connect": False,
+    }
+
+
+def _target_payload_from_candidate(candidate: Optional[CandidateScore], action: str, notes: List[str]) -> dict:
+    if candidate is None:
+        return {
+            "source_bone": None,
+            "confidence": 0.0,
+            "action": action,
+            "evidence": {
+                "name": 0.0,
+                "hierarchy": 0.0,
+                "geometry": 0.0,
+                "source_origin": None,
+                "role": None,
+            },
+            "notes": list(notes),
+        }
+
+    return {
+        "source_bone": candidate.source_bone,
+        "confidence": round(candidate.confidence, 3),
+        "action": action,
+        "evidence": {
+            "name": candidate.name_evidence,
+            "hierarchy": candidate.hierarchy_evidence,
+            "geometry": candidate.geometry_evidence,
+            "source_origin": candidate.source_origin,
+            "role": candidate.role,
+        },
+        "notes": list(notes),
+    }
+
+
+def _build_root_target_geometry(hip_bone: Optional[BoneInfo], context: dict) -> Tuple[Optional[List[float]], Optional[List[float]]]:
+    placement = context.get("placement_metadata") or {}
+    ground_center = placement.get("bbox_ground_center")
+    up_axis = (placement.get("up_axis") or {}).get("index")
+
+    if ground_center is None or up_axis is None or hip_bone is None:
+        return None, None
+
+    target_head = [float(value) for value in ground_center]
+    target_tail = list(target_head)
+    target_tail[int(up_axis)] = float(hip_bone.head[int(up_axis)])
+    return target_head, target_tail
+
+
+def _root_failure_codes(
+    original_payload: dict,
+    candidate: Optional[CandidateScore],
+    hip_bone: Optional[BoneInfo],
+    context: dict,
+) -> List[str]:
+    failure_codes: List[str] = []
+    original_notes = set(original_payload.get("notes", []))
+    if "candidate_conflict" in original_notes:
+        failure_codes.append("candidate_conflict")
+
+    if candidate is None:
+        failure_codes.append("no_root_candidate")
+        if hip_bone is None:
+            failure_codes.append("hip_unresolved")
+        return sorted(set(failure_codes))
+
+    candidate_bone = context["bones"].get(candidate.source_bone)
+    if candidate_bone is None:
+        failure_codes.append("no_root_candidate")
+        return sorted(set(failure_codes))
+
+    if "root" not in candidate_bone.family_tags:
+        failure_codes.append("no_root_candidate")
+        failure_codes.append("root_candidate_missing_root_family")
+
+    if candidate.role in {"control", "mechanism"}:
+        failure_codes.append("root_candidate_disallowed_role")
+
+    if hip_bone is None:
+        failure_codes.append("hip_unresolved")
+
+    actual_roots = [bone for bone in context["bones"].values() if bone.parent is None]
+    if len(actual_roots) != 1:
+        failure_codes.append("multiple_source_roots")
+    elif actual_roots[0].name != candidate.source_bone:
+        failure_codes.append("root_candidate_not_source_root")
+
+    placement = context["placement_metadata"]
+    bbox_height = max(float(placement.get("bbox_height", 0.0)), 1e-6)
+    ground_center = placement["bbox_ground_center"]
+    forward_axis = int(placement["forward_axis"]["index"])
+    side_axis = int(placement["side_axis"]["index"])
+    up_axis = int(placement["up_axis"]["index"])
+    up_sign = int(placement["up_axis"]["sign"])
+
+    center_tolerance = bbox_height * ROOT_CENTER_TOLERANCE_RATIO
+    if (
+        abs(candidate_bone.head[forward_axis] - float(ground_center[forward_axis])) > center_tolerance
+        or abs(candidate_bone.head[side_axis] - float(ground_center[side_axis])) > center_tolerance
+    ):
+        failure_codes.append("root_head_off_ground_center")
+
+    ground_tolerance = bbox_height * ROOT_GROUND_TOLERANCE_RATIO
+    if abs(candidate_bone.head[up_axis] - float(ground_center[up_axis])) > ground_tolerance:
+        failure_codes.append("root_head_off_ground")
+
+    direction_alignment = _aligned_axis_cosine(candidate_bone, up_axis, up_sign)
+    if direction_alignment < ROOT_UP_ALIGNMENT_COSINE:
+        failure_codes.append("root_not_vertical")
+
+    if hip_bone is not None:
+        tail_tolerance = bbox_height * ROOT_TAIL_TO_HIP_TOLERANCE_RATIO
+        if abs(candidate_bone.tail[up_axis] - hip_bone.head[up_axis]) > tail_tolerance:
+            failure_codes.append("root_tail_mismatch_hip")
+        if candidate_bone.child_names != [hip_bone.name]:
+            failure_codes.append("root_children_not_hip_only")
+
+    return sorted(set(failure_codes))
+
+
+def _aligned_axis_cosine(bone: BoneInfo, axis_index: int, axis_sign: int) -> float:
+    direction = [bone.tail[index] - bone.head[index] for index in range(3)]
+    length = math.sqrt(sum(component * component for component in direction))
+    if length <= 1e-6:
+        return 0.0
+    axis_vector = [0.0, 0.0, 0.0]
+    axis_vector[axis_index] = float(axis_sign)
+    dot = sum((direction[index] / length) * axis_vector[index] for index in range(3))
+    return abs(dot)
+
+
 def _classify_non_mapped_bones(
     bones: Dict[str, BoneInfo],
     context: dict,
@@ -648,12 +952,14 @@ def _classify_non_mapped_bones(
     return preserved, unclassified
 
 
-def _build_review_flags(resolved_targets: Dict[str, dict], context: dict) -> List[str]:
+def _build_review_flags(resolved_targets: Dict[str, dict], root_resolution: dict, context: dict) -> List[str]:
     flags: Set[str] = set()
     actual_roots = [bone for bone in context["bones"].values() if bone.parent is None]
 
     if len(actual_roots) > 1:
         flags.add("multiple_roots")
+    if root_resolution.get("mode") != "reuse_existing_root":
+        flags.add("root_noncompliant")
     if not context["spine_chain"] or any(
         resolved_targets[target]["action"] == "create_in_builder" for target in ("Lower_Spine", "Upper_Spine")
     ):
@@ -674,10 +980,11 @@ def _build_review_flags(resolved_targets: Dict[str, dict], context: dict) -> Lis
 
 
 def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: List[str], primary_data: dict) -> dict:
-    mapped = [payload for payload in resolved_targets.values() if payload["action"] in {"direct_map", "alias_map"}]
+    mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
     average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)
     direct_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "direct_map")
     alias_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "alias_map")
+    repair_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "repair_in_builder")
     review_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "review")
     missing_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "create_in_builder")
     ranking_score = round(
@@ -694,6 +1001,7 @@ def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: Lis
         "mapped_core_targets": len(mapped),
         "direct_map_targets": direct_map_targets,
         "alias_map_targets": alias_map_targets,
+        "repair_targets": repair_targets,
         "review_targets": review_targets,
         "missing_core_targets": missing_targets,
         "average_confidence": average_confidence,
@@ -1258,14 +1566,32 @@ def _calibrate_side_signs(bones: Iterable[BoneInfo], lateral_axis: int) -> Dict[
     return {"left": left_sign, "right": -left_sign}
 
 
+def _axis_cross_sign(axis_a: int, axis_b: int, axis_c: int) -> int:
+    return 1 if ((axis_a + 1) % 3 == axis_b and (axis_b + 1) % 3 == axis_c) else -1
+
+
 def _height_ratio(bone: BoneInfo, context: dict) -> float:
-    return _clamp((bone.midpoint[context["height_axis"]] - context["height_min"]) / context["height_span"])
+    axis = context["height_axis"]
+    sign = context["height_sign"]
+    if sign >= 0:
+        value = bone.midpoint[axis] - context["height_bounds_min"]
+    else:
+        value = context["height_bounds_max"] - bone.midpoint[axis]
+    return _clamp(value / context["height_span"])
 
 
 def _endpoint_ratio(bone: BoneInfo, context: dict, which: str) -> float:
     axis = context["height_axis"]
-    value = bone.min_point[axis] if which == "low" else bone.max_point[axis]
-    return _clamp((value - context["height_min"]) / context["height_span"])
+    sign = context["height_sign"]
+
+    if sign >= 0:
+        value = bone.min_point[axis] if which == "low" else bone.max_point[axis]
+        normalized = value - context["height_bounds_min"]
+    else:
+        value = bone.max_point[axis] if which == "low" else bone.min_point[axis]
+        normalized = context["height_bounds_max"] - value
+
+    return _clamp(normalized / context["height_span"])
 
 
 def _centerline_score(bone: BoneInfo, context: dict) -> float:
