@@ -10,16 +10,16 @@
     "ranking": [
       {
         "armature_name": "rig",
-        "ranking_score": 110.69,
+        "ranking_score": 110.93,
         "mapped_core_targets": 20,
-        "average_confidence": 0.919,
+        "average_confidence": 0.943,
         "primary_input": "rig_filtered.json"
       },
       {
         "armature_name": "metarig",
-        "ranking_score": 92.11,
-        "mapped_core_targets": 17,
-        "average_confidence": 0.961,
+        "ranking_score": 97.31,
+        "mapped_core_targets": 18,
+        "average_confidence": 0.931,
         "primary_input": "metarig_all.json"
       }
     ]
@@ -34,19 +34,20 @@
         "source_file": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\sample_assets\\LowPolyCharacter4.blend"
       },
       "summary": {
-        "mapped_core_targets": 17,
+        "mapped_core_targets": 18,
         "direct_map_targets": 16,
-        "alias_map_targets": 1,
-        "review_targets": 3,
+        "alias_map_targets": 0,
+        "repair_targets": 2,
+        "review_targets": 2,
         "missing_core_targets": 0,
-        "average_confidence": 0.961,
-        "ranking_score": 92.11
+        "average_confidence": 0.931,
+        "ranking_score": 97.31
       },
       "asam_targets": {
         "Root": {
-          "source_bone": null,
+          "source_bone": "spine",
           "confidence": 0.41,
-          "action": "review",
+          "action": "repair_in_builder",
           "evidence": {
             "name": 0.0,
             "hierarchy": 1.0,
@@ -55,21 +56,29 @@
             "role": "unknown"
           },
           "notes": [
-            "candidate_conflict"
+            "candidate_conflict",
+            "no_root_candidate",
+            "root_candidate_missing_root_family",
+            "root_children_not_hip_only",
+            "root_head_off_ground",
+            "root_head_off_ground_center",
+            "root_tail_mismatch_hip"
           ]
         },
         "Hip": {
           "source_bone": "pelvis.L",
-          "confidence": 0.68,
-          "action": "alias_map",
+          "confidence": 0.682,
+          "action": "repair_in_builder",
           "evidence": {
             "name": 1.0,
             "hierarchy": 0.0,
-            "geometry": 0.901,
+            "geometry": 0.912,
             "source_origin": "primary",
             "role": "unknown"
           },
-          "notes": []
+          "notes": [
+            "paired_sided_pelvis_requires_centering"
+          ]
         },
         "Lower_Spine": {
           "source_bone": "spine",
@@ -308,6 +317,72 @@
           "notes": []
         }
       },
+      "root_resolution": {
+        "mode": "create_new_root",
+        "target_bone": "Root",
+        "source_bone": null,
+        "rename_source_to_target": false,
+        "failure_codes": [
+          "candidate_conflict",
+          "no_root_candidate",
+          "root_candidate_missing_root_family",
+          "root_children_not_hip_only",
+          "root_head_off_ground",
+          "root_head_off_ground_center",
+          "root_tail_mismatch_hip"
+        ],
+        "target_head": [
+          0.0,
+          -0.06670395284891129,
+          0.025279806926846504
+        ],
+        "target_tail": [
+          0.0,
+          -0.06670395284891129,
+          0.9532261490821838
+        ],
+        "up_axis": {
+          "index": 2,
+          "name": "z",
+          "sign": 1
+        },
+        "use_connect": false
+      },
+      "placement_metadata": {
+        "bounds_source": "bones_fallback",
+        "driven_meshes": [],
+        "bbox_min": [
+          -0.6381202936172485,
+          -0.2766076922416687,
+          0.025279806926846504
+        ],
+        "bbox_max": [
+          0.6381202936172485,
+          0.14319978654384613,
+          1.9765647649765015
+        ],
+        "bbox_height": 1.951284958049655,
+        "bbox_ground_center": [
+          0.0,
+          -0.06670395284891129,
+          0.025279806926846504
+        ],
+        "forward_axis": {
+          "index": 1,
+          "name": "y",
+          "sign": -1
+        },
+        "side_axis": {
+          "index": 0,
+          "name": "x",
+          "sign": 1
+        },
+        "up_axis": {
+          "index": 2,
+          "name": "z",
+          "sign": 1
+        }
+      },
       "proposed_asam_hierarchy": {
         "object_nodes": [
           {
@@ -409,13 +484,6 @@
       "missing_core_targets": [],
       "ambiguous_targets": [
         {
-          "target": "Root",
-          "reason": [
-            "candidate_conflict"
-          ],
-          "confidence": 0.41
-        },
-        {
           "target": "Neck",
           "reason": [
             "candidate_conflict"
@@ -429,7 +497,8 @@
         }
       ],
       "review_flags": [
-        "insufficient_head_evidence"
+        "insufficient_head_evidence",
+        "root_noncompliant"
       ],
       "deferred_targets": [
         "Eye_Left",
@@ -453,49 +522,57 @@
       "summary": {
         "mapped_core_targets": 20,
         "direct_map_targets": 18,
-        "alias_map_targets": 2,
+        "alias_map_targets": 0,
+        "repair_targets": 2,
         "review_targets": 0,
         "missing_core_targets": 0,
-        "average_confidence": 0.919,
-        "ranking_score": 110.69
+        "average_confidence": 0.943,
+        "ranking_score": 110.93
       },
       "asam_targets": {
         "Root": {
           "source_bone": "root",
-          "confidence": 0.89,
-          "action": "direct_map",
+          "confidence": 1.0,
+          "action": "repair_in_builder",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.45,
+            "geometry": 1.0,
             "source_origin": "support",
             "role": "unknown"
           },
           "notes": [
+            "multiple_source_roots",
+            "root_children_not_hip_only",
+            "root_head_off_ground_center",
+            "root_not_vertical",
+            "root_tail_mismatch_hip",
             "support_fallback"
           ]
         },
         "Hip": {
           "source_bone": "DEF-pelvis.L",
-          "confidence": 0.698,
-          "action": "alias_map",
+          "confidence": 0.683,
+          "action": "repair_in_builder",
           "evidence": {
             "name": 1.0,
             "hierarchy": 0.0,
-            "geometry": 0.988,
+            "geometry": 0.917,
             "source_origin": "primary",
             "role": "unknown"
           },
-          "notes": []
+          "notes": [
+            "paired_sided_pelvis_requires_centering"
+          ]
         },
         "Lower_Spine": {
-          "source_bone": "DEF-spine.002",
-          "confidence": 0.858,
+          "source_bone": "DEF-spine",
+          "confidence": 0.86,
           "action": "direct_map",
           "evidence": {
             "name": 0.72,
             "hierarchy": 1.0,
-            "geometry": 0.991,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -503,12 +580,12 @@
         },
         "Upper_Spine": {
           "source_bone": "DEF-spine.004",
-          "confidence": 0.859,
+          "confidence": 0.86,
           "action": "direct_map",
           "evidence": {
             "name": 0.72,
             "hierarchy": 1.0,
-            "geometry": 0.997,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -516,12 +593,12 @@
         },
         "Neck": {
           "source_bone": "MCH-ROT-neck",
-          "confidence": 0.82,
+          "confidence": 0.835,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 0.45,
-            "geometry": 0.927,
+            "geometry": 1.0,
             "source_origin": "support",
             "role": "unknown"
           },
@@ -531,12 +608,12 @@
         },
         "Head": {
           "source_bone": "head",
-          "confidence": 0.798,
-          "action": "alias_map",
+          "confidence": 0.805,
+          "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 0.35,
-            "geometry": 0.964,
+            "geometry": 1.0,
             "source_origin": "support",
             "role": "unknown"
           },
@@ -546,12 +623,12 @@
         },
         "Shoulder_Left": {
           "source_bone": "ORG-shoulder.L",
-          "confidence": 0.884,
+          "confidence": 0.91,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 0.7,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "support",
             "role": "unknown"
           },
@@ -561,12 +638,12 @@
         },
         "Upper_Arm_Left": {
           "source_bone": "DEF-upper_arm.L",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -574,12 +651,12 @@
         },
         "Lower_Arm_Left": {
           "source_bone": "DEF-forearm.L",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -587,12 +664,12 @@
         },
         "Hand_Left": {
           "source_bone": "DEF-hand.L",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -600,12 +677,12 @@
         },
         "Shoulder_Right": {
           "source_bone": "ORG-shoulder.R",
-          "confidence": 0.884,
+          "confidence": 0.91,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 0.7,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "support",
             "role": "unknown"
           },
@@ -615,12 +692,12 @@
         },
         "Upper_Arm_Right": {
           "source_bone": "DEF-upper_arm.R",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -628,12 +705,12 @@
         },
         "Lower_Arm_Right": {
           "source_bone": "DEF-forearm.R",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -641,12 +718,12 @@
         },
         "Hand_Right": {
           "source_bone": "DEF-hand.R",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -654,12 +731,12 @@
         },
         "Upper_Leg_Left": {
           "source_bone": "DEF-thigh.L",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -667,12 +744,12 @@
         },
         "Lower_Leg_Left": {
           "source_bone": "DEF-shin.L.001",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -680,12 +757,12 @@
         },
         "Foot_Left": {
           "source_bone": "DEF-foot.L",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -693,12 +770,12 @@
         },
         "Upper_Leg_Right": {
           "source_bone": "DEF-thigh.R",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -706,12 +783,12 @@
         },
         "Lower_Leg_Right": {
           "source_bone": "DEF-shin.R.001",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -719,16 +796,82 @@
         },
         "Foot_Right": {
           "source_bone": "DEF-foot.R",
-          "confidence": 0.974,
+          "confidence": 1.0,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 0.872,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
           "notes": []
+        }
+      },
+      "root_resolution": {
+        "mode": "create_new_root",
+        "target_bone": "Root",
+        "source_bone": "root",
+        "rename_source_to_target": false,
+        "failure_codes": [
+          "multiple_source_roots",
+          "root_children_not_hip_only",
+          "root_head_off_ground_center",
+          "root_not_vertical",
+          "root_tail_mismatch_hip"
+        ],
+        "target_head": [
+          5.960464477539063e-08,
+          0.05099785327911377,
+          0.0033478213008493185
+        ],
+        "target_tail": [
+          5.960464477539063e-08,
+          0.05099785327911377,
+          0.9532261490821838
+        ],
+        "up_axis": {
+          "index": 2,
+          "name": "z",
+          "sign": 1
+        },
+        "use_connect": false
+      },
+      "placement_metadata": {
+        "bounds_source": "meshes",
+        "driven_meshes": [
+          "Cube"
+        ],
+        "bbox_min": [
+          -0.6768602132797241,
+          -0.2960062026977539,
+          0.0033478213008493185
+        ],
+        "bbox_max": [
+          0.6768603324890137,
+          0.39800190925598145,
+          2.008983612060547
+        ],
+        "bbox_height": 2.0056357907596976,
+        "bbox_ground_center": [
+          5.960464477539063e-08,
+          0.05099785327911377,
+          0.0033478213008493185
+        ],
+        "forward_axis": {
+          "index": 1,
+          "name": "y",
+          "sign": -1
+        },
+        "side_axis": {
+          "index": 0,
+          "name": "x",
+          "sign": 1
+        },
+        "up_axis": {
+          "index": 2,
+          "name": "z",
+          "sign": 1
         }
       },
       "proposed_asam_hierarchy": {
@@ -791,13 +934,13 @@
           "role": "unknown"
         },
         {
-          "bone_name": "DEF-spine",
+          "bone_name": "DEF-spine.001",
           "reason": "supporting_chain_detail",
           "origin": "primary",
           "role": "unknown"
         },
         {
-          "bone_name": "DEF-spine.001",
+          "bone_name": "DEF-spine.002",
           "reason": "supporting_chain_detail",
           "origin": "primary",
           "role": "unknown"
@@ -1954,8 +2097,8 @@
       "missing_core_targets": [],
       "ambiguous_targets": [],
       "review_flags": [
-        "insufficient_head_evidence",
-        "multiple_roots"
+        "multiple_roots",
+        "root_noncompliant"
       ],
       "deferred_targets": [
         "Eye_Left",
@@ -1973,40 +2116,47 @@
   "semantic_mapping": {
     "Root": {
       "source_bone": "root",
-      "confidence": 0.89,
-      "action": "direct_map",
+      "confidence": 1.0,
+      "action": "repair_in_builder",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.45,
+        "geometry": 1.0,
         "source_origin": "support",
         "role": "unknown"
       },
       "notes": [
+        "multiple_source_roots",
+        "root_children_not_hip_only",
+        "root_head_off_ground_center",
+        "root_not_vertical",
+        "root_tail_mismatch_hip",
         "support_fallback"
       ]
     },
     "Hip": {
       "source_bone": "DEF-pelvis.L",
-      "confidence": 0.698,
-      "action": "alias_map",
+      "confidence": 0.683,
+      "action": "repair_in_builder",
       "evidence": {
         "name": 1.0,
         "hierarchy": 0.0,
-        "geometry": 0.988,
+        "geometry": 0.917,
         "source_origin": "primary",
         "role": "unknown"
       },
-      "notes": []
+      "notes": [
+        "paired_sided_pelvis_requires_centering"
+      ]
     },
     "Lower_Spine": {
-      "source_bone": "DEF-spine.002",
-      "confidence": 0.858,
+      "source_bone": "DEF-spine",
+      "confidence": 0.86,
       "action": "direct_map",
       "evidence": {
         "name": 0.72,
         "hierarchy": 1.0,
-        "geometry": 0.991,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2014,12 +2164,12 @@
     },
     "Upper_Spine": {
       "source_bone": "DEF-spine.004",
-      "confidence": 0.859,
+      "confidence": 0.86,
       "action": "direct_map",
       "evidence": {
         "name": 0.72,
         "hierarchy": 1.0,
-        "geometry": 0.997,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2027,12 +2177,12 @@
     },
     "Neck": {
       "source_bone": "MCH-ROT-neck",
-      "confidence": 0.82,
+      "confidence": 0.835,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 0.45,
-        "geometry": 0.927,
+        "geometry": 1.0,
         "source_origin": "support",
         "role": "unknown"
       },
@@ -2042,12 +2192,12 @@
     },
     "Head": {
       "source_bone": "head",
-      "confidence": 0.798,
-      "action": "alias_map",
+      "confidence": 0.805,
+      "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 0.35,
-        "geometry": 0.964,
+        "geometry": 1.0,
         "source_origin": "support",
         "role": "unknown"
       },
@@ -2057,12 +2207,12 @@
     },
     "Shoulder_Left": {
       "source_bone": "ORG-shoulder.L",
-      "confidence": 0.884,
+      "confidence": 0.91,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 0.7,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "support",
         "role": "unknown"
       },
@@ -2072,12 +2222,12 @@
     },
     "Upper_Arm_Left": {
       "source_bone": "DEF-upper_arm.L",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2085,12 +2235,12 @@
     },
     "Lower_Arm_Left": {
       "source_bone": "DEF-forearm.L",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2098,12 +2248,12 @@
     },
     "Hand_Left": {
       "source_bone": "DEF-hand.L",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2111,12 +2261,12 @@
     },
     "Shoulder_Right": {
       "source_bone": "ORG-shoulder.R",
-      "confidence": 0.884,
+      "confidence": 0.91,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 0.7,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "support",
         "role": "unknown"
       },
@@ -2126,12 +2276,12 @@
     },
     "Upper_Arm_Right": {
       "source_bone": "DEF-upper_arm.R",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2139,12 +2289,12 @@
     },
     "Lower_Arm_Right": {
       "source_bone": "DEF-forearm.R",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2152,12 +2302,12 @@
     },
     "Hand_Right": {
       "source_bone": "DEF-hand.R",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2165,12 +2315,12 @@
     },
     "Upper_Leg_Left": {
       "source_bone": "DEF-thigh.L",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2178,12 +2328,12 @@
     },
     "Lower_Leg_Left": {
       "source_bone": "DEF-shin.L.001",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2191,12 +2341,12 @@
     },
     "Foot_Left": {
       "source_bone": "DEF-foot.L",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2204,12 +2354,12 @@
     },
     "Upper_Leg_Right": {
       "source_bone": "DEF-thigh.R",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2217,12 +2367,12 @@
     },
     "Lower_Leg_Right": {
       "source_bone": "DEF-shin.R.001",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -2230,16 +2380,82 @@
     },
     "Foot_Right": {
       "source_bone": "DEF-foot.R",
-      "confidence": 0.974,
+      "confidence": 1.0,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 0.872,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
       "notes": []
+    }
+  },
+  "root_resolution": {
+    "mode": "create_new_root",
+    "target_bone": "Root",
+    "source_bone": "root",
+    "rename_source_to_target": false,
+    "failure_codes": [
+      "multiple_source_roots",
+      "root_children_not_hip_only",
+      "root_head_off_ground_center",
+      "root_not_vertical",
+      "root_tail_mismatch_hip"
+    ],
+    "target_head": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.0033478213008493185
+    ],
+    "target_tail": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.9532261490821838
+    ],
+    "up_axis": {
+      "index": 2,
+      "name": "z",
+      "sign": 1
+    },
+    "use_connect": false
+  },
+  "placement_metadata": {
+    "bounds_source": "meshes",
+    "driven_meshes": [
+      "Cube"
+    ],
+    "bbox_min": [
+      -0.6768602132797241,
+      -0.2960062026977539,
+      0.0033478213008493185
+    ],
+    "bbox_max": [
+      0.6768603324890137,
+      0.39800190925598145,
+      2.008983612060547
+    ],
+    "bbox_height": 2.0056357907596976,
+    "bbox_ground_center": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.0033478213008493185
+    ],
+    "forward_axis": {
+      "index": 1,
+      "name": "y",
+      "sign": -1
+    },
+    "side_axis": {
+      "index": 0,
+      "name": "x",
+      "sign": 1
+    },
+    "up_axis": {
+      "index": 2,
+      "name": "z",
+      "sign": 1
     }
   },
   "missing_targets": [],
@@ -2649,8 +2865,8 @@
     }
   ],
   "review_flags": [
-    "insufficient_head_evidence",
-    "multiple_roots"
+    "multiple_roots",
+    "root_noncompliant"
   ],
   "deferred_targets": [
     "Eye_Left",

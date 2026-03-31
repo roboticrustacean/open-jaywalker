@@ -393,7 +393,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
         candidates.sort(key=lambda item: (-item.selection_score, -item.confidence, item.source_bone))
         target_candidates[target_name] = candidates
 
-    resolved_targets = _resolve_targets(target_candidates)
+    resolved_targets = _resolve_targets(target_candidates, context)
     root_resolution = _resolve_root_compliance(resolved_targets, target_candidates.get("Root", []), context)
     mapped_bones = {
         payload["source_bone"]
@@ -659,7 +659,7 @@ def _score_target_candidate(target_name: str, bone: BoneInfo, context: dict) -> 
     )
 
 
-def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]]) -> Dict[str, dict]:
+def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]], context: dict) -> Dict[str, dict]:
     resolved: Dict[str, dict] = {}
     provisional_choices: Dict[str, Optional[CandidateScore]] = {}
 
@@ -707,6 +707,15 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]]) -> Dict
             continue
 
         action = _action_for_candidate(candidate)
+        notes = list(candidate.notes)
+        if action in {"direct_map", "alias_map"} and _paired_sided_pelvis_requires_centering(
+            target_name,
+            candidate,
+            target_candidates,
+            context,
+        ):
+            action = "repair_in_builder"
+            notes = sorted(set(notes + ["paired_sided_pelvis_requires_centering"]))
         resolved[target_name] = {
             "source_bone": candidate.source_bone if action != "create_in_builder" else None,
             "confidence": round(candidate.confidence, 3),
@@ -718,7 +727,7 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]]) -> Dict
                 "source_origin": candidate.source_origin,
                 "role": candidate.role,
             },
-            "notes": list(candidate.notes),
+            "notes": notes,
         }
 
     return resolved
@@ -1048,6 +1057,44 @@ def _action_for_candidate(candidate: CandidateScore) -> str:
     if candidate.confidence >= 0.60:
         return "alias_map"
     return "review"
+
+
+def _paired_sided_pelvis_requires_centering(
+    target_name: str,
+    candidate: CandidateScore,
+    target_candidates: Dict[str, List[CandidateScore]],
+    context: dict,
+) -> bool:
+    if target_name != "Hip":
+        return False
+
+    bone = context["bones"].get(candidate.source_bone)
+    if bone is None:
+        return False
+    if bone.side not in {"left", "right"}:
+        return False
+    if "hip" not in bone.family_tags:
+        return False
+    if not any(token in bone.compact_name for token in ("pelvis", "hip", "hips")):
+        return False
+
+    for alternate in target_candidates.get("Hip", []):
+        if alternate.source_bone == candidate.source_bone:
+            continue
+        alternate_bone = context["bones"].get(alternate.source_bone)
+        if alternate_bone is None:
+            continue
+        if alternate_bone.side not in {"left", "right"}:
+            continue
+        if alternate_bone.side == bone.side:
+            continue
+        if "hip" not in alternate_bone.family_tags:
+            continue
+        if not any(token in alternate_bone.compact_name for token in ("pelvis", "hip", "hips")):
+            continue
+        return True
+
+    return False
 
 
 def _target_side(target_name: str) -> Optional[str]:

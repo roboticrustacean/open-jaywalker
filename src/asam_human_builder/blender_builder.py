@@ -48,7 +48,12 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
     if collection_action == "rebuild":
         _remove_generated_collection(bpy_module, collection_name, asset_name)
 
-    _ensure_generated_names_available(bpy_module, group_root_name, armature_name)
+    group_root_name, armature_name = _resolve_generated_names(
+        bpy_module,
+        asset_name,
+        group_root_name,
+        armature_name,
+    )
     collection = _create_collection(bpy_module, collection_name, asset_name)
     group_root = _create_group_root(bpy_module, group_root_name, asset_name, collection)
     armature_object = _create_armature_object(bpy_module, armature_name, asset_name, collection, group_root)
@@ -111,19 +116,48 @@ def _validate_generated_collection_contents(collection, asset_name: str) -> None
             )
 
 
-def _ensure_generated_names_available(bpy_module, group_root_name: str, armature_name: str) -> None:
-    conflicts = []
-    if bpy_module.data.objects.get(group_root_name) is not None:
-        conflicts.append(group_root_name)
-    if bpy_module.data.objects.get(armature_name) is not None:
-        conflicts.append(armature_name)
-    if bpy_module.data.armatures.get(armature_name) is not None:
-        conflicts.append("{0} (armature data)".format(armature_name))
+def _resolve_generated_names(
+    bpy_module,
+    asset_name: str,
+    group_root_name: str,
+    armature_name: str,
+) -> tuple[str, str]:
+    resolved_group_root = _resolve_unique_name(
+        group_root_name,
+        lambda name: bpy_module.data.objects.get(name) is not None,
+        [
+            "{0}_{1}".format(group_root_name, asset_name),
+            "{0}_Generated".format(group_root_name),
+        ],
+    )
+    resolved_armature = _resolve_unique_name(
+        armature_name,
+        lambda name: (
+            bpy_module.data.objects.get(name) is not None
+            or bpy_module.data.armatures.get(name) is not None
+        ),
+        ["{0}_Generated".format(armature_name)],
+    )
+    return resolved_group_root, resolved_armature
 
-    if conflicts:
-        raise ValueError(
-            "Generated object names are already in use: {0}".format(", ".join(conflicts))
-        )
+
+def _resolve_unique_name(preferred_name: str, is_in_use, fallback_bases: List[str]) -> str:
+    candidates = [preferred_name]
+    for base_name in fallback_bases:
+        if base_name not in candidates:
+            candidates.append(base_name)
+
+    for candidate in candidates:
+        if not is_in_use(candidate):
+            return candidate
+
+    suffix = 2
+    while True:
+        for base_name in candidates[1:] or [preferred_name]:
+            candidate = "{0}_{1}".format(base_name, suffix)
+            if not is_in_use(candidate):
+                return candidate
+        suffix += 1
 
 
 def _create_collection(bpy_module, collection_name: str, asset_name: str):

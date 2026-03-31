@@ -9566,5 +9566,42 @@
       ],
       "unsided": []
     }
+  },
+  "placement_metadata": {
+    "bounds_source": "meshes",
+    "driven_meshes": [
+      "Cube"
+    ],
+    "bbox_min": [
+      -0.6768602132797241,
+      -0.2960062026977539,
+      0.0033478213008493185
+    ],
+    "bbox_max": [
+      0.6768603324890137,
+      0.39800190925598145,
+      2.008983612060547
+    ],
+    "bbox_height": 2.0056357907596976,
+    "bbox_ground_center": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.0033478213008493185
+    ],
+    "forward_axis": {
+      "index": 1,
+      "name": "y",
+      "sign": -1
+    },
+    "side_axis": {
+      "index": 0,
+      "name": "x",
+      "sign": 1
+    },
+    "up_axis": {
+      "index": 2,
+      "name": "z",
+      "sign": 1
+    }
   }
 }

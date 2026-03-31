@@ -87,7 +87,7 @@ def _write_single_armature_asset(asset_name: str, armature_name: str, bones, cha
 
 
 class Phase3ClassifierTests(unittest.TestCase):
-    def test_openmaterial_sample_maps_full_core_and_reuses_root(self):
+    def test_openmaterial_sample_maps_full_core_and_repairs_root(self):
         asset_dir = _copy_asset_folder("openmatexamplehuman")
         report, build_plan, report_path, plan_path = write_asset_report(asset_dir)
 
@@ -101,8 +101,9 @@ class Phase3ClassifierTests(unittest.TestCase):
         )
         self.assertEqual(report["semantic_mapping"]["Root"]["source_bone"], "Root")
         self.assertEqual(report["semantic_mapping"]["Head"]["source_bone"], "Head")
-        self.assertEqual(build_plan["root_resolution"]["mode"], "reuse_existing_root")
-        self.assertNotIn("root_noncompliant", report["review_flags"])
+        self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
+        self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
+        self.assertIn("root_noncompliant", report["review_flags"])
         self.assertFalse(any(action["target"] == "Root" for action in build_plan["actions"]["rename"]))
 
     def test_lowpoly_classifies_both_armatures_and_requires_new_root(self):
@@ -117,12 +118,48 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(armatures["rig"]["selected_inputs"]["primary"], "rig_filtered.json")
         self.assertEqual(armatures["rig"]["selected_inputs"]["support"], "rig_all.json")
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
+        self.assertEqual(report["semantic_mapping"]["Hip"]["action"], "repair_in_builder")
+        self.assertIn("paired_sided_pelvis_requires_centering", report["semantic_mapping"]["Hip"]["notes"])
         self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
         self.assertEqual(build_plan["root_resolution"]["source_bone"], "root")
         self.assertIn("root_noncompliant", report["review_flags"])
         self.assertIn("multiple_source_roots", build_plan["root_resolution"]["failure_codes"])
         self.assertIn("root_not_vertical", build_plan["root_resolution"]["failure_codes"])
         self.assertFalse(any(action["target"] == "Root" for action in build_plan["actions"]["rename"]))
+        self.assertFalse(any(action["target"] == "Hip" for action in build_plan["actions"]["rename"]))
+
+    def test_paired_sided_pelvis_marks_hip_for_builder_repair(self):
+        bones = [
+            _bone("root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.9)),
+            _bone("pelvis.L", "root", (0.0, 0.0, 0.9), (0.12, 0.0, 1.02)),
+            _bone("pelvis.R", "root", (0.0, 0.0, 0.9), (-0.12, 0.0, 1.02)),
+            _bone("spine", "root", (0.0, 0.0, 1.02), (0.0, 0.0, 1.25)),
+            _bone("thigh.L", "pelvis.L", (0.12, 0.0, 0.9), (0.12, 0.0, 0.45)),
+            _bone("thigh.R", "pelvis.R", (-0.12, 0.0, 0.9), (-0.12, 0.0, 0.45)),
+        ]
+        chains = {
+            "spine": [["spine"]],
+            "leg": {
+                "left": [["thigh.L"]],
+                "right": [["thigh.R"]],
+                "unsided": [],
+            },
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        asset_dir = _write_single_armature_asset(
+            "paired_pelvis",
+            "Rig",
+            bones,
+            chains,
+            _placement_metadata((-0.3, -0.2, 0.0), (0.3, 0.2, 1.5)),
+        )
+
+        report, build_plan, _, _ = write_asset_report(asset_dir)
+
+        self.assertEqual(report["semantic_mapping"]["Hip"]["action"], "repair_in_builder")
+        self.assertIn("paired_sided_pelvis_requires_centering", report["semantic_mapping"]["Hip"]["notes"])
+        self.assertIn(report["semantic_mapping"]["Hip"]["source_bone"], {"pelvis.L", "pelvis.R"})
+        self.assertFalse(any(action["target"] == "Hip" for action in build_plan["actions"]["rename"]))
 
     def test_partial_rig_yields_review_and_create_actions(self):
         temp_root = Path(tempfile.mkdtemp(prefix="phase3_partial_"))
@@ -299,7 +336,7 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertTrue((asset_dir / "classifier_report.json").exists())
         self.assertTrue((asset_dir / "build_plan.json").exists())
         self.assertIn("Recommended primary armature: Armature", result.stdout)
-        self.assertIn("Root resolution: reuse_existing_root", result.stdout)
+        self.assertIn("Root resolution: create_new_root", result.stdout)
 
 
 if __name__ == "__main__":

@@ -4,15 +4,7 @@
   "actions": {
     "rename": [
       {
-        "source": "root",
-        "target": "Root"
-      },
-      {
-        "source": "DEF-pelvis.L",
-        "target": "Hip"
-      },
-      {
-        "source": "DEF-spine.002",
+        "source": "DEF-spine",
         "target": "Lower_Spine"
       },
       {
@@ -86,6 +78,72 @@
     ],
     "create": []
   },
+  "root_resolution": {
+    "mode": "create_new_root",
+    "target_bone": "Root",
+    "source_bone": "root",
+    "rename_source_to_target": false,
+    "failure_codes": [
+      "multiple_source_roots",
+      "root_children_not_hip_only",
+      "root_head_off_ground_center",
+      "root_not_vertical",
+      "root_tail_mismatch_hip"
+    ],
+    "target_head": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.0033478213008493185
+    ],
+    "target_tail": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.9532261490821838
+    ],
+    "up_axis": {
+      "index": 2,
+      "name": "z",
+      "sign": 1
+    },
+    "use_connect": false
+  },
+  "placement_metadata": {
+    "bounds_source": "meshes",
+    "driven_meshes": [
+      "Cube"
+    ],
+    "bbox_min": [
+      -0.6768602132797241,
+      -0.2960062026977539,
+      0.0033478213008493185
+    ],
+    "bbox_max": [
+      0.6768603324890137,
+      0.39800190925598145,
+      2.008983612060547
+    ],
+    "bbox_height": 2.0056357907596976,
+    "bbox_ground_center": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.0033478213008493185
+    ],
+    "forward_axis": {
+      "index": 1,
+      "name": "y",
+      "sign": -1
+    },
+    "side_axis": {
+      "index": 0,
+      "name": "x",
+      "sign": 1
+    },
+    "up_axis": {
+      "index": 2,
+      "name": "z",
+      "sign": 1
+    }
+  },
   "proposed_asam_hierarchy": {
     "object_nodes": [
       {
@@ -146,13 +204,13 @@
       "role": "unknown"
     },
     {
-      "bone_name": "DEF-spine",
+      "bone_name": "DEF-spine.001",
       "reason": "supporting_chain_detail",
       "origin": "primary",
       "role": "unknown"
     },
     {
-      "bone_name": "DEF-spine.001",
+      "bone_name": "DEF-spine.002",
       "reason": "supporting_chain_detail",
       "origin": "primary",
       "role": "unknown"

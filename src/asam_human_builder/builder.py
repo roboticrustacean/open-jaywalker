@@ -298,6 +298,19 @@ def _resolve_target_geometry(
 
     payload = semantic_mapping[target_name]
     source_bone_name = payload.get("source_bone")
+    if target_name == "Hip" and _hip_requires_centered_pelvis_pair(payload):
+        geometry = _resolve_centered_hip_geometry(
+            source_bone_name,
+            semantic_mapping,
+            root_resolution,
+            source_bones,
+            placement_metadata,
+            bone_parents,
+            children_map,
+            resolved_geometry,
+        )
+        return geometry, "centered_pelvis_pair", source_bone_name
+
     if payload.get("action") in RECOVERABLE_ACTIONS and source_bone_name in source_bones:
         return copy.deepcopy(source_bones[source_bone_name]), "source_bone", source_bone_name
 
@@ -314,6 +327,98 @@ def _resolve_target_geometry(
         children_map,
         resolved_geometry,
     )
+
+
+def _hip_requires_centered_pelvis_pair(payload: dict) -> bool:
+    return payload.get("action") == "repair_in_builder" and "paired_sided_pelvis_requires_centering" in set(
+        payload.get("notes", [])
+    )
+
+
+def _resolve_centered_hip_geometry(
+    source_bone_name: Optional[str],
+    semantic_mapping: dict,
+    root_resolution: dict,
+    source_bones: Dict[str, dict],
+    placement_metadata: dict,
+    bone_parents: dict,
+    children_map: Dict[str, List[str]],
+    resolved_geometry: Dict[str, dict],
+) -> dict:
+    root_geometry = resolved_geometry.get("Root")
+    if root_geometry is None:
+        root_geometry, _, _ = _resolve_root_geometry(root_resolution, source_bones, placement_metadata, [])
+
+    lower_spine_geometry = _get_reference_geometry(
+        "Lower_Spine",
+        semantic_mapping,
+        root_resolution,
+        source_bones,
+        resolved_geometry,
+        placement_metadata,
+    )
+
+    centerline = _placement_centerline(placement_metadata)
+    side_axis = int(placement_metadata["side_axis"]["index"])
+    default_length = _default_length_for_target("Hip", placement_metadata)
+    default_direction = _default_direction_for_target("Hip", placement_metadata, root_geometry)
+
+    head = list(root_geometry["tail"])
+    head[side_axis] = centerline
+
+    if lower_spine_geometry is not None:
+        tail = list(lower_spine_geometry["head"])
+        tail[side_axis] = centerline
+        return _ensure_non_zero_geometry(head, tail, placement_metadata)
+
+    opposite_geometry = _find_opposite_pelvis_geometry(source_bone_name, source_bones)
+    source_geometry = source_bones.get(source_bone_name) if source_bone_name in source_bones else None
+    if source_geometry is not None and opposite_geometry is not None:
+        averaged_tail = [
+            float((source_geometry["tail"][index] + opposite_geometry["tail"][index]) / 2.0)
+            for index in range(3)
+        ]
+        averaged_tail[side_axis] = centerline
+        if _distance(head, averaged_tail) > 1e-5:
+            return _ensure_non_zero_geometry(head, averaged_tail, placement_metadata)
+
+    tail = _offset_point(head, default_direction, default_length)
+    tail[side_axis] = centerline
+    return _ensure_non_zero_geometry(head, tail, placement_metadata)
+
+
+def _placement_centerline(placement_metadata: dict) -> float:
+    side_axis = int(placement_metadata["side_axis"]["index"])
+    return float(placement_metadata["bbox_ground_center"][side_axis])
+
+
+def _find_opposite_pelvis_geometry(source_bone_name: Optional[str], source_bones: Dict[str, dict]) -> Optional[dict]:
+    if not source_bone_name:
+        return None
+    for candidate_name in _opposite_name_candidates(source_bone_name):
+        if candidate_name in source_bones:
+            return source_bones[candidate_name]
+    return None
+
+
+def _opposite_name_candidates(name: str) -> List[str]:
+    replacements = [
+        (".L", ".R"),
+        (".R", ".L"),
+        ("_L", "_R"),
+        ("_R", "_L"),
+        ("-L", "-R"),
+        ("-R", "-L"),
+        ("Left", "Right"),
+        ("Right", "Left"),
+        ("left", "right"),
+        ("right", "left"),
+    ]
+    candidates: List[str] = []
+    for old, new in replacements:
+        if old in name:
+            candidates.append(name.replace(old, new))
+    return candidates
 
 
 def _resolve_root_geometry(

@@ -9,9 +9,9 @@
     "ranking": [
       {
         "armature_name": "Armature",
-        "ranking_score": 109.96,
+        "ranking_score": 109.68,
         "mapped_core_targets": 20,
-        "average_confidence": 0.996,
+        "average_confidence": 0.993,
         "primary_input": "Armature_all.json"
       }
     ]
@@ -27,35 +27,38 @@
       },
       "summary": {
         "mapped_core_targets": 20,
-        "direct_map_targets": 20,
+        "direct_map_targets": 19,
         "alias_map_targets": 0,
+        "repair_targets": 1,
         "review_targets": 0,
         "missing_core_targets": 0,
-        "average_confidence": 0.996,
-        "ranking_score": 109.96
+        "average_confidence": 0.993,
+        "ranking_score": 109.68
       },
       "asam_targets": {
         "Root": {
           "source_bone": "Root",
-          "confidence": 1.0,
-          "action": "direct_map",
+          "confidence": 0.991,
+          "action": "repair_in_builder",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 1.0,
+            "geometry": 0.954,
             "source_origin": "primary",
             "role": "unknown"
           },
-          "notes": []
+          "notes": [
+            "root_head_off_ground_center"
+          ]
         },
         "Hip": {
           "source_bone": "Hip",
-          "confidence": 0.97,
+          "confidence": 0.963,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 0.9,
-            "geometry": 1.0,
+            "geometry": 0.967,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -63,12 +66,12 @@
         },
         "Lower_Spine": {
           "source_bone": "Lower_Spine",
-          "confidence": 1.0,
+          "confidence": 0.993,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 1.0,
+            "geometry": 0.967,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -76,12 +79,12 @@
         },
         "Upper_Spine": {
           "source_bone": "Upper_Spine",
-          "confidence": 1.0,
+          "confidence": 0.993,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 1.0,
+            "geometry": 0.967,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -89,12 +92,12 @@
         },
         "Neck": {
           "source_bone": "Neck",
-          "confidence": 1.0,
+          "confidence": 0.993,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 1.0,
+            "geometry": 0.967,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -102,12 +105,12 @@
         },
         "Head": {
           "source_bone": "Head",
-          "confidence": 1.0,
+          "confidence": 0.993,
           "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
-            "geometry": 1.0,
+            "geometry": 0.967,
             "source_origin": "primary",
             "role": "unknown"
           },
@@ -296,6 +299,71 @@
           "notes": []
         }
       },
+      "root_resolution": {
+        "mode": "create_new_root",
+        "target_bone": "Root",
+        "source_bone": "Root",
+        "rename_source_to_target": false,
+        "failure_codes": [
+          "root_head_off_ground_center"
+        ],
+        "target_head": [
+          0.08631828427314758,
+          0.009727418422698975,
+          -0.003222084604203701
+        ],
+        "target_tail": [
+          0.08631828427314758,
+          0.009727418422698975,
+          0.8424201011657715
+        ],
+        "up_axis": {
+          "index": 2,
+          "name": "z",
+          "sign": 1
+        },
+        "use_connect": false
+      },
+      "placement_metadata": {
+        "bounds_source": "meshes",
+        "driven_meshes": [
+          "Accessories_Wristband",
+          "Body_Human",
+          "Clothing_Vest",
+          "Hair_Short"
+        ],
+        "bbox_min": [
+          -0.31790876388549805,
+          -0.28237396478652954,
+          -0.003222084604203701
+        ],
+        "bbox_max": [
+          0.4905453324317932,
+          0.3018288016319275,
+          1.7785322666168213
+        ],
+        "bbox_height": 1.781754351221025,
+        "bbox_ground_center": [
+          0.08631828427314758,
+          0.009727418422698975,
+          -0.003222084604203701
+        ],
+        "forward_axis": {
+          "index": 0,
+          "name": "x",
+          "sign": 1
+        },
+        "side_axis": {
+          "index": 1,
+          "name": "y",
+          "sign": 1
+        },
+        "up_axis": {
+          "index": 2,
+          "name": "z",
+          "sign": 1
+        }
+      },
       "proposed_asam_hierarchy": {
         "object_nodes": [
           {
@@ -383,7 +451,9 @@
       "unclassified_bones": [],
       "missing_core_targets": [],
       "ambiguous_targets": [],
-      "review_flags": [],
+      "review_flags": [
+        "root_noncompliant"
+      ],
       "deferred_targets": [
         "Eye_Left",
         "Eye_Right",
@@ -400,25 +470,27 @@
   "semantic_mapping": {
     "Root": {
       "source_bone": "Root",
-      "confidence": 1.0,
-      "action": "direct_map",
+      "confidence": 0.991,
+      "action": "repair_in_builder",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 1.0,
+        "geometry": 0.954,
         "source_origin": "primary",
         "role": "unknown"
       },
-      "notes": []
+      "notes": [
+        "root_head_off_ground_center"
+      ]
     },
     "Hip": {
       "source_bone": "Hip",
-      "confidence": 0.97,
+      "confidence": 0.963,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 0.9,
-        "geometry": 1.0,
+        "geometry": 0.967,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -426,12 +498,12 @@
     },
     "Lower_Spine": {
       "source_bone": "Lower_Spine",
-      "confidence": 1.0,
+      "confidence": 0.993,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 1.0,
+        "geometry": 0.967,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -439,12 +511,12 @@
     },
     "Upper_Spine": {
       "source_bone": "Upper_Spine",
-      "confidence": 1.0,
+      "confidence": 0.993,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 1.0,
+        "geometry": 0.967,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -452,12 +524,12 @@
     },
     "Neck": {
       "source_bone": "Neck",
-      "confidence": 1.0,
+      "confidence": 0.993,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 1.0,
+        "geometry": 0.967,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -465,12 +537,12 @@
     },
     "Head": {
       "source_bone": "Head",
-      "confidence": 1.0,
+      "confidence": 0.993,
       "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
-        "geometry": 1.0,
+        "geometry": 0.967,
         "source_origin": "primary",
         "role": "unknown"
       },
@@ -659,10 +731,77 @@
       "notes": []
     }
   },
+  "root_resolution": {
+    "mode": "create_new_root",
+    "target_bone": "Root",
+    "source_bone": "Root",
+    "rename_source_to_target": false,
+    "failure_codes": [
+      "root_head_off_ground_center"
+    ],
+    "target_head": [
+      0.08631828427314758,
+      0.009727418422698975,
+      -0.003222084604203701
+    ],
+    "target_tail": [
+      0.08631828427314758,
+      0.009727418422698975,
+      0.8424201011657715
+    ],
+    "up_axis": {
+      "index": 2,
+      "name": "z",
+      "sign": 1
+    },
+    "use_connect": false
+  },
+  "placement_metadata": {
+    "bounds_source": "meshes",
+    "driven_meshes": [
+      "Accessories_Wristband",
+      "Body_Human",
+      "Clothing_Vest",
+      "Hair_Short"
+    ],
+    "bbox_min": [
+      -0.31790876388549805,
+      -0.28237396478652954,
+      -0.003222084604203701
+    ],
+    "bbox_max": [
+      0.4905453324317932,
+      0.3018288016319275,
+      1.7785322666168213
+    ],
+    "bbox_height": 1.781754351221025,
+    "bbox_ground_center": [
+      0.08631828427314758,
+      0.009727418422698975,
+      -0.003222084604203701
+    ],
+    "forward_axis": {
+      "index": 0,
+      "name": "x",
+      "sign": 1
+    },
+    "side_axis": {
+      "index": 1,
+      "name": "y",
+      "sign": 1
+    },
+    "up_axis": {
+      "index": 2,
+      "name": "z",
+      "sign": 1
+    }
+  },
   "missing_targets": [],
   "ambiguous_targets": [],
   "unclassified_bones": [],
-  "review_flags": [],
+  "review_flags": [
+    "root_noncompliant"
+  ],
   "deferred_targets": [
     "Eye_Left",
     "Eye_Right",
