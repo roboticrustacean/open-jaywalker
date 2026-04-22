@@ -106,6 +106,19 @@ def validate_builder_inputs(classifier_report: dict, build_plan: dict) -> None:
             )
         )
 
+    if "source_translation_offset" in build_plan["root_resolution"]:
+        offset = build_plan["root_resolution"]["source_translation_offset"]
+        if not isinstance(offset, (list, tuple)) or len(offset) != 3:
+            raise ValueError(
+                "build_plan.root_resolution.source_translation_offset must be a length-3 sequence"
+            )
+        try:
+            [float(value) for value in offset]
+        except (TypeError, ValueError) as exc:
+            raise ValueError(
+                "build_plan.root_resolution.source_translation_offset entries must be numeric"
+            ) from exc
+
 
 def choose_generated_collection_action(existing_collections: Sequence[dict], expected_name: str, asset_name: str) -> str:
     """
@@ -181,6 +194,12 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
     if classifier_report["recommended_primary_armature"] != build_plan["recommended_primary_armature"]:
         raise ValueError("Classifier and build plan disagree on the recommended primary armature")
 
+    source_translation_offset = [
+        float(value)
+        for value in root_resolution.get("source_translation_offset", [0.0, 0.0, 0.0])
+    ]
+    translated_source_bones = _translate_source_bones(source_bones, source_translation_offset)
+
     spec = {
         "asset_name": asset_name,
         "source_armature_name": build_plan["recommended_primary_armature"],
@@ -190,6 +209,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         "root_resolution": copy.deepcopy(root_resolution),
         "placement_metadata": copy.deepcopy(placement_metadata),
         "extras_preserved": copy.deepcopy(build_plan.get("extras_preserved", [])),
+        "source_translation_offset": list(source_translation_offset),
         "bones": [],
         "warnings": [],
     }
@@ -201,7 +221,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
             target_name,
             semantic_mapping,
             root_resolution,
-            source_bones,
+            translated_source_bones,
             placement_metadata,
             bone_parents,
             children_map,
@@ -419,6 +439,15 @@ def _opposite_name_candidates(name: str) -> List[str]:
         if old in name:
             candidates.append(name.replace(old, new))
     return candidates
+
+
+def _translate_source_bones(source_bones: Dict[str, dict], offset: Sequence[float]) -> Dict[str, dict]:
+    offset_values = [float(offset[index]) for index in range(3)]
+    translated = copy.deepcopy(source_bones)
+    for bone in translated.values():
+        bone["head"] = [float(bone["head"][index]) + offset_values[index] for index in range(3)]
+        bone["tail"] = [float(bone["tail"][index]) + offset_values[index] for index in range(3)]
+    return translated
 
 
 def _resolve_root_geometry(

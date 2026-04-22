@@ -133,6 +133,11 @@ ROOT_CENTER_TOLERANCE_RATIO = 0.02
 ROOT_GROUND_TOLERANCE_RATIO = 0.01
 ROOT_TAIL_TO_HIP_TOLERANCE_RATIO = 0.05
 ROOT_UP_ALIGNMENT_COSINE = 0.95
+ROOT_ORIGIN_SPEC_REFERENCES: Tuple[str, ...] = (
+    "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+    "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
+    "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root",
+)
 
 CORE_FAMILY_BY_TARGET: Dict[str, str] = {
     "Root": "root",
@@ -739,8 +744,10 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
     candidate_bone = context["bones"].get(candidate.source_bone) if candidate is not None else None
     hip_payload = resolved_targets.get("Hip", {})
     hip_bone = context["bones"].get(hip_payload.get("source_bone")) if hip_payload.get("source_bone") else None
-    target_head, target_tail = _build_root_target_geometry(hip_bone, context)
+    source_translation_offset = _compute_source_translation_offset(candidate_bone, context)
+    target_head, target_tail = _build_root_target_geometry(hip_bone, context, source_translation_offset)
     failure_codes = _root_failure_codes(original_payload, candidate, hip_bone, context)
+    diagnostics = _build_root_compliance_diagnostics(candidate_bone, context, failure_codes)
     can_create_new_root = target_head is not None and target_tail is not None
     source_bone = candidate.source_bone if candidate_bone is not None and "root" in candidate_bone.family_tags else None
 
@@ -753,6 +760,9 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "source_bone": candidate.source_bone,
             "rename_source_to_target": candidate.source_bone != "Root",
             "failure_codes": [],
+            "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
+            "source_translation_offset": list(source_translation_offset),
+            "diagnostic_notes": diagnostics,
             "target_head": target_head,
             "target_tail": target_tail,
             "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
@@ -768,6 +778,9 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "source_bone": source_bone,
             "rename_source_to_target": False,
             "failure_codes": failure_codes,
+            "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
+            "source_translation_offset": list(source_translation_offset),
+            "diagnostic_notes": diagnostics,
             "target_head": target_head,
             "target_tail": target_tail,
             "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
@@ -782,6 +795,9 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
         "source_bone": source_bone,
         "rename_source_to_target": False,
         "failure_codes": sorted(set(failure_codes + ["insufficient_root_builder_inputs"])),
+        "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
+        "source_translation_offset": list(source_translation_offset),
+        "diagnostic_notes": diagnostics,
         "target_head": target_head,
         "target_tail": target_tail,
         "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
@@ -820,7 +836,22 @@ def _target_payload_from_candidate(candidate: Optional[CandidateScore], action: 
     }
 
 
-def _build_root_target_geometry(hip_bone: Optional[BoneInfo], context: dict) -> Tuple[Optional[List[float]], Optional[List[float]]]:
+def _compute_source_translation_offset(
+    candidate_bone: Optional[BoneInfo],
+    context: dict,
+) -> List[float]:
+    placement = context.get("placement_metadata") or {}
+    ground_center = placement.get("bbox_ground_center")
+    if candidate_bone is None or ground_center is None:
+        return [0.0, 0.0, 0.0]
+    return [float(ground_center[index]) - float(candidate_bone.head[index]) for index in range(3)]
+
+
+def _build_root_target_geometry(
+    hip_bone: Optional[BoneInfo],
+    context: dict,
+    source_translation_offset: Sequence[float],
+) -> Tuple[Optional[List[float]], Optional[List[float]]]:
     placement = context.get("placement_metadata") or {}
     ground_center = placement.get("bbox_ground_center")
     up_axis = (placement.get("up_axis") or {}).get("index")
@@ -828,9 +859,12 @@ def _build_root_target_geometry(hip_bone: Optional[BoneInfo], context: dict) -> 
     if ground_center is None or up_axis is None or hip_bone is None:
         return None, None
 
+    up_axis_index = int(up_axis)
     target_head = [float(value) for value in ground_center]
     target_tail = list(target_head)
-    target_tail[int(up_axis)] = float(hip_bone.head[int(up_axis)])
+    offset_up = float(source_translation_offset[up_axis_index])
+    target_tail[up_axis_index] = float(hip_bone.head[up_axis_index]) + offset_up
+
     return target_head, target_tail
 
 
@@ -880,6 +914,9 @@ def _root_failure_codes(
     up_axis = int(placement["up_axis"]["index"])
     up_sign = int(placement["up_axis"]["sign"])
 
+    # ASAM 7.3.3.1 + 7.3.3.3.2 + 7.3.3.3.4 place the Root at asset origin
+    # (center of bbox projected to ground), so reuse requires matching this
+    # origin within tolerance.
     center_tolerance = bbox_height * ROOT_CENTER_TOLERANCE_RATIO
     if (
         abs(candidate_bone.head[forward_axis] - float(ground_center[forward_axis])) > center_tolerance
@@ -903,6 +940,43 @@ def _root_failure_codes(
             failure_codes.append("root_children_not_hip_only")
 
     return sorted(set(failure_codes))
+
+
+def _build_root_compliance_diagnostics(
+    candidate_bone: Optional[BoneInfo],
+    context: dict,
+    failure_codes: List[str],
+) -> List[str]:
+    if candidate_bone is None:
+        return []
+
+    placement = context["placement_metadata"]
+    ground_center = placement["bbox_ground_center"]
+    forward_axis = int(placement["forward_axis"]["index"])
+    side_axis = int(placement["side_axis"]["index"])
+    up_axis = int(placement["up_axis"]["index"])
+
+    forward_delta = candidate_bone.head[forward_axis] - float(ground_center[forward_axis])
+    side_delta = candidate_bone.head[side_axis] - float(ground_center[side_axis])
+    up_delta = candidate_bone.head[up_axis] - float(ground_center[up_axis])
+    planar_delta = math.sqrt((forward_delta * forward_delta) + (side_delta * side_delta))
+
+    notes = [
+        "root_head_delta_forward={0:.6f}".format(forward_delta),
+        "root_head_delta_side={0:.6f}".format(side_delta),
+        "root_head_delta_up={0:.6f}".format(up_delta),
+    ]
+    if "root_head_off_ground_center" in failure_codes:
+        notes.append("root_origin_violation_against_asam_7_3_3_1")
+    if "root_head_off_ground" in failure_codes:
+        notes.append("root_ground_projection_violation_against_asam_7_3_3_1")
+
+    # Distinguish root-bone non-compliance from likely mesh-to-skeleton offset.
+    is_local_origin = all(abs(candidate_bone.head[index]) <= 1e-6 for index in range(3))
+    if is_local_origin and planar_delta > 1e-6:
+        notes.append("mesh_bounds_offset_detected_root_at_local_origin")
+
+    return notes
 
 
 def _aligned_axis_cosine(bone: BoneInfo, axis_index: int, axis_sign: int) -> float:

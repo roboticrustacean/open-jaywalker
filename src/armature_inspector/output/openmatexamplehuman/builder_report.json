@@ -3,7 +3,7 @@
   "source_armature_name": "Armature",
   "generated_collection_name": "ASAM_openmatexamplehuman",
   "group_root_name": "Grp_Root_openmatexamplehuman",
-  "generated_armature_name": "Armature_openmatexamplehuman",
+  "generated_armature_name": "Armature_openmatexamplehuman_Generated",
   "built_core_targets": [
     "Root",
     "Hip",

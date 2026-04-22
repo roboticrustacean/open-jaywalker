@@ -104,7 +104,67 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
         self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
         self.assertIn("root_noncompliant", report["review_flags"])
+        self.assertIn(
+            "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+            build_plan["root_resolution"]["spec_references"],
+        )
+        self.assertIn(
+            "root_origin_violation_against_asam_7_3_3_1",
+            build_plan["root_resolution"]["diagnostic_notes"],
+        )
+        self.assertIn(
+            "mesh_bounds_offset_detected_root_at_local_origin",
+            build_plan["root_resolution"]["diagnostic_notes"],
+        )
         self.assertFalse(any(action["target"] == "Root" for action in build_plan["actions"]["rename"]))
+        expected_offset = build_plan["placement_metadata"]["bbox_ground_center"]
+        self.assertEqual(
+            build_plan["root_resolution"]["source_translation_offset"],
+            expected_offset,
+        )
+        up_index = build_plan["placement_metadata"]["up_axis"]["index"]
+        offset_up = build_plan["root_resolution"]["source_translation_offset"][up_index]
+        source_bones_payload = json.loads((asset_dir / "Armature_all.json").read_text(encoding="utf-8"))
+        source_hip_head_z = next(
+            bone["head"][up_index] for bone in source_bones_payload["bones"] if bone["name"] == "Hip"
+        )
+        self.assertAlmostEqual(
+            build_plan["root_resolution"]["target_tail"][up_index],
+            source_hip_head_z + offset_up,
+            places=6,
+        )
+
+    def test_compliant_root_has_near_zero_translation_offset(self):
+        bones = [
+            _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+            _bone("Hip", "Root", (0.0, 0.0, 1.0), (0.0, 0.0, 1.15)),
+            _bone("Lower_Spine", "Hip", (0.0, 0.0, 1.15), (0.0, 0.0, 1.35)),
+            _bone("Upper_Spine", "Lower_Spine", (0.0, 0.0, 1.35), (0.0, 0.0, 1.55)),
+            _bone("Upper_Leg_Left", "Hip", (0.0, 0.15, 1.0), (0.0, 0.15, 0.45)),
+            _bone("Upper_Leg_Right", "Hip", (0.0, -0.15, 1.0), (0.0, -0.15, 0.45)),
+        ]
+        chains = {
+            "spine": [["Lower_Spine", "Upper_Spine"]],
+            "leg": {
+                "left": [["Upper_Leg_Left"]],
+                "right": [["Upper_Leg_Right"]],
+                "unsided": [],
+            },
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        asset_dir = _write_single_armature_asset(
+            "compliant_root_offset",
+            "Rig",
+            bones,
+            chains,
+            _placement_metadata((-0.2, -0.25, 0.0), (0.2, 0.25, 1.8)),
+        )
+
+        _, build_plan, _, _ = write_asset_report(asset_dir)
+
+        offset = build_plan["root_resolution"]["source_translation_offset"]
+        for component in offset:
+            self.assertLess(abs(component), 1e-6)
 
     def test_lowpoly_classifies_both_armatures_and_requires_new_root(self):
         asset_dir = _copy_asset_folder("LowPolyCharacter4")
@@ -233,6 +293,20 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(build_plan["root_resolution"]["mode"], "reuse_existing_root")
         self.assertTrue(build_plan["root_resolution"]["rename_source_to_target"])
         self.assertEqual(build_plan["root_resolution"]["source_bone"], "master")
+        self.assertIn(
+            "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root",
+            build_plan["root_resolution"]["spec_references"],
+        )
+        self.assertNotIn(
+            "root_origin_violation_against_asam_7_3_3_1",
+            build_plan["root_resolution"]["diagnostic_notes"],
+        )
+        self.assertFalse(
+            any(
+                note.startswith("mesh_bounds_offset_detected")
+                for note in build_plan["root_resolution"]["diagnostic_notes"]
+            )
+        )
 
     def test_horizontal_root_requires_new_root(self):
         bones = [

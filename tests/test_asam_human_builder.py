@@ -115,6 +115,12 @@ def _spec_bone(build_spec: dict, name: str) -> dict:
     return next(bone for bone in build_spec["bones"] if bone["name"] == name)
 
 
+def _assert_vec_almost_equal(test_case: unittest.TestCase, actual, expected, places: int = 9) -> None:
+    test_case.assertEqual(len(actual), len(expected))
+    for actual_value, expected_value in zip(actual, expected):
+        test_case.assertAlmostEqual(actual_value, expected_value, places=places)
+
+
 class _FakeProps:
     def __init__(self):
         self._props = {}
@@ -449,6 +455,141 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(head["geometry_source"], "extrapolated_parent")
         self.assertEqual(head["head"], [0.0, 0.0, 1.72])
         self.assertGreater(head["tail"][2], head["head"][2])
+
+    def test_translate_source_bones_applies_offset_and_preserves_length(self):
+        from asam_human_builder.builder import _translate_source_bones
+
+        source_bones = {
+            "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
+            "Hip": _bone("Hip", "Root", (0.0, 0.0, 0.9), (0.0, 0.0, 1.05)),
+        }
+        offset = [0.1, -0.2, 0.05]
+
+        translated = _translate_source_bones(source_bones, offset)
+
+        _assert_vec_almost_equal(self, translated["Root"]["head"], [0.1, -0.2, 0.05])
+        _assert_vec_almost_equal(self, translated["Root"]["tail"], [0.1, -0.2, 0.55])
+        _assert_vec_almost_equal(self, translated["Hip"]["head"], [0.1, -0.2, 0.95])
+        _assert_vec_almost_equal(self, translated["Hip"]["tail"], [0.1, -0.2, 1.1])
+        self.assertAlmostEqual(translated["Root"]["length"], source_bones["Root"]["length"], places=9)
+        self.assertAlmostEqual(translated["Hip"]["length"], source_bones["Hip"]["length"], places=9)
+        self.assertEqual(source_bones["Root"]["head"], [0.0, 0.0, 0.0])
+
+    def test_translate_source_bones_preserves_unknown_keys(self):
+        from asam_human_builder.builder import _translate_source_bones
+
+        source_bones = {
+            "Root": {
+                **_bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
+                "roll": 1.25,
+                "custom_metadata": {"source": "blender"},
+            },
+        }
+        offset = [0.1, 0.0, 0.0]
+
+        translated = _translate_source_bones(source_bones, offset)
+
+        self.assertEqual(translated["Root"]["roll"], 1.25)
+        self.assertEqual(translated["Root"]["custom_metadata"], {"source": "blender"})
+        translated["Root"]["custom_metadata"]["source"] = "mutated"
+        self.assertEqual(source_bones["Root"]["custom_metadata"]["source"], "blender")
+
+    def test_validate_builder_inputs_rejects_malformed_offset(self):
+        from asam_human_builder.builder import validate_builder_inputs
+
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        plan["root_resolution"]["source_translation_offset"] = [0.0, 0.0]
+
+        with self.assertRaises(ValueError) as ctx:
+            validate_builder_inputs(report, plan)
+        self.assertIn("length-3", str(ctx.exception))
+
+        plan["root_resolution"]["source_translation_offset"] = [0.0, "oops", 0.0]
+        with self.assertRaises(ValueError) as ctx:
+            validate_builder_inputs(report, plan)
+        self.assertIn("numeric", str(ctx.exception))
+
+    def test_build_armature_spec_translates_source_bones_in_create_new_root_mode(self):
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        plan["root_resolution"].update({
+            "mode": "create_new_root",
+            "source_bone": "Root",
+            "target_head": [0.1, 0.0, 0.0],
+            "target_tail": [0.1, 0.0, 0.9],
+            "source_translation_offset": [0.1, 0.0, 0.0],
+        })
+        report["semantic_mapping"]["Hip"].update({
+            "source_bone": "Hip",
+            "action": "direct_map",
+            "confidence": 1.0,
+        })
+        source_bones = {
+            "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
+            "Hip": _bone("Hip", "Root", (0.0, 0.0, 0.9), (0.0, 0.0, 1.0)),
+        }
+
+        spec = build_armature_spec(report, plan, source_bones)
+
+        hip_bone = _spec_bone(spec, "Hip")
+        self.assertAlmostEqual(hip_bone["head"][0], 0.1, places=9)
+        self.assertAlmostEqual(hip_bone["head"][2], 0.9, places=9)
+        root_bone = _spec_bone(spec, "Root")
+        self.assertAlmostEqual(root_bone["tail"][2], hip_bone["head"][2], places=9)
+        self.assertEqual(spec["source_translation_offset"], [0.1, 0.0, 0.0])
+
+    def test_build_armature_spec_identity_when_offset_zero(self):
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        plan["root_resolution"].update({
+            "mode": "create_new_root",
+            "source_bone": "Root",
+            "target_head": [0.0, 0.0, 0.0],
+            "target_tail": [0.0, 0.0, 0.9],
+            "source_translation_offset": [0.0, 0.0, 0.0],
+        })
+        report["semantic_mapping"]["Hip"].update({
+            "source_bone": "Hip",
+            "action": "direct_map",
+            "confidence": 1.0,
+        })
+        source_bones = {
+            "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
+            "Hip": _bone("Hip", "Root", (0.0, 0.0, 0.9), (0.0, 0.0, 1.0)),
+        }
+
+        spec = build_armature_spec(report, plan, source_bones)
+
+        hip_bone = _spec_bone(spec, "Hip")
+        self.assertEqual(hip_bone["head"], [0.0, 0.0, 0.9])
+        self.assertEqual(hip_bone["tail"], [0.0, 0.0, 1.0])
+
+    def test_reuse_existing_root_snaps_to_bbox_ground_center_via_translation(self):
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        plan["root_resolution"].update({
+            "mode": "reuse_existing_root",
+            "source_bone": "Root",
+            "target_head": [0.01, 0.0, 0.0],
+            "target_tail": [0.01, 0.0, 0.9],
+            "source_translation_offset": [0.01, 0.0, 0.0],
+        })
+        report["semantic_mapping"]["Root"].update({
+            "source_bone": "Root",
+            "action": "direct_map",
+            "confidence": 1.0,
+        })
+        source_bones = {
+            "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.9)),
+        }
+
+        spec = build_armature_spec(report, plan, source_bones)
+
+        root_bone = _spec_bone(spec, "Root")
+        self.assertAlmostEqual(root_bone["head"][0], 0.01, places=9)
+        self.assertAlmostEqual(root_bone["head"][1], 0.0, places=9)
+        self.assertAlmostEqual(root_bone["head"][2], 0.0, places=9)
 
     def test_generated_collection_action_rebuilds_only_safe_generated_output(self):
         action = choose_generated_collection_action(

@@ -307,6 +307,23 @@
         "failure_codes": [
           "root_head_off_ground_center"
         ],
+        "spec_references": [
+          "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+          "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
+          "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
+        ],
+        "source_translation_offset": [
+          0.08631828427314758,
+          0.009727418422698975,
+          -0.003222084604203701
+        ],
+        "diagnostic_notes": [
+          "root_head_delta_forward=-0.086318",
+          "root_head_delta_side=-0.009727",
+          "root_head_delta_up=0.003222",
+          "root_origin_violation_against_asam_7_3_3_1",
+          "mesh_bounds_offset_detected_root_at_local_origin"
+        ],
         "target_head": [
           0.08631828427314758,
           0.009727418422698975,
@@ -315,7 +332,7 @@
         "target_tail": [
           0.08631828427314758,
           0.009727418422698975,
-          0.8424201011657715
+          0.8391980165615678
         ],
         "up_axis": {
           "index": 2,
@@ -739,6 +756,23 @@
     "failure_codes": [
       "root_head_off_ground_center"
     ],
+    "spec_references": [
+      "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+      "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
+      "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
+    ],
+    "source_translation_offset": [
+      0.08631828427314758,
+      0.009727418422698975,
+      -0.003222084604203701
+    ],
+    "diagnostic_notes": [
+      "root_head_delta_forward=-0.086318",
+      "root_head_delta_side=-0.009727",
+      "root_head_delta_up=0.003222",
+      "root_origin_violation_against_asam_7_3_3_1",
+      "mesh_bounds_offset_detected_root_at_local_origin"
+    ],
     "target_head": [
       0.08631828427314758,
       0.009727418422698975,
@@ -747,7 +781,7 @@
     "target_tail": [
       0.08631828427314758,
       0.009727418422698975,
-      0.8424201011657715
+      0.8391980165615678
     ],
     "up_axis": {
       "index": 2,
