@@ -748,6 +748,29 @@ def build_armature_placement_metadata(bones_data, mesh_points=None, driven_meshe
     metadata.update(axis_metadata)
     return metadata
 
+# endregion
+
+# region MESH_BINDING
+
+
+def _meshes_driven_by_armature(armature_obj):
+    """
+    Unique mesh objects parented to the armature or using it in an Armature modifier.
+    """
+    meshes_by_id = {}
+    for obj in bpy.data.objects:
+        if obj.type != "MESH":
+            continue
+        driven = obj.parent == armature_obj
+        if not driven:
+            for modifier in getattr(obj, "modifiers", []):
+                if modifier.type == "ARMATURE" and getattr(modifier, "object", None) == armature_obj:
+                    driven = True
+                    break
+        if driven:
+            meshes_by_id[id(obj)] = obj
+    return list(meshes_by_id.values())
+
 
 def _collect_armature_mesh_bounds(armature_obj):
     """
@@ -759,19 +782,7 @@ def _collect_armature_mesh_bounds(armature_obj):
     driven_meshes = []
     local_points = []
 
-    for obj in bpy.data.objects:
-        if obj.type != "MESH":
-            continue
-
-        driven_by_armature = obj.parent == armature_obj
-        if not driven_by_armature:
-            for modifier in getattr(obj, "modifiers", []):
-                if modifier.type == "ARMATURE" and getattr(modifier, "object", None) == armature_obj:
-                    driven_by_armature = True
-                    break
-        if not driven_by_armature:
-            continue
-
+    for obj in _meshes_driven_by_armature(armature_obj):
         driven_meshes.append(obj.name)
         for corner in obj.bound_box:
             world_point = obj.matrix_world @ Vector(corner)
@@ -779,6 +790,120 @@ def _collect_armature_mesh_bounds(armature_obj):
             local_points.append([float(local_point[0]), float(local_point[1]), float(local_point[2])])
 
     return local_points, driven_meshes
+
+
+def build_mesh_binding(armature_obj):
+    """
+    Build machine-readable mesh-to-armature binding metadata for JSON export.
+    """
+    mesh_bindings = []
+    driven_meshes = sorted(_meshes_driven_by_armature(armature_obj), key=lambda obj: obj.name)
+
+    for obj in driven_meshes:
+        warnings = []
+        parent_link = getattr(obj, "parent", None) == armature_obj
+        modifier_link = False
+
+        modifiers_payload = []
+        for stack_index, modifier in enumerate(getattr(obj, "modifiers", [])):
+            modifier_type = getattr(modifier, "type", None)
+            modifier_object_name = None
+            if modifier_type == "ARMATURE":
+                modifier_target = getattr(modifier, "object", None)
+                modifier_object_name = getattr(modifier_target, "name", None)
+                if modifier_target == armature_obj:
+                    modifier_link = True
+
+            modifiers_payload.append(
+                {
+                    "stack_index": stack_index,
+                    "type": modifier_type,
+                    "name": getattr(modifier, "name", None),
+                    "object": modifier_object_name,
+                }
+            )
+
+        if parent_link and modifier_link:
+            armature_link = "parent_and_modifier"
+        elif parent_link:
+            armature_link = "parent"
+        else:
+            armature_link = "modifier"
+
+        vertex_group_records = sorted(
+            list(getattr(obj, "vertex_groups", [])),
+            key=lambda group: group.name,
+        )
+        vertex_groups = [group.name for group in vertex_group_records]
+        group_index_to_name = {}
+        weighted_vertex_counts = {}
+        for fallback_index, group in enumerate(vertex_group_records):
+            group_index = getattr(group, "index", fallback_index)
+            group_index_to_name[group_index] = group.name
+            weighted_vertex_counts[group_index] = 0
+
+        mesh_data = getattr(obj, "data", None)
+        if mesh_data is None:
+            warnings.append("mesh_data_missing")
+        else:
+            for vertex in getattr(mesh_data, "vertices", []):
+                seen_non_empty_groups = set()
+                for group_element in getattr(vertex, "groups", []):
+                    group_index = getattr(group_element, "group", None)
+                    weight = float(getattr(group_element, "weight", 0.0))
+                    if group_index not in weighted_vertex_counts:
+                        continue
+                    if weight > 1e-6:
+                        seen_non_empty_groups.add(group_index)
+                for group_index in seen_non_empty_groups:
+                    weighted_vertex_counts[group_index] += 1
+
+        per_group_stats = [
+            {
+                "name": group_name,
+                "weighted_vertex_count": weighted_vertex_counts[group_index],
+            }
+            for group_index, group_name in sorted(
+                group_index_to_name.items(),
+                key=lambda entry: entry[1],
+            )
+        ]
+        non_empty_group_count = sum(
+            1 for entry in per_group_stats if entry["weighted_vertex_count"] > 0
+        )
+
+        material_slots = []
+        for slot_index, slot in enumerate(getattr(obj, "material_slots", [])):
+            material = getattr(slot, "material", None)
+            material_slots.append(
+                {
+                    "slot_index": slot_index,
+                    "material_name": getattr(material, "name", None) if material is not None else None,
+                }
+            )
+
+        mesh_bindings.append(
+            {
+                "mesh_name": obj.name,
+                "armature_link": armature_link,
+                "modifiers": modifiers_payload,
+                "vertex_groups": vertex_groups,
+                "vertex_group_stats": {
+                    "non_empty_group_count": non_empty_group_count,
+                    "per_group": per_group_stats,
+                },
+                "material_slots": material_slots,
+                "warnings": sorted(warnings),
+            }
+        )
+
+    return {
+        "armature_object_name": armature_obj.name,
+        "meshes": mesh_bindings,
+    }
+
+
+# endregion
 
 
 def _format_vec3(vec, precision=4):
@@ -900,6 +1025,7 @@ def export_armature_json(armature_obj):
     source_file = bpy.data.filepath or "(unsaved)"
 
     mesh_points, driven_meshes = _collect_armature_mesh_bounds(armature_obj)
+    mesh_binding = build_mesh_binding(armature_obj)
 
     all_chains = {
         "spine": detect_spine_chains(armature_obj),
@@ -921,6 +1047,7 @@ def export_armature_json(armature_obj):
             mesh_points=mesh_points,
             driven_meshes=driven_meshes,
         ),
+        "mesh_binding": mesh_binding,
     }
     
     all_path = os.path.join(output_dir, f"{safe_name}_all.json")
@@ -949,6 +1076,7 @@ def export_armature_json(armature_obj):
             mesh_points=mesh_points,
             driven_meshes=driven_meshes,
         ),
+        "mesh_binding": mesh_binding,
     }
     
     filtered_path = os.path.join(output_dir, f"{safe_name}_filtered.json")
@@ -961,8 +1089,6 @@ def export_armature_json(armature_obj):
     print(f"    {filter_label} bones -> {filtered_path}")
     
     return all_path, filtered_path
-
-# endregion
 
 # region SCENE DIAGNOSTICS
 
