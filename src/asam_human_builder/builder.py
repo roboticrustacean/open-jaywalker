@@ -26,6 +26,7 @@ REQUIRED_PLAN_FIELDS = {
     "recommended_primary_armature",
     "root_resolution",
     "placement_metadata",
+    "mesh_binding",
     "proposed_asam_hierarchy",
 }
 
@@ -35,6 +36,8 @@ DEFAULT_LENGTH_RATIOS = {
     "Upper_Spine": 0.12,
     "Neck": 0.05,
     "Head": 0.08,
+    "Eye_Left": 0.02,
+    "Eye_Right": 0.02,
     "Shoulder_Left": 0.06,
     "Shoulder_Right": 0.06,
     "Upper_Arm_Left": 0.16,
@@ -43,12 +46,18 @@ DEFAULT_LENGTH_RATIOS = {
     "Lower_Arm_Right": 0.15,
     "Hand_Left": 0.07,
     "Hand_Right": 0.07,
+    "Full_Thumb_Left": 0.05,
+    "Full_Thumb_Right": 0.05,
+    "Full_Fingers_Left": 0.06,
+    "Full_Fingers_Right": 0.06,
     "Upper_Leg_Left": 0.22,
     "Upper_Leg_Right": 0.22,
     "Lower_Leg_Left": 0.22,
     "Lower_Leg_Right": 0.22,
     "Foot_Left": 0.10,
     "Foot_Right": 0.10,
+    "Full_Toes_Left": 0.05,
+    "Full_Toes_Right": 0.05,
 }
 
 
@@ -88,6 +97,12 @@ def validate_builder_inputs(classifier_report: dict, build_plan: dict) -> None:
         raise ValueError("build_plan.root_resolution must be a dictionary")
     if not isinstance(build_plan.get("placement_metadata"), dict):
         raise ValueError("build_plan.placement_metadata must be a dictionary")
+    if not isinstance(build_plan.get("mesh_binding"), dict):
+        raise ValueError("build_plan.mesh_binding must be a dictionary")
+    if build_plan["mesh_binding"].get("armature_object_name") != build_plan.get("recommended_primary_armature"):
+        raise ValueError("build_plan.mesh_binding.armature_object_name must match recommended_primary_armature")
+    if not isinstance(build_plan["mesh_binding"].get("meshes"), list):
+        raise ValueError("build_plan.mesh_binding.meshes must be a list")
     if not isinstance(build_plan.get("proposed_asam_hierarchy"), dict):
         raise ValueError("build_plan.proposed_asam_hierarchy must be a dictionary")
 
@@ -208,6 +223,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         "generated_armature_name": "Armature_{0}".format(asset_name),
         "root_resolution": copy.deepcopy(root_resolution),
         "placement_metadata": copy.deepcopy(placement_metadata),
+        "mesh_binding": copy.deepcopy(build_plan["mesh_binding"]),
         "extras_preserved": copy.deepcopy(build_plan.get("extras_preserved", [])),
         "source_translation_offset": list(source_translation_offset),
         "bones": [],
@@ -262,6 +278,10 @@ def build_builder_report(build_spec: dict, execution_result: dict) -> dict:
         "generated_collection_name": execution_result["generated_collection_name"],
         "group_root_name": execution_result["group_root_name"],
         "generated_armature_name": execution_result["generated_armature_name"],
+        "collection_action": execution_result.get("collection_action"),
+        "duplicated_meshes": copy.deepcopy(execution_result.get("duplicated_meshes", [])),
+        "skipped_meshes": copy.deepcopy(execution_result.get("skipped_meshes", [])),
+        "mesh_warnings": list(execution_result.get("mesh_warnings", [])),
         "built_core_targets": [bone["name"] for bone in build_spec["bones"]],
         "targets_from_source_geometry": source_targets,
         "targets_created_heuristically": created_targets,
@@ -289,6 +309,15 @@ def print_builder_summary(builder_report: dict, report_path: Path) -> None:
     print("Source armature: {0}".format(builder_report["source_armature_name"]))
     print("Generated collection: {0}".format(builder_report["generated_collection_name"]))
     print("Generated armature: {0}".format(builder_report["generated_armature_name"]))
+    print("Collection action: {0}".format(builder_report.get("collection_action") or "(unknown)"))
+    duplicated_meshes = builder_report.get("duplicated_meshes", [])
+    print("Duplicated meshes: {0}".format(len(duplicated_meshes)))
+    if duplicated_meshes:
+        print(
+            "Generated mesh copies: {0}".format(
+                ", ".join(mesh["generated_mesh_name"] for mesh in duplicated_meshes)
+            )
+        )
     print("Built core targets: {0}".format(", ".join(builder_report["built_core_targets"])))
     print("From source geometry: {0}".format(", ".join(builder_report["targets_from_source_geometry"]) or "(none)"))
     print(
@@ -670,9 +699,19 @@ def _default_direction_for_target(target_name: str, placement_metadata: dict, an
     elif family in {"Upper_Arm", "Lower_Arm", "Hand"}:
         vector[side_axis] = float(lateral_scale or side_sign)
         vector[up_axis] = float(-0.35 * up_sign)
+    elif family in {"Full_Thumb", "Full_Fingers"}:
+        # Fingers/thumb extend sideward and slightly downward like the hand.
+        vector[side_axis] = float(lateral_scale or side_sign)
+        vector[up_axis] = float(-0.35 * up_sign)
     elif family in {"Upper_Leg", "Lower_Leg"}:
         vector[up_axis] = float(-up_sign)
     elif family == "Foot":
+        vector[forward_axis] = float(forward_sign)
+    elif family == "Full_Toes":
+        # Toes extend forward from the foot.
+        vector[forward_axis] = float(forward_sign)
+    elif family == "Eye":
+        # Eyes point forward (gaze direction) per ASAM §7.3.3.3.10.
         vector[forward_axis] = float(forward_sign)
     else:
         vector[up_axis] = float(up_sign)

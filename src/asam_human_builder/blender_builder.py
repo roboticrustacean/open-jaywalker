@@ -58,12 +58,24 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
     group_root = _create_group_root(bpy_module, group_root_name, asset_name, collection)
     armature_object = _create_armature_object(bpy_module, armature_name, asset_name, collection, group_root)
     _populate_edit_bones(bpy_module, armature_object, build_spec["bones"])
+    source_translation_offset = build_spec.get("source_translation_offset", [0.0, 0.0, 0.0])
+    mesh_result = _duplicate_bound_meshes(
+        bpy_module,
+        build_spec,
+        collection,
+        source_armature,
+        armature_object,
+        source_translation_offset,
+    )
 
     return {
         "generated_collection_name": collection.name,
         "group_root_name": group_root.name,
         "generated_armature_name": armature_object.name,
         "collection_action": collection_action,
+        "duplicated_meshes": mesh_result["duplicated_meshes"],
+        "skipped_meshes": mesh_result["skipped_meshes"],
+        "mesh_warnings": mesh_result["mesh_warnings"],
     }
 
 
@@ -188,6 +200,126 @@ def _create_armature_object(bpy_module, armature_name: str, asset_name: str, col
     armature_object[GENERATED_ASSET_KEY] = asset_name
     collection.objects.link(armature_object)
     return armature_object
+
+
+def _duplicate_bound_meshes(
+    bpy_module,
+    build_spec: dict,
+    collection,
+    source_armature,
+    generated_armature,
+    source_translation_offset: List[float],
+) -> dict:
+    duplicated_meshes = []
+    skipped_meshes = []
+    mesh_warnings = []
+
+    mesh_records = sorted(
+        build_spec.get("mesh_binding", {}).get("meshes", []),
+        key=lambda record: record.get("mesh_name") or "",
+    )
+    if not mesh_records:
+        mesh_warnings.append("no_driven_meshes")
+
+    for record in mesh_records:
+        mesh_name = record.get("mesh_name")
+        source_mesh = bpy_module.data.objects.get(mesh_name)
+        if source_mesh is None:
+            skipped_meshes.append({"mesh_name": mesh_name, "reason": "source_mesh_missing"})
+            continue
+        if getattr(source_mesh, "type", None) != "MESH":
+            skipped_meshes.append({"mesh_name": mesh_name, "reason": "source_object_not_mesh"})
+            continue
+
+        generated_mesh = _copy_mesh_object(
+            bpy_module,
+            source_mesh,
+            build_spec["asset_name"],
+            collection,
+            generated_armature,
+            source_translation_offset,
+        )
+        retargeted = _retarget_armature_modifiers(generated_mesh, source_armature, generated_armature)
+        if record.get("armature_link") == "parent" and not retargeted:
+            mesh_warnings.append("parent_only_no_armature_modifier:{0}".format(mesh_name))
+
+        duplicated_meshes.append(
+            {
+                "source_mesh_name": mesh_name,
+                "generated_mesh_name": generated_mesh.name,
+                "armature_link": record.get("armature_link"),
+                "retargeted_armature_modifiers": retargeted,
+            }
+        )
+
+    return {
+        "duplicated_meshes": sorted(
+            duplicated_meshes,
+            key=lambda item: (item["source_mesh_name"] or "", item["generated_mesh_name"]),
+        ),
+        "skipped_meshes": sorted(skipped_meshes, key=lambda item: item["mesh_name"] or ""),
+        "mesh_warnings": sorted(mesh_warnings),
+    }
+
+
+def _copy_mesh_object(
+    bpy_module,
+    source_mesh,
+    asset_name: str,
+    collection,
+    parent_object,
+    source_translation_offset: List[float],
+):
+    """Duplicate a mesh object, parent it to parent_object, and apply the armature offset."""
+    generated_mesh = source_mesh.copy()
+    generated_mesh.name = _resolve_unique_name(
+        "ASAM_{0}".format(source_mesh.name),
+        lambda name: bpy_module.data.objects.get(name) is not None,
+        ["ASAM_{0}_Generated".format(source_mesh.name)],
+    )
+    if getattr(source_mesh, "data", None) is not None:
+        generated_mesh.data = source_mesh.data.copy()
+        generated_mesh.data.name = "{0}Data".format(generated_mesh.name)
+        generated_mesh.data[GENERATED_MARKER_KEY] = True
+        generated_mesh.data[GENERATED_ASSET_KEY] = asset_name
+
+    world_matrix = getattr(source_mesh, "matrix_world", None)
+    generated_mesh[GENERATED_MARKER_KEY] = True
+    generated_mesh[GENERATED_ASSET_KEY] = asset_name
+    collection.objects.link(generated_mesh)
+    # Parent to the generated armature (one level below group_root) to match ASAM hierarchy.
+    generated_mesh.parent = parent_object
+    if world_matrix is not None:
+        generated_mesh.matrix_world = world_matrix
+    # Propagate the same translation offset that was applied to the armature bones so
+    # the mesh remains aligned with the repositioned generated armature.
+    if any(abs(float(value)) > 1e-9 for value in source_translation_offset):
+        _apply_mesh_world_offset(generated_mesh, source_translation_offset)
+    return generated_mesh
+
+
+def _apply_mesh_world_offset(mesh_obj, offset: List[float]) -> None:
+    """Shift mesh_obj's world-space position by offset using mathutils when available."""
+    try:
+        from mathutils import Matrix, Vector  # available inside Blender
+        translation = Matrix.Translation(Vector(offset))
+        mesh_obj.matrix_world = translation @ mesh_obj.matrix_world
+    except ImportError:  # pragma: no cover - only hit outside Blender
+        # Fallback for pure-Python test environments that stub matrix_world.
+        current = getattr(mesh_obj, "matrix_world", None)
+        mesh_obj.matrix_world = ("offset_applied", tuple(offset), current)
+
+
+def _retarget_armature_modifiers(mesh_obj, source_armature, generated_armature) -> List[str]:
+    retargeted = []
+    for modifier in getattr(mesh_obj, "modifiers", []):
+        if getattr(modifier, "type", None) != "ARMATURE":
+            continue
+        if getattr(modifier, "object", None) != source_armature:
+            continue
+        modifier.object = generated_armature
+        retargeted.append(getattr(modifier, "name", ""))
+    return sorted(retargeted)
 
 
 def _populate_edit_bones(bpy_module, armature_object, bones: List[dict]) -> None:

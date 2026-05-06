@@ -1534,5 +1534,206 @@
       "name": "z",
       "sign": 1
     }
+  },
+  "mesh_binding": {
+    "armature_object_name": "rig",
+    "meshes": [
+      {
+        "mesh_name": "Cube",
+        "armature_link": "parent_and_modifier",
+        "modifiers": [
+          {
+            "stack_index": 0,
+            "type": "ARMATURE",
+            "name": "Armature",
+            "object": "rig"
+          }
+        ],
+        "vertex_groups": [
+          "DEF-foot.L",
+          "DEF-foot.R",
+          "DEF-forearm.L",
+          "DEF-forearm.L.001",
+          "DEF-forearm.R",
+          "DEF-forearm.R.001",
+          "DEF-hand.L",
+          "DEF-hand.R",
+          "DEF-pelvis.L",
+          "DEF-pelvis.R",
+          "DEF-shin.L",
+          "DEF-shin.L.001",
+          "DEF-shin.R",
+          "DEF-shin.R.001",
+          "DEF-shoulder.L",
+          "DEF-shoulder.R",
+          "DEF-spine",
+          "DEF-spine.001",
+          "DEF-spine.002",
+          "DEF-spine.003",
+          "DEF-spine.004",
+          "DEF-spine.005",
+          "DEF-spine.006",
+          "DEF-thigh.L",
+          "DEF-thigh.L.001",
+          "DEF-thigh.R",
+          "DEF-thigh.R.001",
+          "DEF-toe.L",
+          "DEF-toe.R",
+          "DEF-upper_arm.L",
+          "DEF-upper_arm.L.001",
+          "DEF-upper_arm.R",
+          "DEF-upper_arm.R.001",
+          "Hair_Front"
+        ],
+        "vertex_group_stats": {
+          "non_empty_group_count": 31,
+          "per_group": [
+            {
+              "name": "DEF-foot.L",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-foot.R",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-forearm.L",
+              "weighted_vertex_count": 23
+            },
+            {
+              "name": "DEF-forearm.L.001",
+              "weighted_vertex_count": 22
+            },
+            {
+              "name": "DEF-forearm.R",
+              "weighted_vertex_count": 23
+            },
+            {
+              "name": "DEF-forearm.R.001",
+              "weighted_vertex_count": 22
+            },
+            {
+              "name": "DEF-hand.L",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-hand.R",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-pelvis.L",
+              "weighted_vertex_count": 38
+            },
+            {
+              "name": "DEF-pelvis.R",
+              "weighted_vertex_count": 37
+            },
+            {
+              "name": "DEF-shin.L",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-shin.L.001",
+              "weighted_vertex_count": 17
+            },
+            {
+              "name": "DEF-shin.R",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-shin.R.001",
+              "weighted_vertex_count": 17
+            },
+            {
+              "name": "DEF-shoulder.L",
+              "weighted_vertex_count": 11
+            },
+            {
+              "name": "DEF-shoulder.R",
+              "weighted_vertex_count": 11
+            },
+            {
+              "name": "DEF-spine",
+              "weighted_vertex_count": 38
+            },
+            {
+              "name": "DEF-spine.001",
+              "weighted_vertex_count": 49
+            },
+            {
+              "name": "DEF-spine.002",
+              "weighted_vertex_count": 56
+            },
+            {
+              "name": "DEF-spine.003",
+              "weighted_vertex_count": 6
+            },
+            {
+              "name": "DEF-spine.004",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-spine.005",
+              "weighted_vertex_count": 3
+            },
+            {
+              "name": "DEF-spine.006",
+              "weighted_vertex_count": 79
+            },
+            {
+              "name": "DEF-thigh.L",
+              "weighted_vertex_count": 14
+            },
+            {
+              "name": "DEF-thigh.L.001",
+              "weighted_vertex_count": 19
+            },
+            {
+              "name": "DEF-thigh.R",
+              "weighted_vertex_count": 13
+            },
+            {
+              "name": "DEF-thigh.R.001",
+              "weighted_vertex_count": 19
+            },
+            {
+              "name": "DEF-toe.L",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-toe.R",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-upper_arm.L",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-upper_arm.L.001",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-upper_arm.R",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-upper_arm.R.001",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "Hair_Front",
+              "weighted_vertex_count": 1
+            }
+          ]
+        },
+        "material_slots": [
+          {
+            "slot_index": 0,
+            "material_name": "Body"
+          }
+        ],
+        "warnings": []
+      }
+    ]
   }
 }

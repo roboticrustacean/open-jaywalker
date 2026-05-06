@@ -23,32 +23,32 @@ CORE_TARGETS: List[str] = [
     "Upper_Spine",
     "Neck",
     "Head",
+    "Eye_Left",
+    "Eye_Right",
     "Shoulder_Left",
     "Upper_Arm_Left",
     "Lower_Arm_Left",
     "Hand_Left",
+    "Full_Thumb_Left",
+    "Full_Fingers_Left",
     "Shoulder_Right",
     "Upper_Arm_Right",
     "Lower_Arm_Right",
     "Hand_Right",
+    "Full_Thumb_Right",
+    "Full_Fingers_Right",
     "Upper_Leg_Left",
     "Lower_Leg_Left",
     "Foot_Left",
+    "Full_Toes_Left",
     "Upper_Leg_Right",
     "Lower_Leg_Right",
     "Foot_Right",
-]
-
-DEFERRED_TARGETS: List[str] = [
-    "Eye_Left",
-    "Eye_Right",
-    "Full_Thumb_Left",
-    "Full_Thumb_Right",
-    "Full_Fingers_Left",
-    "Full_Fingers_Right",
-    "Full_Toes_Left",
     "Full_Toes_Right",
 ]
+
+# All former deferred targets are now promoted to CORE_TARGETS (full ASAM §7.3.3 compliance).
+DEFERRED_TARGETS: List[str] = []
 
 TARGET_PARENTS: Dict[str, str] = {
     "Root": "Armature_{asset_name}",
@@ -57,20 +57,28 @@ TARGET_PARENTS: Dict[str, str] = {
     "Upper_Spine": "Lower_Spine",
     "Neck": "Upper_Spine",
     "Head": "Neck",
+    "Eye_Left": "Head",
+    "Eye_Right": "Head",
     "Shoulder_Left": "Upper_Spine",
     "Upper_Arm_Left": "Shoulder_Left",
     "Lower_Arm_Left": "Upper_Arm_Left",
     "Hand_Left": "Lower_Arm_Left",
+    "Full_Thumb_Left": "Hand_Left",
+    "Full_Fingers_Left": "Hand_Left",
     "Shoulder_Right": "Upper_Spine",
     "Upper_Arm_Right": "Shoulder_Right",
     "Lower_Arm_Right": "Upper_Arm_Right",
     "Hand_Right": "Lower_Arm_Right",
+    "Full_Thumb_Right": "Hand_Right",
+    "Full_Fingers_Right": "Hand_Right",
     "Upper_Leg_Left": "Hip",
     "Lower_Leg_Left": "Upper_Leg_Left",
     "Foot_Left": "Lower_Leg_Left",
+    "Full_Toes_Left": "Foot_Left",
     "Upper_Leg_Right": "Hip",
     "Lower_Leg_Right": "Upper_Leg_Right",
     "Foot_Right": "Lower_Leg_Right",
+    "Full_Toes_Right": "Foot_Right",
 }
 
 TARGET_PRIORITY: Dict[str, int] = {target: index for index, target in enumerate(CORE_TARGETS)}
@@ -118,13 +126,17 @@ HEIGHT_BANDS: Dict[str, Tuple[float, float]] = {
     "Upper_Spine": (0.55, 0.93),
     "Neck": (0.72, 0.98),
     "Head": (0.82, 1.0),
+    "Eye": (0.85, 1.0),
     "Shoulder": (0.58, 0.92),
     "Upper_Arm": (0.45, 0.86),
     "Lower_Arm": (0.28, 0.82),
     "Hand": (0.18, 0.72),
+    "Full_Thumb": (0.18, 0.72),
+    "Full_Fingers": (0.18, 0.72),
     "Upper_Leg": (0.28, 0.72),
     "Lower_Leg": (0.08, 0.55),
     "Foot": (0.0, 0.25),
+    "Full_Toes": (0.0, 0.15),
 }
 
 AXIS_NAMES = ("x", "y", "z")
@@ -146,20 +158,28 @@ CORE_FAMILY_BY_TARGET: Dict[str, str] = {
     "Upper_Spine": "upper_spine",
     "Neck": "neck",
     "Head": "head",
+    "Eye_Left": "eye",
+    "Eye_Right": "eye",
     "Shoulder_Left": "shoulder",
     "Upper_Arm_Left": "upper_arm",
     "Lower_Arm_Left": "lower_arm",
     "Hand_Left": "hand",
+    "Full_Thumb_Left": "full_thumb",
+    "Full_Fingers_Left": "full_fingers",
     "Shoulder_Right": "shoulder",
     "Upper_Arm_Right": "upper_arm",
     "Lower_Arm_Right": "lower_arm",
     "Hand_Right": "hand",
+    "Full_Thumb_Right": "full_thumb",
+    "Full_Fingers_Right": "full_fingers",
     "Upper_Leg_Left": "upper_leg",
     "Lower_Leg_Left": "lower_leg",
     "Foot_Left": "foot",
+    "Full_Toes_Left": "full_toes",
     "Upper_Leg_Right": "upper_leg",
     "Lower_Leg_Right": "lower_leg",
     "Foot_Right": "foot",
+    "Full_Toes_Right": "full_toes",
 }
 
 
@@ -274,6 +294,7 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         key=lambda report: (-report["summary"]["ranking_score"], report["armature_name"]),
     )
     recommended_report = ranked_reports[0]
+    mesh_binding = copy.deepcopy(recommended_report.get("mesh_binding"))
 
     actions: Dict[str, list] = {"rename": [], "create": []}
     for target, payload in recommended_report["asam_targets"].items():
@@ -306,6 +327,7 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         "semantic_mapping": copy.deepcopy(recommended_report["asam_targets"]),
         "root_resolution": copy.deepcopy(recommended_report["root_resolution"]),
         "placement_metadata": copy.deepcopy(recommended_report["placement_metadata"]),
+        "mesh_binding": mesh_binding,
         "missing_targets": list(recommended_report["missing_core_targets"]),
         "ambiguous_targets": copy.deepcopy(recommended_report["ambiguous_targets"]),
         "unclassified_bones": copy.deepcopy(recommended_report["unclassified_bones"]),
@@ -319,6 +341,7 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         "actions": actions,
         "root_resolution": copy.deepcopy(recommended_report["root_resolution"]),
         "placement_metadata": copy.deepcopy(recommended_report["placement_metadata"]),
+        "mesh_binding": copy.deepcopy(mesh_binding),
         "proposed_asam_hierarchy": copy.deepcopy(recommended_report["proposed_asam_hierarchy"]),
         "extras_preserved": copy.deepcopy(recommended_report["extras_preserved"]),
     }
@@ -431,6 +454,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
         "asam_targets": resolved_targets,
         "root_resolution": root_resolution,
         "placement_metadata": copy.deepcopy(context["placement_metadata"]),
+        "mesh_binding": copy.deepcopy(armature_input.primary_data.get("mesh_binding")),
         "proposed_asam_hierarchy": _build_proposed_hierarchy(asset_name),
         "extras_preserved": extras_preserved,
         "unclassified_bones": unclassified_bones,
@@ -1287,6 +1311,34 @@ def _family_name_score(family: str, bone: BoneInfo) -> float:
             return 0.82
         return 0.0
 
+    if family == "eye":
+        if compact == "eye" or compact == "eyeball":
+            return 1.0
+        if "eye" in tokens:
+            return 0.90
+        return 0.0
+
+    if family == "full_thumb":
+        if "fullthumb" in compact or compact == "thumb":
+            return 1.0
+        if "thumb" in tokens:
+            return 0.90
+        return 0.0
+
+    if family == "full_fingers":
+        if "fullfingers" in compact:
+            return 1.0
+        if "finger" in tokens or compact in {"index", "middle", "ring", "pinky"}:
+            return 0.80
+        return 0.0
+
+    if family == "full_toes":
+        if "fulltoes" in compact:
+            return 1.0
+        if "toe" in tokens or "toes" in tokens:
+            return 0.90
+        return 0.0
+
     return 0.0
 
 
@@ -1398,6 +1450,30 @@ def _hierarchy_evidence(target_name: str, bone: BoneInfo, context: dict) -> floa
         if parent and ("lower_leg" in parent.family_tags or "upper_leg" in parent.family_tags):
             score += 0.20
         if _has_descendant_family(bone.name, context, {"toe"}):
+            score += 0.20
+
+    elif family == "eye":
+        if parent and "head" in parent.family_tags:
+            score += 0.70
+        if not children:
+            score += 0.20
+
+    elif family == "full_thumb":
+        if parent and "hand" in parent.family_tags:
+            score += 0.70
+        if "thumb" in bone.family_tags:
+            score += 0.20
+
+    elif family == "full_fingers":
+        if parent and "hand" in parent.family_tags:
+            score += 0.60
+        if "finger" in bone.family_tags:
+            score += 0.30
+
+    elif family == "full_toes":
+        if parent and "foot" in parent.family_tags:
+            score += 0.70
+        if "toe" in bone.family_tags:
             score += 0.20
 
     return _clamp(score)

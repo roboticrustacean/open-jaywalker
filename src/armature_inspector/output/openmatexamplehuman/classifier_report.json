@@ -381,6 +381,719 @@
           "sign": 1
         }
       },
+      "mesh_binding": {
+        "armature_object_name": "Armature",
+        "meshes": [
+          {
+            "mesh_name": "Accessories_Wristband",
+            "armature_link": "parent_and_modifier",
+            "modifiers": [
+              {
+                "stack_index": 0,
+                "type": "ARMATURE",
+                "name": "Armature",
+                "object": "Armature"
+              }
+            ],
+            "vertex_groups": [
+              "Eye_Left",
+              "Eye_Right",
+              "Foot_Left",
+              "Foot_Right",
+              "Full_Fingers_Left",
+              "Full_Fingers_Right",
+              "Full_Thumb_Left",
+              "Full_Thumb_Right",
+              "Full_Toes_Left",
+              "Full_Toes_Right",
+              "Hand_Left",
+              "Hand_Right",
+              "Head",
+              "Hip",
+              "Lower_Arm_Left",
+              "Lower_Arm_Right",
+              "Lower_Leg_Left",
+              "Lower_Leg_Right",
+              "Lower_Spine",
+              "Neck",
+              "Root",
+              "Shoulder_Left",
+              "Shoulder_Right",
+              "Upper_Arm_Left",
+              "Upper_Arm_Right",
+              "Upper_Leg_Left",
+              "Upper_Leg_Right",
+              "Upper_Spine"
+            ],
+            "vertex_group_stats": {
+              "non_empty_group_count": 1,
+              "per_group": [
+                {
+                  "name": "Eye_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Eye_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Foot_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Foot_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Fingers_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Fingers_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Thumb_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Thumb_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Toes_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Toes_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Hand_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Hand_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Head",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Hip",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Arm_Left",
+                  "weighted_vertex_count": 289
+                },
+                {
+                  "name": "Lower_Arm_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Leg_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Leg_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Spine",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Neck",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Root",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Shoulder_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Shoulder_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Arm_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Arm_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Leg_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Leg_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Spine",
+                  "weighted_vertex_count": 0
+                }
+              ]
+            },
+            "material_slots": [
+              {
+                "slot_index": 0,
+                "material_name": "Accessorie"
+              }
+            ],
+            "warnings": []
+          },
+          {
+            "mesh_name": "Body_Human",
+            "armature_link": "parent_and_modifier",
+            "modifiers": [
+              {
+                "stack_index": 0,
+                "type": "ARMATURE",
+                "name": "Armature",
+                "object": "Armature"
+              }
+            ],
+            "vertex_groups": [
+              "Eye_Left",
+              "Eye_Right",
+              "Foot_Left",
+              "Foot_Right",
+              "Full_Fingers_Left",
+              "Full_Fingers_Right",
+              "Full_Thumb_Left",
+              "Full_Thumb_Right",
+              "Full_Toes_Left",
+              "Full_Toes_Right",
+              "Hand_Left",
+              "Hand_Right",
+              "Head",
+              "Hip",
+              "Lower_Arm_Left",
+              "Lower_Arm_Right",
+              "Lower_Leg_Left",
+              "Lower_Leg_Right",
+              "Lower_Spine",
+              "Neck",
+              "Root",
+              "Shoulder_Left",
+              "Shoulder_Right",
+              "Upper_Arm_Left",
+              "Upper_Arm_Right",
+              "Upper_Leg_Left",
+              "Upper_Leg_Right",
+              "Upper_Spine"
+            ],
+            "vertex_group_stats": {
+              "non_empty_group_count": 27,
+              "per_group": [
+                {
+                  "name": "Eye_Left",
+                  "weighted_vertex_count": 321
+                },
+                {
+                  "name": "Eye_Right",
+                  "weighted_vertex_count": 321
+                },
+                {
+                  "name": "Foot_Left",
+                  "weighted_vertex_count": 1500
+                },
+                {
+                  "name": "Foot_Right",
+                  "weighted_vertex_count": 1500
+                },
+                {
+                  "name": "Full_Fingers_Left",
+                  "weighted_vertex_count": 2308
+                },
+                {
+                  "name": "Full_Fingers_Right",
+                  "weighted_vertex_count": 2308
+                },
+                {
+                  "name": "Full_Thumb_Left",
+                  "weighted_vertex_count": 1374
+                },
+                {
+                  "name": "Full_Thumb_Right",
+                  "weighted_vertex_count": 1374
+                },
+                {
+                  "name": "Full_Toes_Left",
+                  "weighted_vertex_count": 235
+                },
+                {
+                  "name": "Full_Toes_Right",
+                  "weighted_vertex_count": 235
+                },
+                {
+                  "name": "Hand_Left",
+                  "weighted_vertex_count": 2187
+                },
+                {
+                  "name": "Hand_Right",
+                  "weighted_vertex_count": 2187
+                },
+                {
+                  "name": "Head",
+                  "weighted_vertex_count": 4291
+                },
+                {
+                  "name": "Hip",
+                  "weighted_vertex_count": 1993
+                },
+                {
+                  "name": "Lower_Arm_Left",
+                  "weighted_vertex_count": 1302
+                },
+                {
+                  "name": "Lower_Arm_Right",
+                  "weighted_vertex_count": 1302
+                },
+                {
+                  "name": "Lower_Leg_Left",
+                  "weighted_vertex_count": 1022
+                },
+                {
+                  "name": "Lower_Leg_Right",
+                  "weighted_vertex_count": 1022
+                },
+                {
+                  "name": "Lower_Spine",
+                  "weighted_vertex_count": 1036
+                },
+                {
+                  "name": "Neck",
+                  "weighted_vertex_count": 1075
+                },
+                {
+                  "name": "Root",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Shoulder_Left",
+                  "weighted_vertex_count": 942
+                },
+                {
+                  "name": "Shoulder_Right",
+                  "weighted_vertex_count": 940
+                },
+                {
+                  "name": "Upper_Arm_Left",
+                  "weighted_vertex_count": 830
+                },
+                {
+                  "name": "Upper_Arm_Right",
+                  "weighted_vertex_count": 830
+                },
+                {
+                  "name": "Upper_Leg_Left",
+                  "weighted_vertex_count": 1674
+                },
+                {
+                  "name": "Upper_Leg_Right",
+                  "weighted_vertex_count": 1654
+                },
+                {
+                  "name": "Upper_Spine",
+                  "weighted_vertex_count": 2254
+                }
+              ]
+            },
+            "material_slots": [
+              {
+                "slot_index": 0,
+                "material_name": "Skin"
+              },
+              {
+                "slot_index": 1,
+                "material_name": "Shirt"
+              },
+              {
+                "slot_index": 2,
+                "material_name": "Pants"
+              },
+              {
+                "slot_index": 3,
+                "material_name": "Brown_Hair"
+              },
+              {
+                "slot_index": 4,
+                "material_name": "Eye"
+              },
+              {
+                "slot_index": 5,
+                "material_name": "Iris"
+              },
+              {
+                "slot_index": 6,
+                "material_name": "Pupil"
+              },
+              {
+                "slot_index": 7,
+                "material_name": "Lips"
+              },
+              {
+                "slot_index": 8,
+                "material_name": "Shoe_Default"
+              },
+              {
+                "slot_index": 9,
+                "material_name": "Under_Shoe"
+              },
+              {
+                "slot_index": 10,
+                "material_name": "Padding"
+              },
+              {
+                "slot_index": 11,
+                "material_name": "Padding_2"
+              }
+            ],
+            "warnings": []
+          },
+          {
+            "mesh_name": "Clothing_Vest",
+            "armature_link": "parent_and_modifier",
+            "modifiers": [
+              {
+                "stack_index": 0,
+                "type": "ARMATURE",
+                "name": "Armature",
+                "object": "Armature"
+              }
+            ],
+            "vertex_groups": [
+              "Eye_Left",
+              "Eye_Right",
+              "Foot_Left",
+              "Foot_Right",
+              "Full_Fingers_Left",
+              "Full_Fingers_Right",
+              "Full_Thumb_Left",
+              "Full_Thumb_Right",
+              "Full_Toes_Left",
+              "Full_Toes_Right",
+              "Hand_Left",
+              "Hand_Right",
+              "Head",
+              "Hip",
+              "Lower_Arm_Left",
+              "Lower_Arm_Right",
+              "Lower_Leg_Left",
+              "Lower_Leg_Right",
+              "Lower_Spine",
+              "Neck",
+              "Root",
+              "Shoulder_Left",
+              "Shoulder_Right",
+              "Upper_Arm_Left",
+              "Upper_Arm_Right",
+              "Upper_Leg_Left",
+              "Upper_Leg_Right",
+              "Upper_Spine"
+            ],
+            "vertex_group_stats": {
+              "non_empty_group_count": 6,
+              "per_group": [
+                {
+                  "name": "Eye_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Eye_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Foot_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Foot_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Fingers_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Fingers_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Thumb_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Thumb_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Toes_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Toes_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Hand_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Hand_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Head",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Hip",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Arm_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Arm_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Leg_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Leg_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Spine",
+                  "weighted_vertex_count": 752
+                },
+                {
+                  "name": "Neck",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Root",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Shoulder_Left",
+                  "weighted_vertex_count": 935
+                },
+                {
+                  "name": "Shoulder_Right",
+                  "weighted_vertex_count": 935
+                },
+                {
+                  "name": "Upper_Arm_Left",
+                  "weighted_vertex_count": 700
+                },
+                {
+                  "name": "Upper_Arm_Right",
+                  "weighted_vertex_count": 701
+                },
+                {
+                  "name": "Upper_Leg_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Leg_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Spine",
+                  "weighted_vertex_count": 2500
+                }
+              ]
+            },
+            "material_slots": [
+              {
+                "slot_index": 0,
+                "material_name": "Vest"
+              }
+            ],
+            "warnings": []
+          },
+          {
+            "mesh_name": "Hair_Short",
+            "armature_link": "parent_and_modifier",
+            "modifiers": [
+              {
+                "stack_index": 0,
+                "type": "ARMATURE",
+                "name": "Armature",
+                "object": "Armature"
+              }
+            ],
+            "vertex_groups": [
+              "Eye_Left",
+              "Eye_Right",
+              "Foot_Left",
+              "Foot_Right",
+              "Full_Fingers_Left",
+              "Full_Fingers_Right",
+              "Full_Thumb_Left",
+              "Full_Thumb_Right",
+              "Full_Toes_Left",
+              "Full_Toes_Right",
+              "Hand_Left",
+              "Hand_Right",
+              "Head",
+              "Hip",
+              "Lower_Arm_Left",
+              "Lower_Arm_Right",
+              "Lower_Leg_Left",
+              "Lower_Leg_Right",
+              "Lower_Spine",
+              "Neck",
+              "Root",
+              "Shoulder_Left",
+              "Shoulder_Right",
+              "Upper_Arm_Left",
+              "Upper_Arm_Right",
+              "Upper_Leg_Left",
+              "Upper_Leg_Right",
+              "Upper_Spine"
+            ],
+            "vertex_group_stats": {
+              "non_empty_group_count": 1,
+              "per_group": [
+                {
+                  "name": "Eye_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Eye_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Foot_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Foot_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Fingers_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Fingers_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Thumb_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Thumb_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Toes_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Full_Toes_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Hand_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Hand_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Head",
+                  "weighted_vertex_count": 2151
+                },
+                {
+                  "name": "Hip",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Arm_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Arm_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Leg_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Leg_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Lower_Spine",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Neck",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Root",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Shoulder_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Shoulder_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Arm_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Arm_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Leg_Left",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Leg_Right",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "Upper_Spine",
+                  "weighted_vertex_count": 0
+                }
+              ]
+            },
+            "material_slots": [
+              {
+                "slot_index": 0,
+                "material_name": "Brown_Hair"
+              }
+            ],
+            "warnings": []
+          }
+        ]
+      },
       "proposed_asam_hierarchy": {
         "object_nodes": [
           {
@@ -829,6 +1542,719 @@
       "name": "z",
       "sign": 1
     }
+  },
+  "mesh_binding": {
+    "armature_object_name": "Armature",
+    "meshes": [
+      {
+        "mesh_name": "Accessories_Wristband",
+        "armature_link": "parent_and_modifier",
+        "modifiers": [
+          {
+            "stack_index": 0,
+            "type": "ARMATURE",
+            "name": "Armature",
+            "object": "Armature"
+          }
+        ],
+        "vertex_groups": [
+          "Eye_Left",
+          "Eye_Right",
+          "Foot_Left",
+          "Foot_Right",
+          "Full_Fingers_Left",
+          "Full_Fingers_Right",
+          "Full_Thumb_Left",
+          "Full_Thumb_Right",
+          "Full_Toes_Left",
+          "Full_Toes_Right",
+          "Hand_Left",
+          "Hand_Right",
+          "Head",
+          "Hip",
+          "Lower_Arm_Left",
+          "Lower_Arm_Right",
+          "Lower_Leg_Left",
+          "Lower_Leg_Right",
+          "Lower_Spine",
+          "Neck",
+          "Root",
+          "Shoulder_Left",
+          "Shoulder_Right",
+          "Upper_Arm_Left",
+          "Upper_Arm_Right",
+          "Upper_Leg_Left",
+          "Upper_Leg_Right",
+          "Upper_Spine"
+        ],
+        "vertex_group_stats": {
+          "non_empty_group_count": 1,
+          "per_group": [
+            {
+              "name": "Eye_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Eye_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Foot_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Foot_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Fingers_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Fingers_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Thumb_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Thumb_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Toes_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Toes_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Hand_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Hand_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Head",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Hip",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Arm_Left",
+              "weighted_vertex_count": 289
+            },
+            {
+              "name": "Lower_Arm_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Leg_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Leg_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Spine",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Neck",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Root",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Shoulder_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Shoulder_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Arm_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Arm_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Leg_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Leg_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Spine",
+              "weighted_vertex_count": 0
+            }
+          ]
+        },
+        "material_slots": [
+          {
+            "slot_index": 0,
+            "material_name": "Accessorie"
+          }
+        ],
+        "warnings": []
+      },
+      {
+        "mesh_name": "Body_Human",
+        "armature_link": "parent_and_modifier",
+        "modifiers": [
+          {
+            "stack_index": 0,
+            "type": "ARMATURE",
+            "name": "Armature",
+            "object": "Armature"
+          }
+        ],
+        "vertex_groups": [
+          "Eye_Left",
+          "Eye_Right",
+          "Foot_Left",
+          "Foot_Right",
+          "Full_Fingers_Left",
+          "Full_Fingers_Right",
+          "Full_Thumb_Left",
+          "Full_Thumb_Right",
+          "Full_Toes_Left",
+          "Full_Toes_Right",
+          "Hand_Left",
+          "Hand_Right",
+          "Head",
+          "Hip",
+          "Lower_Arm_Left",
+          "Lower_Arm_Right",
+          "Lower_Leg_Left",
+          "Lower_Leg_Right",
+          "Lower_Spine",
+          "Neck",
+          "Root",
+          "Shoulder_Left",
+          "Shoulder_Right",
+          "Upper_Arm_Left",
+          "Upper_Arm_Right",
+          "Upper_Leg_Left",
+          "Upper_Leg_Right",
+          "Upper_Spine"
+        ],
+        "vertex_group_stats": {
+          "non_empty_group_count": 27,
+          "per_group": [
+            {
+              "name": "Eye_Left",
+              "weighted_vertex_count": 321
+            },
+            {
+              "name": "Eye_Right",
+              "weighted_vertex_count": 321
+            },
+            {
+              "name": "Foot_Left",
+              "weighted_vertex_count": 1500
+            },
+            {
+              "name": "Foot_Right",
+              "weighted_vertex_count": 1500
+            },
+            {
+              "name": "Full_Fingers_Left",
+              "weighted_vertex_count": 2308
+            },
+            {
+              "name": "Full_Fingers_Right",
+              "weighted_vertex_count": 2308
+            },
+            {
+              "name": "Full_Thumb_Left",
+              "weighted_vertex_count": 1374
+            },
+            {
+              "name": "Full_Thumb_Right",
+              "weighted_vertex_count": 1374
+            },
+            {
+              "name": "Full_Toes_Left",
+              "weighted_vertex_count": 235
+            },
+            {
+              "name": "Full_Toes_Right",
+              "weighted_vertex_count": 235
+            },
+            {
+              "name": "Hand_Left",
+              "weighted_vertex_count": 2187
+            },
+            {
+              "name": "Hand_Right",
+              "weighted_vertex_count": 2187
+            },
+            {
+              "name": "Head",
+              "weighted_vertex_count": 4291
+            },
+            {
+              "name": "Hip",
+              "weighted_vertex_count": 1993
+            },
+            {
+              "name": "Lower_Arm_Left",
+              "weighted_vertex_count": 1302
+            },
+            {
+              "name": "Lower_Arm_Right",
+              "weighted_vertex_count": 1302
+            },
+            {
+              "name": "Lower_Leg_Left",
+              "weighted_vertex_count": 1022
+            },
+            {
+              "name": "Lower_Leg_Right",
+              "weighted_vertex_count": 1022
+            },
+            {
+              "name": "Lower_Spine",
+              "weighted_vertex_count": 1036
+            },
+            {
+              "name": "Neck",
+              "weighted_vertex_count": 1075
+            },
+            {
+              "name": "Root",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Shoulder_Left",
+              "weighted_vertex_count": 942
+            },
+            {
+              "name": "Shoulder_Right",
+              "weighted_vertex_count": 940
+            },
+            {
+              "name": "Upper_Arm_Left",
+              "weighted_vertex_count": 830
+            },
+            {
+              "name": "Upper_Arm_Right",
+              "weighted_vertex_count": 830
+            },
+            {
+              "name": "Upper_Leg_Left",
+              "weighted_vertex_count": 1674
+            },
+            {
+              "name": "Upper_Leg_Right",
+              "weighted_vertex_count": 1654
+            },
+            {
+              "name": "Upper_Spine",
+              "weighted_vertex_count": 2254
+            }
+          ]
+        },
+        "material_slots": [
+          {
+            "slot_index": 0,
+            "material_name": "Skin"
+          },
+          {
+            "slot_index": 1,
+            "material_name": "Shirt"
+          },
+          {
+            "slot_index": 2,
+            "material_name": "Pants"
+          },
+          {
+            "slot_index": 3,
+            "material_name": "Brown_Hair"
+          },
+          {
+            "slot_index": 4,
+            "material_name": "Eye"
+          },
+          {
+            "slot_index": 5,
+            "material_name": "Iris"
+          },
+          {
+            "slot_index": 6,
+            "material_name": "Pupil"
+          },
+          {
+            "slot_index": 7,
+            "material_name": "Lips"
+          },
+          {
+            "slot_index": 8,
+            "material_name": "Shoe_Default"
+          },
+          {
+            "slot_index": 9,
+            "material_name": "Under_Shoe"
+          },
+          {
+            "slot_index": 10,
+            "material_name": "Padding"
+          },
+          {
+            "slot_index": 11,
+            "material_name": "Padding_2"
+          }
+        ],
+        "warnings": []
+      },
+      {
+        "mesh_name": "Clothing_Vest",
+        "armature_link": "parent_and_modifier",
+        "modifiers": [
+          {
+            "stack_index": 0,
+            "type": "ARMATURE",
+            "name": "Armature",
+            "object": "Armature"
+          }
+        ],
+        "vertex_groups": [
+          "Eye_Left",
+          "Eye_Right",
+          "Foot_Left",
+          "Foot_Right",
+          "Full_Fingers_Left",
+          "Full_Fingers_Right",
+          "Full_Thumb_Left",
+          "Full_Thumb_Right",
+          "Full_Toes_Left",
+          "Full_Toes_Right",
+          "Hand_Left",
+          "Hand_Right",
+          "Head",
+          "Hip",
+          "Lower_Arm_Left",
+          "Lower_Arm_Right",
+          "Lower_Leg_Left",
+          "Lower_Leg_Right",
+          "Lower_Spine",
+          "Neck",
+          "Root",
+          "Shoulder_Left",
+          "Shoulder_Right",
+          "Upper_Arm_Left",
+          "Upper_Arm_Right",
+          "Upper_Leg_Left",
+          "Upper_Leg_Right",
+          "Upper_Spine"
+        ],
+        "vertex_group_stats": {
+          "non_empty_group_count": 6,
+          "per_group": [
+            {
+              "name": "Eye_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Eye_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Foot_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Foot_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Fingers_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Fingers_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Thumb_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Thumb_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Toes_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Toes_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Hand_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Hand_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Head",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Hip",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Arm_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Arm_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Leg_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Leg_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Spine",
+              "weighted_vertex_count": 752
+            },
+            {
+              "name": "Neck",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Root",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Shoulder_Left",
+              "weighted_vertex_count": 935
+            },
+            {
+              "name": "Shoulder_Right",
+              "weighted_vertex_count": 935
+            },
+            {
+              "name": "Upper_Arm_Left",
+              "weighted_vertex_count": 700
+            },
+            {
+              "name": "Upper_Arm_Right",
+              "weighted_vertex_count": 701
+            },
+            {
+              "name": "Upper_Leg_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Leg_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Spine",
+              "weighted_vertex_count": 2500
+            }
+          ]
+        },
+        "material_slots": [
+          {
+            "slot_index": 0,
+            "material_name": "Vest"
+          }
+        ],
+        "warnings": []
+      },
+      {
+        "mesh_name": "Hair_Short",
+        "armature_link": "parent_and_modifier",
+        "modifiers": [
+          {
+            "stack_index": 0,
+            "type": "ARMATURE",
+            "name": "Armature",
+            "object": "Armature"
+          }
+        ],
+        "vertex_groups": [
+          "Eye_Left",
+          "Eye_Right",
+          "Foot_Left",
+          "Foot_Right",
+          "Full_Fingers_Left",
+          "Full_Fingers_Right",
+          "Full_Thumb_Left",
+          "Full_Thumb_Right",
+          "Full_Toes_Left",
+          "Full_Toes_Right",
+          "Hand_Left",
+          "Hand_Right",
+          "Head",
+          "Hip",
+          "Lower_Arm_Left",
+          "Lower_Arm_Right",
+          "Lower_Leg_Left",
+          "Lower_Leg_Right",
+          "Lower_Spine",
+          "Neck",
+          "Root",
+          "Shoulder_Left",
+          "Shoulder_Right",
+          "Upper_Arm_Left",
+          "Upper_Arm_Right",
+          "Upper_Leg_Left",
+          "Upper_Leg_Right",
+          "Upper_Spine"
+        ],
+        "vertex_group_stats": {
+          "non_empty_group_count": 1,
+          "per_group": [
+            {
+              "name": "Eye_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Eye_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Foot_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Foot_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Fingers_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Fingers_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Thumb_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Thumb_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Toes_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Full_Toes_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Hand_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Hand_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Head",
+              "weighted_vertex_count": 2151
+            },
+            {
+              "name": "Hip",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Arm_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Arm_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Leg_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Leg_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Lower_Spine",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Neck",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Root",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Shoulder_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Shoulder_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Arm_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Arm_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Leg_Left",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Leg_Right",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "Upper_Spine",
+              "weighted_vertex_count": 0
+            }
+          ]
+        },
+        "material_slots": [
+          {
+            "slot_index": 0,
+            "material_name": "Brown_Hair"
+          }
+        ],
+        "warnings": []
+      }
+    ]
   },
   "missing_targets": [],
   "ambiguous_targets": [],

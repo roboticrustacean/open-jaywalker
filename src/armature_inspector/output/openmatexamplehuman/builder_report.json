@@ -3,7 +3,44 @@
   "source_armature_name": "Armature",
   "generated_collection_name": "ASAM_openmatexamplehuman",
   "group_root_name": "Grp_Root_openmatexamplehuman",
-  "generated_armature_name": "Armature_openmatexamplehuman_Generated",
+  "generated_armature_name": "Armature_openmatexamplehuman",
+  "collection_action": "create",
+  "duplicated_meshes": [
+    {
+      "source_mesh_name": "Accessories_Wristband",
+      "generated_mesh_name": "ASAM_Accessories_Wristband",
+      "armature_link": "parent_and_modifier",
+      "retargeted_armature_modifiers": [
+        "Armature"
+      ]
+    },
+    {
+      "source_mesh_name": "Body_Human",
+      "generated_mesh_name": "ASAM_Body_Human",
+      "armature_link": "parent_and_modifier",
+      "retargeted_armature_modifiers": [
+        "Armature"
+      ]
+    },
+    {
+      "source_mesh_name": "Clothing_Vest",
+      "generated_mesh_name": "ASAM_Clothing_Vest",
+      "armature_link": "parent_and_modifier",
+      "retargeted_armature_modifiers": [
+        "Armature"
+      ]
+    },
+    {
+      "source_mesh_name": "Hair_Short",
+      "generated_mesh_name": "ASAM_Hair_Short",
+      "armature_link": "parent_and_modifier",
+      "retargeted_armature_modifiers": [
+        "Armature"
+      ]
+    }
+  ],
+  "skipped_meshes": [],
+  "mesh_warnings": [],
   "built_core_targets": [
     "Root",
     "Hip",

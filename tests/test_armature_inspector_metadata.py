@@ -1,4 +1,5 @@
 import importlib
+import json
 import sys
 import types
 import unittest
@@ -85,6 +86,75 @@ class ArmatureInspectorMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["side_axis"]["index"], 1)
         self.assertEqual(metadata["forward_axis"]["index"], 0)
         self.assertEqual(metadata["driven_meshes"], ["BodyMesh"])
+
+    def test_build_mesh_binding_no_meshes(self):
+        fake_bpy = types.SimpleNamespace(
+            data=types.SimpleNamespace(objects=[]),
+        )
+        with mock.patch.dict(sys.modules, {"bpy": fake_bpy}):
+            if "inspector" in sys.modules:
+                del sys.modules["inspector"]
+            inspector = importlib.import_module("inspector")
+        arm = types.SimpleNamespace(name="Rig")
+        binding = inspector.build_mesh_binding(arm)
+        self.assertEqual(binding["armature_object_name"], "Rig")
+        self.assertEqual(binding["meshes"], [])
+
+    def test_openmatexamplehuman_armature_all_has_mesh_binding(self):
+        path = (
+            REPO_ROOT
+            / "src"
+            / "armature_inspector"
+            / "output"
+            / "openmatexamplehuman"
+            / "Armature_all.json"
+        )
+        self.assertTrue(path.is_file(), msg=f"Missing {path}; regenerate exports")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self.assertIn("mesh_binding", data)
+        mb = data["mesh_binding"]
+        self.assertEqual(mb["armature_object_name"], data["armature_name"])
+        self.assertIn("meshes", mb)
+        names = [m["mesh_name"] for m in mb["meshes"]]
+        self.assertEqual(names, sorted(names))
+        for m in mb["meshes"]:
+            self.assertIn(m["armature_link"], ("parent", "modifier", "parent_and_modifier"))
+            self.assertIn("vertex_groups", m)
+            self.assertIn("vertex_group_stats", m)
+            self.assertIn("material_slots", m)
+            self.assertIsInstance(m["warnings"], list)
+        self.assertEqual(
+            set(m["mesh_name"] for m in mb["meshes"]),
+            set(data["placement_metadata"]["driven_meshes"]),
+        )
+
+    def test_lowpoly_rig_all_has_mesh_binding(self):
+        path = (
+            REPO_ROOT
+            / "src"
+            / "armature_inspector"
+            / "output"
+            / "LowPolyCharacter4"
+            / "rig_all.json"
+        )
+        self.assertTrue(path.is_file(), msg=f"Missing {path}; regenerate exports")
+        data = json.loads(path.read_text(encoding="utf-8"))
+        self.assertIn("mesh_binding", data)
+        mb = data["mesh_binding"]
+        self.assertEqual(mb["armature_object_name"], data["armature_name"])
+        self.assertIn("meshes", mb)
+        names = [m["mesh_name"] for m in mb["meshes"]]
+        self.assertEqual(names, sorted(names))
+        for m in mb["meshes"]:
+            self.assertIn(m["armature_link"], ("parent", "modifier", "parent_and_modifier"))
+            self.assertIn("vertex_groups", m)
+            self.assertIn("vertex_group_stats", m)
+            self.assertIn("material_slots", m)
+            self.assertIsInstance(m["warnings"], list)
+        self.assertEqual(
+            set(m["mesh_name"] for m in mb["meshes"]),
+            set(data["placement_metadata"]["driven_meshes"]),
+        )
 
 
 if __name__ == "__main__":

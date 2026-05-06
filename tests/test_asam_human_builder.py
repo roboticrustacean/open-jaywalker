@@ -1,3 +1,4 @@
+import copy
 import shutil
 import sys
 import tempfile
@@ -11,13 +12,22 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from asam_human_builder.builder import (  # noqa: E402
+    GENERATED_ASSET_KEY,
+    GENERATED_MARKER_KEY,
     build_armature_spec,
     build_armature_spec_from_asset_dir,
+    build_builder_report,
     choose_generated_collection_action,
     resolve_default_asset_dir,
+    validate_builder_inputs,
 )
 from asam_human_builder.blender_builder import build_armature_in_blender  # noqa: E402
-from phase3_classifier.classifier import CORE_TARGETS, TARGET_PARENTS, write_asset_report  # noqa: E402
+from phase3_classifier.classifier import (  # noqa: E402
+    CORE_TARGETS,
+    DEFERRED_TARGETS,
+    TARGET_PARENTS,
+    write_asset_report,
+)
 
 
 FIXTURE_ROOT = REPO_ROOT / "src" / "armature_inspector" / "output"
@@ -41,6 +51,33 @@ def _placement_metadata():
         "forward_axis": {"index": 0, "name": "x", "sign": 1},
         "side_axis": {"index": 1, "name": "y", "sign": 1},
         "up_axis": {"index": 2, "name": "z", "sign": 1},
+    }
+
+
+def _mesh_binding(armature_name: str = "Rig") -> dict:
+    return {
+        "armature_object_name": armature_name,
+        "meshes": [
+            {
+                "mesh_name": "BodyMesh",
+                "armature_link": "modifier",
+                "modifiers": [
+                    {
+                        "stack_index": 0,
+                        "type": "ARMATURE",
+                        "name": "Armature",
+                        "object": armature_name,
+                    }
+                ],
+                "vertex_groups": ["Hip"],
+                "vertex_group_stats": {
+                    "non_empty_group_count": 1,
+                    "per_group": [{"name": "Hip", "weighted_vertex_count": 8}],
+                },
+                "material_slots": [{"slot_index": 0, "material_name": "BodyMat"}],
+                "warnings": [],
+            }
+        ],
     }
 
 
@@ -83,6 +120,7 @@ def _base_build_plan(asset_name: str = "SyntheticAsset", armature_name: str = "R
             "use_connect": False,
         },
         "placement_metadata": _placement_metadata(),
+        "mesh_binding": _mesh_binding(armature_name),
         "proposed_asam_hierarchy": {
             "object_nodes": [
                 {"name": "Grp_Root", "parent": None},
@@ -165,6 +203,46 @@ class _FakeArmatureData(_FakeProps):
         self.edit_bones = _FakeEditBones()
 
 
+class _FakeMeshData(_FakeProps):
+    def __init__(self, name: str):
+        super().__init__()
+        self.name = name
+        self.users = 0
+
+    def copy(self):
+        copied = _FakeMeshData("{0}_copy".format(self.name))
+        copied._props = copy.deepcopy(self._props)
+        return copied
+
+
+class _FakeMaterial:
+    def __init__(self, name: str):
+        self.name = name
+
+    def copy(self):
+        return _FakeMaterial(self.name)
+
+
+class _FakeMaterialSlot:
+    def __init__(self, material_name: str):
+        self.material = _FakeMaterial(material_name)
+
+    def copy(self):
+        copied = _FakeMaterialSlot(self.material.name)
+        copied.material = self.material.copy()
+        return copied
+
+
+class _FakeModifier:
+    def __init__(self, name: str, modifier_type: str, obj=None):
+        self.name = name
+        self.type = modifier_type
+        self.object = obj
+
+    def copy(self):
+        return _FakeModifier(self.name, self.type, self.object)
+
+
 class _FakeObject(_FakeProps):
     def __init__(self, name: str, data=None):
         super().__init__()
@@ -174,7 +252,29 @@ class _FakeObject(_FakeProps):
         self.mode = "OBJECT"
         self.selected = False
         self.empty_display_type = None
-        self.type = "ARMATURE" if isinstance(data, _FakeArmatureData) else "EMPTY"
+        self.modifiers = []
+        self.vertex_groups = []
+        self.material_slots = []
+        self.matrix_world = ("world", name)
+        if isinstance(data, _FakeArmatureData):
+            self.type = "ARMATURE"
+        elif isinstance(data, _FakeMeshData):
+            self.type = "MESH"
+        else:
+            self.type = "EMPTY"
+
+    def copy(self):
+        copied = _FakeObject("{0}_copy".format(self.name), self.data)
+        copied.parent = self.parent
+        copied.mode = self.mode
+        copied.selected = self.selected
+        copied.empty_display_type = self.empty_display_type
+        copied.modifiers = [modifier.copy() for modifier in self.modifiers]
+        copied.vertex_groups = list(self.vertex_groups)
+        copied.material_slots = [slot.copy() for slot in self.material_slots]
+        copied.matrix_world = self.matrix_world
+        copied._props = copy.deepcopy(self._props)
+        return copied
 
     def select_set(self, value: bool):
         self.selected = bool(value)
@@ -187,16 +287,30 @@ class _FakeObjectStore:
     def get(self, name: str):
         return self._objects.get(name)
 
+    def contains(self, obj):
+        return any(registered is obj for registered in self._objects.values())
+
     def new(self, name: str, data):
         obj = _FakeObject(name, data)
         self._objects[name] = obj
-        if isinstance(data, _FakeArmatureData):
+        if isinstance(data, (_FakeArmatureData, _FakeMeshData)):
             data.users += 1
+        return obj
+
+    def register(self, obj):
+        if self.contains(obj):
+            return obj
+        existing = self._objects.get(obj.name)
+        if existing is not None and existing is not obj:
+            raise AssertionError("object name already registered: {0}".format(obj.name))
+        self._objects[obj.name] = obj
+        if isinstance(getattr(obj, "data", None), (_FakeArmatureData, _FakeMeshData)):
+            obj.data.users += 1
         return obj
 
     def remove(self, obj, do_unlink=True):
         self._objects.pop(obj.name, None)
-        if isinstance(getattr(obj, "data", None), _FakeArmatureData):
+        if isinstance(getattr(obj, "data", None), (_FakeArmatureData, _FakeMeshData)):
             obj.data.users = max(0, obj.data.users - 1)
 
 
@@ -223,6 +337,9 @@ class _FakeCollectionObjectLinks:
     def link(self, obj):
         if obj not in self._collection._objects:
             self._collection._objects.append(obj)
+        bpy_module = getattr(self._collection, "_bpy_module", None)
+        if bpy_module is not None and not bpy_module.data.objects.contains(obj):
+            bpy_module.data.objects.register(obj)
 
 
 class _FakeCollectionChildren:
@@ -240,9 +357,10 @@ class _FakeCollectionChildren:
 
 
 class _FakeCollection(_FakeProps):
-    def __init__(self, name: str):
+    def __init__(self, name: str, bpy_module=None):
         super().__init__()
         self.name = name
+        self._bpy_module = bpy_module
         self._objects = []
         self.objects = _FakeCollectionObjectLinks(self)
         self.children = _FakeCollectionChildren()
@@ -253,7 +371,8 @@ class _FakeCollection(_FakeProps):
 
 
 class _FakeCollectionStore:
-    def __init__(self):
+    def __init__(self, bpy_module=None):
+        self._bpy_module = bpy_module
         self._collections = {}
 
     def __iter__(self):
@@ -263,7 +382,7 @@ class _FakeCollectionStore:
         return self._collections.get(name)
 
     def new(self, name: str):
-        collection = _FakeCollection(name)
+        collection = _FakeCollection(name, self._bpy_module)
         self._collections[name] = collection
         return collection
 
@@ -317,13 +436,23 @@ class _FakeBpy:
         self.data = type("Data", (), {})()
         self.data.objects = _FakeObjectStore()
         self.data.armatures = _FakeArmatureStore()
-        self.data.collections = _FakeCollectionStore()
+        self.data.collections = _FakeCollectionStore(self)
         self.data.scenes = [self.context.scene]
         self.ops = _FakeOps(self.context)
 
     def add_source_armature(self, name: str):
         armature = self.data.armatures.new(name)
         source = self.data.objects.new(name, armature)
+        return source
+
+    def add_source_mesh(self, name: str, source_armature=None, armature_modifier=True):
+        mesh_data = _FakeMeshData("{0}Data".format(name))
+        source = self.data.objects.new(name, mesh_data)
+        source.material_slots = [_FakeMaterialSlot("BodyMat")]
+        if source_armature is not None:
+            source.parent = source_armature
+        if armature_modifier:
+            source.modifiers.append(_FakeModifier("Armature", "ARMATURE", source_armature))
         return source
 
 
@@ -495,8 +624,6 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(source_bones["Root"]["custom_metadata"]["source"], "blender")
 
     def test_validate_builder_inputs_rejects_malformed_offset(self):
-        from asam_human_builder.builder import validate_builder_inputs
-
         report = _base_classifier_report()
         plan = _base_build_plan()
         plan["root_resolution"]["source_translation_offset"] = [0.0, 0.0]
@@ -509,6 +636,67 @@ class AsamHumanBuilderTests(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             validate_builder_inputs(report, plan)
         self.assertIn("numeric", str(ctx.exception))
+
+    def test_validate_builder_inputs_requires_mesh_binding(self):
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        del plan["mesh_binding"]
+
+        with self.assertRaisesRegex(ValueError, "build_plan is missing required fields: mesh_binding"):
+            validate_builder_inputs(report, plan)
+
+    def test_validate_builder_inputs_rejects_mesh_binding_armature_mismatch(self):
+        report = _base_classifier_report(armature_name="Rig")
+        plan = _base_build_plan(armature_name="Rig")
+        plan["mesh_binding"]["armature_object_name"] = "OtherRig"
+
+        with self.assertRaisesRegex(
+            ValueError,
+            "mesh_binding.armature_object_name must match recommended_primary_armature",
+        ):
+            validate_builder_inputs(report, plan)
+
+    def test_build_armature_spec_copies_mesh_binding(self):
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        source_bones = {"Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0))}
+
+        spec = build_armature_spec(report, plan, source_bones)
+
+        self.assertEqual(spec["mesh_binding"], plan["mesh_binding"])
+        self.assertIsNot(spec["mesh_binding"], plan["mesh_binding"])
+
+    def test_build_builder_report_includes_mesh_duplication_fields(self):
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "bones": [],
+            "extras_preserved": [],
+            "warnings": [],
+        }
+        execution_result = {
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "collection_action": "create",
+            "duplicated_meshes": [
+                {
+                    "source_mesh_name": "BodyMesh",
+                    "generated_mesh_name": "ASAM_BodyMesh",
+                    "armature_link": "modifier",
+                    "retargeted_armature_modifiers": ["Armature"],
+                }
+            ],
+            "skipped_meshes": [],
+            "mesh_warnings": [],
+        }
+
+        report = build_builder_report(build_spec, execution_result)
+
+        self.assertEqual(report["collection_action"], "create")
+        self.assertEqual(report["duplicated_meshes"], execution_result["duplicated_meshes"])
+        self.assertEqual(report["skipped_meshes"], [])
+        self.assertEqual(report["mesh_warnings"], [])
 
     def test_build_armature_spec_translates_source_bones_in_create_new_root_mode(self):
         report = _base_classifier_report()
@@ -669,6 +857,317 @@ class AsamHumanBuilderTests(unittest.TestCase):
 
         self.assertEqual(execution_result["group_root_name"], "Grp_Root")
         self.assertEqual(execution_result["generated_armature_name"], "Armature_openmatexamplehuman_Generated")
+
+    def test_fake_bpy_source_mesh_supports_copy_materials_modifiers_and_props(self):
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature)
+        source_mesh.vertex_groups = ["Hip"]
+        source_mesh.matrix_world = ("world", "BodyMesh")
+        source_mesh["generated"] = False
+        source_mesh.data["source"] = "inspector"
+
+        copied_data = source_mesh.data.copy()
+        copied_object = source_mesh.copy()
+
+        self.assertEqual(source_mesh.type, "MESH")
+        self.assertEqual(source_mesh.data.users, 1)
+        self.assertEqual(source_mesh.material_slots[0].material.name, "BodyMat")
+        self.assertEqual(source_mesh.modifiers[0].type, "ARMATURE")
+        self.assertIs(source_mesh.modifiers[0].object, source_armature)
+        self.assertEqual(copied_data.name, "BodyMeshData_copy")
+        self.assertEqual(copied_data["source"], "inspector")
+        self.assertEqual(copied_data.users, 0)
+        self.assertEqual(copied_object.name, "BodyMesh_copy")
+        self.assertIs(copied_object.data, source_mesh.data)
+        self.assertIsNot(copied_object.modifiers[0], source_mesh.modifiers[0])
+        self.assertIs(copied_object.modifiers[0].object, source_armature)
+        self.assertEqual(copied_object.vertex_groups, ["Hip"])
+        self.assertIsNot(copied_object.material_slots[0], source_mesh.material_slots[0])
+        self.assertEqual(copied_object.material_slots[0].material.name, "BodyMat")
+        self.assertEqual(copied_object.matrix_world, source_mesh.matrix_world)
+        self.assertEqual(copied_object["generated"], False)
+
+    def test_fake_collection_link_registers_copied_mesh_and_tracks_users(self):
+        bpy_module = _FakeBpy()
+        source_mesh = bpy_module.add_source_mesh("BodyMesh")
+        copied_mesh = source_mesh.copy()
+        copied_mesh.name = "ASAM_BodyMesh"
+        copied_mesh.data = source_mesh.data.copy()
+        collection = bpy_module.data.collections.new("ASAM_SyntheticAsset")
+
+        collection.objects.link(copied_mesh)
+        collection.objects.link(copied_mesh)
+
+        self.assertIs(bpy_module.data.objects.get("ASAM_BodyMesh"), copied_mesh)
+        self.assertEqual(collection.all_objects, [copied_mesh])
+        self.assertEqual(source_mesh.data.users, 1)
+        self.assertEqual(copied_mesh.data.users, 1)
+
+        bpy_module.data.objects.remove(copied_mesh)
+
+        self.assertIsNone(bpy_module.data.objects.get("ASAM_BodyMesh"))
+        self.assertEqual(copied_mesh.data.users, 0)
+
+    def test_fake_object_store_register_is_identity_aware_and_collision_safe(self):
+        bpy_module = _FakeBpy()
+        source_mesh = bpy_module.add_source_mesh("BodyMesh")
+        copied_mesh = source_mesh.copy()
+        copied_mesh.name = "ASAM_BodyMesh"
+        copied_mesh.data = source_mesh.data.copy()
+        collection = bpy_module.data.collections.new("ASAM_SyntheticAsset")
+
+        collection.objects.link(copied_mesh)
+        registered_users = copied_mesh.data.users
+        bpy_module.data.objects.register(copied_mesh)
+
+        self.assertTrue(bpy_module.data.objects.contains(copied_mesh))
+        self.assertEqual(copied_mesh.data.users, registered_users)
+
+        colliding_mesh = source_mesh.copy()
+        colliding_mesh.name = copied_mesh.name
+        with self.assertRaises((AssertionError, ValueError)):
+            bpy_module.data.objects.register(colliding_mesh)
+
+    def test_fake_mesh_and_object_copy_deepcopy_nested_custom_props(self):
+        bpy_module = _FakeBpy()
+        source_mesh = bpy_module.add_source_mesh("BodyMesh")
+        source_mesh["metadata"] = {"tags": ["source"], "nested": {"side": "left"}}
+        source_mesh.data["metadata"] = {"weights": [1.0], "nested": {"group": "Hip"}}
+
+        copied_object = source_mesh.copy()
+        copied_data = source_mesh.data.copy()
+        copied_object["metadata"]["tags"].append("copy")
+        copied_object["metadata"]["nested"]["side"] = "right"
+        copied_data["metadata"]["weights"].append(0.5)
+        copied_data["metadata"]["nested"]["group"] = "Spine"
+
+        self.assertEqual(source_mesh["metadata"], {"tags": ["source"], "nested": {"side": "left"}})
+        self.assertEqual(source_mesh.data["metadata"], {"weights": [1.0], "nested": {"group": "Hip"}})
+
+    def test_blender_builder_duplicates_mesh_and_retargets_armature_modifier(self):
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [],
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        generated_collection = bpy_module.data.collections.get("ASAM_SyntheticAsset")
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        generated_armature = bpy_module.data.objects.get(execution_result["generated_armature_name"])
+        self.assertIsNotNone(generated_mesh)
+        self.assertIn(generated_mesh, generated_collection.all_objects)
+        # Meshes must be children of the generated armature (ASAM hierarchy), not group_root.
+        self.assertIs(generated_mesh.parent, generated_armature)
+        self.assertTrue(generated_mesh.get(GENERATED_MARKER_KEY))
+        self.assertEqual(generated_mesh.get(GENERATED_ASSET_KEY), "SyntheticAsset")
+        self.assertTrue(generated_mesh.data.get(GENERATED_MARKER_KEY))
+        self.assertEqual(generated_mesh.data.get(GENERATED_ASSET_KEY), "SyntheticAsset")
+        self.assertIs(generated_mesh.modifiers[0].object, generated_armature)
+        self.assertIs(source_mesh.modifiers[0].object, source_armature)
+        self.assertEqual(generated_mesh.matrix_world, source_mesh.matrix_world)
+        self.assertIsNot(generated_mesh.data, source_mesh.data)
+        self.assertEqual(execution_result["duplicated_meshes"][0]["source_mesh_name"], "BodyMesh")
+        self.assertEqual(execution_result["duplicated_meshes"][0]["generated_mesh_name"], "ASAM_BodyMesh")
+        self.assertEqual(execution_result["duplicated_meshes"][0]["retargeted_armature_modifiers"], ["Armature"])
+
+    def test_blender_builder_duplicates_parent_only_mesh_with_warning(self):
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=False)
+        binding = _mesh_binding("Rig")
+        binding["meshes"][0]["armature_link"] = "parent"
+        binding["meshes"][0]["modifiers"] = []
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": binding,
+            "bones": [],
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        self.assertIsNotNone(generated_mesh)
+        self.assertEqual(generated_mesh.modifiers, [])
+        self.assertIn("parent_only_no_armature_modifier:BodyMesh", execution_result["mesh_warnings"])
+
+    def test_blender_builder_reports_missing_mesh_binding_entry(self):
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Rig")
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [],
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        self.assertEqual(
+            execution_result["skipped_meshes"],
+            [{"mesh_name": "BodyMesh", "reason": "source_mesh_missing"}],
+        )
+        self.assertEqual(execution_result["duplicated_meshes"], [])
+
+    def test_blender_builder_preserves_armature_modifiers_targeting_other_objects(self):
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        other_armature = bpy_module.add_source_armature("OtherRig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        source_mesh.modifiers.append(_FakeModifier("OtherArmature", "ARMATURE", other_armature))
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [],
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        generated_armature = bpy_module.data.objects.get(execution_result["generated_armature_name"])
+        self.assertIs(generated_mesh.modifiers[0].object, generated_armature)
+        self.assertIs(generated_mesh.modifiers[1].object, other_armature)
+        self.assertIs(source_mesh.modifiers[0].object, source_armature)
+        self.assertIs(source_mesh.modifiers[1].object, other_armature)
+        self.assertEqual(
+            execution_result["duplicated_meshes"][0]["retargeted_armature_modifiers"],
+            ["Armature"],
+        )
+
+    def test_blender_builder_parents_mesh_to_armature_not_group_root(self):
+        """Generated meshes must be one level below the armature in the ASAM hierarchy."""
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [],
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        generated_armature = bpy_module.data.objects.get(execution_result["generated_armature_name"])
+        group_root = bpy_module.data.objects.get(execution_result["group_root_name"])
+        self.assertIsNotNone(generated_mesh)
+        self.assertIsNotNone(generated_armature)
+        # Mesh parent must be the armature, not the group root.
+        self.assertIs(generated_mesh.parent, generated_armature)
+        self.assertIsNot(generated_mesh.parent, group_root)
+        # The armature itself must still be parented to group_root.
+        self.assertIs(generated_armature.parent, group_root)
+
+    def test_blender_builder_applies_offset_to_duplicated_mesh(self):
+        """source_translation_offset must be propagated to the duplicated mesh world matrix."""
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        # Give the source mesh a recognisable world matrix value.
+        source_mesh.matrix_world = ("world", "BodyMesh_original")
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "source_translation_offset": [0.1, 0.0, 0.05],
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [],
+        }
+
+        build_armature_in_blender(build_spec, bpy_module)
+
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        self.assertIsNotNone(generated_mesh)
+        # The fallback encodes the offset application as a 3-tuple.
+        self.assertIsInstance(generated_mesh.matrix_world, tuple)
+        self.assertEqual(generated_mesh.matrix_world[0], "offset_applied")
+        self.assertEqual(generated_mesh.matrix_world[1], (0.1, 0.0, 0.05))
+
+    def test_blender_builder_skips_offset_when_zero(self):
+        """A zero source_translation_offset must not modify the mesh matrix_world."""
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        original_matrix = ("world", "BodyMesh_original")
+        source_mesh.matrix_world = original_matrix
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "source_translation_offset": [0.0, 0.0, 0.0],
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [],
+        }
+
+        build_armature_in_blender(build_spec, bpy_module)
+
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        self.assertIsNotNone(generated_mesh)
+        # matrix_world must be the unmodified copy from the source.
+        self.assertEqual(generated_mesh.matrix_world, original_matrix)
+
+    def test_deferred_targets_list_is_empty(self):
+        """DEFERRED_TARGETS must be empty — all ASAM bones are now promoted to CORE_TARGETS."""
+        self.assertEqual(
+            DEFERRED_TARGETS,
+            [],
+            "DEFERRED_TARGETS should be empty once all ASAM §7.3.3 bones are in CORE_TARGETS.",
+        )
+
+    def test_full_asam_spec_bones_present_in_core_targets(self):
+        """All 28 normative ASAM OpenMATERIAL 3D §7.3.3 bones must be in CORE_TARGETS."""
+        required = {
+            # Spine / head
+            "Root", "Hip", "Lower_Spine", "Upper_Spine", "Neck", "Head",
+            # Eyes (§7.3.3.3.10-11)
+            "Eye_Left", "Eye_Right",
+            # Left arm chain (§7.3.3.3.12-17)
+            "Shoulder_Left", "Upper_Arm_Left", "Lower_Arm_Left", "Hand_Left",
+            "Full_Thumb_Left", "Full_Fingers_Left",
+            # Right arm chain (§7.3.3.3.18-23)
+            "Shoulder_Right", "Upper_Arm_Right", "Lower_Arm_Right", "Hand_Right",
+            "Full_Thumb_Right", "Full_Fingers_Right",
+            # Left leg chain (§7.3.3.3.24-27)
+            "Upper_Leg_Left", "Lower_Leg_Left", "Foot_Left", "Full_Toes_Left",
+            # Right leg chain (§7.3.3.3.28-31)
+            "Upper_Leg_Right", "Lower_Leg_Right", "Foot_Right", "Full_Toes_Right",
+        }
+        core_set = set(CORE_TARGETS)
+        missing = required - core_set
+        self.assertEqual(
+            missing,
+            set(),
+            "The following ASAM-normative bones are missing from CORE_TARGETS: {0}".format(sorted(missing)),
+        )
+        self.assertEqual(len(CORE_TARGETS), 28, "CORE_TARGETS should have exactly 28 bones.")
 
 
 if __name__ == "__main__":

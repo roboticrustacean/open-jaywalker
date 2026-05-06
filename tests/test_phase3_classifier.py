@@ -57,7 +57,41 @@ def _placement_metadata(bbox_min, bbox_max):
     }
 
 
-def _write_single_armature_asset(asset_name: str, armature_name: str, bones, chains, placement_metadata=None) -> Path:
+def _mesh_binding(armature_name: str = "Rig"):
+    return {
+        "armature_object_name": armature_name,
+        "meshes": [
+            {
+                "mesh_name": "BodyMesh",
+                "armature_link": "modifier",
+                "modifiers": [
+                    {
+                        "stack_index": 0,
+                        "type": "ARMATURE",
+                        "name": "Armature",
+                        "object": armature_name,
+                    }
+                ],
+                "vertex_groups": ["Hip"],
+                "vertex_group_stats": {
+                    "non_empty_group_count": 1,
+                    "per_group": [{"name": "Hip", "weighted_vertex_count": 8}],
+                },
+                "material_slots": [{"slot_index": 0, "material_name": "BodyMat"}],
+                "warnings": [],
+            }
+        ],
+    }
+
+
+def _write_single_armature_asset(
+    asset_name: str,
+    armature_name: str,
+    bones,
+    chains,
+    placement_metadata=None,
+    mesh_binding=None,
+) -> Path:
     temp_root = Path(tempfile.mkdtemp(prefix="phase3_synth_"))
     asset_dir = temp_root / asset_name
     asset_dir.mkdir(parents=True, exist_ok=True)
@@ -79,6 +113,8 @@ def _write_single_armature_asset(asset_name: str, armature_name: str, bones, cha
     }
     if placement_metadata is not None:
         payload["placement_metadata"] = placement_metadata
+    if mesh_binding is not None:
+        payload["mesh_binding"] = mesh_binding
 
     with (asset_dir / f"{armature_name}_all.json").open("w", encoding="utf-8") as handle:
         json.dump(payload, handle)
@@ -87,6 +123,40 @@ def _write_single_armature_asset(asset_name: str, armature_name: str, bones, cha
 
 
 class Phase3ClassifierTests(unittest.TestCase):
+    def test_build_plan_propagates_recommended_mesh_binding(self):
+        bones = [
+            _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+            _bone("Hip", "Root", (0.0, 0.0, 1.0), (0.0, 0.0, 1.1)),
+            _bone("Lower_Spine", "Hip", (0.0, 0.0, 1.1), (0.0, 0.0, 1.25)),
+            _bone("Upper_Spine", "Lower_Spine", (0.0, 0.0, 1.25), (0.0, 0.0, 1.45)),
+            _bone("Upper_Leg_Left", "Hip", (0.0, 0.15, 1.0), (0.0, 0.15, 0.45)),
+            _bone("Upper_Leg_Right", "Hip", (0.0, -0.15, 1.0), (0.0, -0.15, 0.45)),
+        ]
+        chains = {
+            "spine": [["Lower_Spine", "Upper_Spine"]],
+            "leg": {
+                "left": [["Upper_Leg_Left"]],
+                "right": [["Upper_Leg_Right"]],
+                "unsided": [],
+            },
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        binding = _mesh_binding("Rig")
+        asset_dir = _write_single_armature_asset(
+            "mesh_binding_propagation",
+            "Rig",
+            bones,
+            chains,
+            _placement_metadata((-0.2, -0.25, 0.0), (0.2, 0.25, 1.8)),
+            binding,
+        )
+
+        report, build_plan, _, _ = write_asset_report(asset_dir)
+
+        self.assertEqual(report["mesh_binding"], binding)
+        self.assertEqual(build_plan["mesh_binding"], binding)
+        self.assertEqual(build_plan["mesh_binding"]["armature_object_name"], build_plan["recommended_primary_armature"])
+
     def test_openmaterial_sample_maps_full_core_and_repairs_root(self):
         asset_dir = _copy_asset_folder("openmatexamplehuman")
         report, build_plan, report_path, plan_path = write_asset_report(asset_dir)

@@ -1270,5 +1270,9 @@
       "name": "z",
       "sign": 1
     }
+  },
+  "mesh_binding": {
+    "armature_object_name": "metarig",
+    "meshes": []
   }
 }
