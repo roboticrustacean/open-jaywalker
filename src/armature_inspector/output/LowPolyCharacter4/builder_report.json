@@ -4,6 +4,121 @@
   "generated_collection_name": "ASAM_LowPolyCharacter4",
   "group_root_name": "Grp_Root",
   "generated_armature_name": "Armature_LowPolyCharacter4",
+  "collection_action": "rebuild",
+  "duplicated_meshes": [
+    {
+      "source_mesh_name": "Cube",
+      "generated_mesh_name": "ASAM_Cube",
+      "armature_link": "parent_and_modifier",
+      "retargeted_armature_modifiers": [
+        "Armature"
+      ],
+      "vertex_group_remap": {
+        "renamed": [
+          {
+            "source": "DEF-foot.L",
+            "target": "Foot_Left"
+          },
+          {
+            "source": "DEF-foot.R",
+            "target": "Foot_Right"
+          },
+          {
+            "source": "DEF-forearm.L",
+            "target": "Lower_Arm_Left"
+          },
+          {
+            "source": "DEF-forearm.R",
+            "target": "Lower_Arm_Right"
+          },
+          {
+            "source": "DEF-hand.L",
+            "target": "Hand_Left"
+          },
+          {
+            "source": "DEF-hand.R",
+            "target": "Hand_Right"
+          },
+          {
+            "source": "DEF-pelvis.L",
+            "target": "Hip"
+          },
+          {
+            "source": "DEF-shin.L.001",
+            "target": "Lower_Leg_Left"
+          },
+          {
+            "source": "DEF-shin.R.001",
+            "target": "Lower_Leg_Right"
+          },
+          {
+            "source": "DEF-spine",
+            "target": "Lower_Spine"
+          },
+          {
+            "source": "DEF-spine.004",
+            "target": "Upper_Spine"
+          },
+          {
+            "source": "DEF-thigh.L",
+            "target": "Upper_Leg_Left"
+          },
+          {
+            "source": "DEF-thigh.R",
+            "target": "Upper_Leg_Right"
+          },
+          {
+            "source": "DEF-toe.L",
+            "target": "Full_Toes_Left"
+          },
+          {
+            "source": "DEF-toe.R",
+            "target": "Full_Toes_Right"
+          },
+          {
+            "source": "DEF-upper_arm.L",
+            "target": "Upper_Arm_Left"
+          },
+          {
+            "source": "DEF-upper_arm.R",
+            "target": "Upper_Arm_Right"
+          }
+        ],
+        "unmapped": [
+          "DEF-forearm.L.001",
+          "DEF-forearm.R.001",
+          "DEF-pelvis.R",
+          "DEF-shin.L",
+          "DEF-shin.R",
+          "DEF-shoulder.L",
+          "DEF-shoulder.R",
+          "DEF-spine.001",
+          "DEF-spine.002",
+          "DEF-spine.003",
+          "DEF-spine.005",
+          "DEF-spine.006",
+          "DEF-thigh.L.001",
+          "DEF-thigh.R.001",
+          "DEF-upper_arm.L.001",
+          "DEF-upper_arm.R.001",
+          "Hair_Front"
+        ],
+        "missing_source_groups": [
+          "Head",
+          "Neck",
+          "Root",
+          "Shoulder_Left",
+          "Shoulder_Right"
+        ],
+        "collisions": []
+      }
+    }
+  ],
+  "skipped_meshes": [],
+  "mesh_warnings": [
+    "missing_source_groups:Cube",
+    "unmapped_vertex_groups:Cube"
+  ],
   "built_core_targets": [
     "Root",
     "Hip",
@@ -11,20 +126,28 @@
     "Upper_Spine",
     "Neck",
     "Head",
+    "Eye_Left",
+    "Eye_Right",
     "Shoulder_Left",
     "Upper_Arm_Left",
     "Lower_Arm_Left",
     "Hand_Left",
+    "Full_Thumb_Left",
+    "Full_Fingers_Left",
     "Shoulder_Right",
     "Upper_Arm_Right",
     "Lower_Arm_Right",
     "Hand_Right",
+    "Full_Thumb_Right",
+    "Full_Fingers_Right",
     "Upper_Leg_Left",
     "Lower_Leg_Left",
     "Foot_Left",
+    "Full_Toes_Left",
     "Upper_Leg_Right",
     "Lower_Leg_Right",
-    "Foot_Right"
+    "Foot_Right",
+    "Full_Toes_Right"
   ],
   "targets_from_source_geometry": [
     "Lower_Spine",
@@ -42,14 +165,22 @@
     "Upper_Leg_Left",
     "Lower_Leg_Left",
     "Foot_Left",
+    "Full_Toes_Left",
     "Upper_Leg_Right",
     "Lower_Leg_Right",
-    "Foot_Right"
+    "Foot_Right",
+    "Full_Toes_Right"
   ],
   "targets_created_heuristically": [
     "Root",
-    "Hip"
+    "Hip",
+    "Eye_Left",
+    "Eye_Right",
+    "Full_Thumb_Left",
+    "Full_Fingers_Left",
+    "Full_Thumb_Right",
+    "Full_Fingers_Right"
   ],
-  "preserved_extras_count": 130,
+  "preserved_extras_count": 128,
   "warnings": []
 }

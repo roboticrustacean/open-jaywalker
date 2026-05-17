@@ -18,6 +18,7 @@ from asam_human_builder.builder import (  # noqa: E402
     build_armature_spec_from_asset_dir,
     build_builder_report,
     choose_generated_collection_action,
+    compute_vertex_group_remap_plan,
     resolve_default_asset_dir,
     validate_builder_inputs,
 )
@@ -1109,6 +1110,108 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(generated_mesh.matrix_world[0], "offset_applied")
         self.assertEqual(generated_mesh.matrix_world[1], (0.1, 0.0, 0.05))
 
+    def test_blender_builder_renames_vertex_groups_to_asam_targets(self):
+        """Duplicated mesh's Rigify-named vertex groups must be renamed to ASAM targets."""
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        source_mesh.vertex_groups = ["DEF-forearm.L", "DEF-hand.L", "DEF-upper_arm.L"]
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [
+                _remap_bone("Upper_Arm_Left", "DEF-upper_arm.L"),
+                _remap_bone("Lower_Arm_Left", "DEF-forearm.L"),
+                _remap_bone("Hand_Left", "DEF-hand.L"),
+            ],
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        self.assertIsNotNone(generated_mesh)
+        self.assertEqual(
+            sorted(generated_mesh.vertex_groups),
+            ["Hand_Left", "Lower_Arm_Left", "Upper_Arm_Left"],
+        )
+        # Source mesh unchanged.
+        self.assertEqual(
+            sorted(source_mesh.vertex_groups),
+            ["DEF-forearm.L", "DEF-hand.L", "DEF-upper_arm.L"],
+        )
+
+        remap = execution_result["duplicated_meshes"][0]["vertex_group_remap"]
+        self.assertEqual(
+            remap["renamed"],
+            [
+                {"source": "DEF-forearm.L", "target": "Lower_Arm_Left"},
+                {"source": "DEF-hand.L", "target": "Hand_Left"},
+                {"source": "DEF-upper_arm.L", "target": "Upper_Arm_Left"},
+            ],
+        )
+        self.assertEqual(remap["unmapped"], [])
+        self.assertEqual(remap["missing_source_groups"], [])
+        self.assertEqual(remap["collisions"], [])
+        self.assertNotIn("unmapped_vertex_groups:BodyMesh", execution_result["mesh_warnings"])
+
+    def test_blender_builder_reports_unmapped_vertex_groups(self):
+        """Vertex groups with no ASAM mapping must surface as a mesh_warning."""
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        source_mesh.vertex_groups = ["DEF-hand.L", "MCH-helper_bone"]
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [_remap_bone("Hand_Left", "DEF-hand.L")],
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        self.assertIn("Hand_Left", generated_mesh.vertex_groups)
+        self.assertIn("MCH-helper_bone", generated_mesh.vertex_groups)  # left alone
+        self.assertIn("unmapped_vertex_groups:BodyMesh", execution_result["mesh_warnings"])
+
+        remap = execution_result["duplicated_meshes"][0]["vertex_group_remap"]
+        self.assertEqual(remap["unmapped"], ["MCH-helper_bone"])
+
+    def test_blender_builder_leaves_pre_compliant_groups_alone(self):
+        """When source vertex groups already match ASAM names, no rename is needed."""
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        source_mesh.vertex_groups = ["Hip", "Upper_Arm_Left"]
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [
+                _remap_bone("Hip", "Hip"),
+                _remap_bone("Upper_Arm_Left", "Upper_Arm_Left"),
+            ],
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        self.assertEqual(sorted(generated_mesh.vertex_groups), ["Hip", "Upper_Arm_Left"])
+        remap = execution_result["duplicated_meshes"][0]["vertex_group_remap"]
+        self.assertEqual(remap["renamed"], [])
+        self.assertEqual(remap["unmapped"], [])
+        self.assertNotIn("unmapped_vertex_groups:BodyMesh", execution_result["mesh_warnings"])
+
     def test_blender_builder_skips_offset_when_zero(self):
         """A zero source_translation_offset must not modify the mesh matrix_world."""
         bpy_module = _FakeBpy()
@@ -1168,6 +1271,156 @@ class AsamHumanBuilderTests(unittest.TestCase):
             "The following ASAM-normative bones are missing from CORE_TARGETS: {0}".format(sorted(missing)),
         )
         self.assertEqual(len(CORE_TARGETS), 28, "CORE_TARGETS should have exactly 28 bones.")
+
+
+def _remap_bone(name: str, source_bone, geometry_source: str = "source_bone") -> dict:
+    """
+    Build a spec-bone dict suitable for both compute_vertex_group_remap_plan and
+    _populate_edit_bones. The geometry fields are placeholders - the remap helper
+    only reads name/source_bone/geometry_source.
+    """
+    return {
+        "name": name,
+        "parent_bone": None,
+        "head": [0.0, 0.0, 0.0],
+        "tail": [0.0, 0.0, 1.0],
+        "use_connect": False,
+        "source_bone": source_bone,
+        "geometry_source": geometry_source,
+    }
+
+
+class ComputeVertexGroupRemapPlanTests(unittest.TestCase):
+    def test_one_to_one_rigify_names_become_asam(self):
+        bones = [
+            _remap_bone("Upper_Arm_Left", "DEF-upper_arm.L"),
+            _remap_bone("Lower_Arm_Left", "DEF-forearm.L"),
+            _remap_bone("Hand_Left", "DEF-hand.L"),
+        ]
+        groups = ["DEF-forearm.L", "DEF-hand.L", "DEF-upper_arm.L"]
+
+        plan = compute_vertex_group_remap_plan(bones, groups)
+
+        self.assertEqual(
+            plan["renames"],
+            [
+                {"source": "DEF-forearm.L", "target": "Lower_Arm_Left"},
+                {"source": "DEF-hand.L", "target": "Hand_Left"},
+                {"source": "DEF-upper_arm.L", "target": "Upper_Arm_Left"},
+            ],
+        )
+        self.assertEqual(plan["unmapped_groups"], [])
+        self.assertEqual(plan["asam_targets_without_source_group"], [])
+        self.assertEqual(plan["name_collisions"], [])
+
+    def test_idempotent_for_already_asam_named_groups(self):
+        # openmatexamplehuman case: source_bone equals the target name (pre-compliant).
+        bones = [
+            _remap_bone("Hip", "Hip"),
+            _remap_bone("Upper_Arm_Left", "Upper_Arm_Left"),
+        ]
+        groups = ["Hip", "Upper_Arm_Left"]
+
+        plan = compute_vertex_group_remap_plan(bones, groups)
+
+        self.assertEqual(plan["renames"], [])
+        self.assertEqual(plan["unmapped_groups"], [])
+        self.assertEqual(plan["asam_targets_without_source_group"], [])
+        self.assertEqual(plan["name_collisions"], [])
+
+    def test_flags_unmapped_groups(self):
+        bones = [_remap_bone("Hand_Left", "DEF-hand.L")]
+        groups = ["DEF-hand.L", "DEF-stray_extra", "MCH-helper"]
+
+        plan = compute_vertex_group_remap_plan(bones, groups)
+
+        self.assertEqual(plan["renames"], [{"source": "DEF-hand.L", "target": "Hand_Left"}])
+        self.assertEqual(plan["unmapped_groups"], ["DEF-stray_extra", "MCH-helper"])
+
+    def test_flags_asam_targets_missing_a_source_group(self):
+        bones = [
+            _remap_bone("Hand_Left", "DEF-hand.L"),
+            _remap_bone("Foot_Left", "DEF-foot.L"),
+        ]
+        groups = ["DEF-hand.L"]  # Foot_Left's source group is missing
+
+        plan = compute_vertex_group_remap_plan(bones, groups)
+
+        self.assertEqual(plan["renames"], [{"source": "DEF-hand.L", "target": "Hand_Left"}])
+        self.assertEqual(plan["asam_targets_without_source_group"], ["Foot_Left"])
+
+    def test_detects_name_collision_when_target_group_already_exists(self):
+        bones = [_remap_bone("Hand_Left", "DEF-hand.L")]
+        # The mesh already has a vertex group named Hand_Left; renaming DEF-hand.L would clobber it.
+        groups = ["DEF-hand.L", "Hand_Left"]
+
+        plan = compute_vertex_group_remap_plan(bones, groups)
+
+        self.assertEqual(plan["renames"], [])
+        self.assertEqual(
+            plan["name_collisions"],
+            [{"source": "DEF-hand.L", "target": "Hand_Left", "existing_group": "Hand_Left"}],
+        )
+        # The pre-existing ASAM group is not flagged as unmapped — it already matches a bone.
+        self.assertNotIn("Hand_Left", plan["unmapped_groups"])
+
+    def test_skips_synthesized_geometry_sources(self):
+        # mirrored_opposite, interpolated_chain, extrapolated_parent: source_bone holds a target name,
+        # not a real source bone. Must be ignored to avoid renaming groups to those.
+        bones = [
+            _remap_bone("Lower_Arm_Right", "Lower_Arm_Left", geometry_source="mirrored_opposite"),
+            _remap_bone("Lower_Spine", "Hip", geometry_source="interpolated_chain"),
+            _remap_bone("Head", "Neck", geometry_source="extrapolated_parent"),
+        ]
+        groups = ["Lower_Arm_Left", "Hip", "Neck"]
+
+        plan = compute_vertex_group_remap_plan(bones, groups)
+
+        self.assertEqual(plan["renames"], [])
+        # Those groups have no bone in the generated armature - they are orphans.
+        self.assertEqual(plan["unmapped_groups"], ["Hip", "Lower_Arm_Left", "Neck"])
+
+    def test_includes_source_root_and_centered_pelvis_pair(self):
+        bones = [
+            _remap_bone("Root", "root", geometry_source="root_resolution"),
+            _remap_bone("Hip", "DEF-pelvis.L", geometry_source="centered_pelvis_pair"),
+        ]
+        groups = ["root", "DEF-pelvis.L", "DEF-pelvis.R"]
+
+        plan = compute_vertex_group_remap_plan(bones, groups)
+
+        self.assertEqual(
+            plan["renames"],
+            [
+                {"source": "DEF-pelvis.L", "target": "Hip"},
+                {"source": "root", "target": "Root"},
+            ],
+        )
+        # DEF-pelvis.R was not selected by the build plan - reported as unmapped (future many-to-one merge).
+        self.assertEqual(plan["unmapped_groups"], ["DEF-pelvis.R"])
+
+    def test_handles_empty_inputs(self):
+        self.assertEqual(
+            compute_vertex_group_remap_plan([], []),
+            {
+                "renames": [],
+                "unmapped_groups": [],
+                "asam_targets_without_source_group": [],
+                "name_collisions": [],
+            },
+        )
+
+    def test_skips_bones_with_no_source_bone(self):
+        bones = [
+            _remap_bone("Foot_Left", None, geometry_source="placement_fallback"),
+            _remap_bone("Hand_Left", "DEF-hand.L"),
+        ]
+        groups = ["DEF-hand.L"]
+
+        plan = compute_vertex_group_remap_plan(bones, groups)
+
+        self.assertEqual(plan["renames"], [{"source": "DEF-hand.L", "target": "Hand_Left"}])
+        self.assertEqual(plan["asam_targets_without_source_group"], [])
 
 
 if __name__ == "__main__":

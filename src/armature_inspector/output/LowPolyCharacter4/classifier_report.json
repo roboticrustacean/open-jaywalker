@@ -1,7 +1,7 @@
 {
   "asset_summary": {
     "asset_name": "LowPolyCharacter4",
-    "asset_dir": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\src\\armature_inspector\\output\\LowPolyCharacter4",
+    "asset_dir": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\.claude\\worktrees\\awesome-pare-c83314\\src\\armature_inspector\\output\\LowPolyCharacter4",
     "armature_count": 2,
     "discovered_armatures": [
       "metarig",
@@ -10,16 +10,16 @@
     "ranking": [
       {
         "armature_name": "rig",
-        "ranking_score": 110.93,
-        "mapped_core_targets": 20,
+        "ranking_score": 116.43,
+        "mapped_core_targets": 22,
         "average_confidence": 0.943,
         "primary_input": "rig_filtered.json"
       },
       {
         "armature_name": "metarig",
-        "ranking_score": 97.31,
-        "mapped_core_targets": 18,
-        "average_confidence": 0.931,
+        "ranking_score": 102.82,
+        "mapped_core_targets": 20,
+        "average_confidence": 0.932,
         "primary_input": "metarig_all.json"
       }
     ]
@@ -34,14 +34,14 @@
         "source_file": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\sample_assets\\LowPolyCharacter4.blend"
       },
       "summary": {
-        "mapped_core_targets": 18,
-        "direct_map_targets": 16,
+        "mapped_core_targets": 20,
+        "direct_map_targets": 18,
         "alias_map_targets": 0,
         "repair_targets": 2,
-        "review_targets": 2,
+        "review_targets": 8,
         "missing_core_targets": 0,
-        "average_confidence": 0.931,
-        "ranking_score": 97.31
+        "average_confidence": 0.932,
+        "ranking_score": 102.82
       },
       "asam_targets": {
         "Root": {
@@ -134,6 +134,36 @@
           },
           "notes": []
         },
+        "Eye_Left": {
+          "source_bone": null,
+          "confidence": 0.208,
+          "action": "review",
+          "evidence": {
+            "name": 0.0,
+            "hierarchy": 0.2,
+            "geometry": 0.74,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
+        },
+        "Eye_Right": {
+          "source_bone": null,
+          "confidence": 0.208,
+          "action": "review",
+          "evidence": {
+            "name": 0.0,
+            "hierarchy": 0.2,
+            "geometry": 0.74,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
+        },
         "Shoulder_Left": {
           "source_bone": "shoulder.L",
           "confidence": 0.97,
@@ -185,6 +215,36 @@
             "role": "unknown"
           },
           "notes": []
+        },
+        "Full_Thumb_Left": {
+          "source_bone": null,
+          "confidence": 0.225,
+          "action": "review",
+          "evidence": {
+            "name": 0.05,
+            "hierarchy": 0.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
+        },
+        "Full_Fingers_Left": {
+          "source_bone": null,
+          "confidence": 0.225,
+          "action": "review",
+          "evidence": {
+            "name": 0.05,
+            "hierarchy": 0.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
         },
         "Shoulder_Right": {
           "source_bone": "shoulder.R",
@@ -238,6 +298,36 @@
           },
           "notes": []
         },
+        "Full_Thumb_Right": {
+          "source_bone": null,
+          "confidence": 0.225,
+          "action": "review",
+          "evidence": {
+            "name": 0.05,
+            "hierarchy": 0.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
+        },
+        "Full_Fingers_Right": {
+          "source_bone": null,
+          "confidence": 0.225,
+          "action": "review",
+          "evidence": {
+            "name": 0.05,
+            "hierarchy": 0.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
+        },
         "Upper_Leg_Left": {
           "source_bone": "thigh.L",
           "confidence": 1.0,
@@ -271,6 +361,19 @@
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
+        "Full_Toes_Left": {
+          "source_bone": "toe.L",
+          "confidence": 0.945,
+          "action": "direct_map",
+          "evidence": {
+            "name": 0.95,
+            "hierarchy": 0.9,
             "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
@@ -315,6 +418,19 @@
             "role": "unknown"
           },
           "notes": []
+        },
+        "Full_Toes_Right": {
+          "source_bone": "toe.R",
+          "confidence": 0.945,
+          "action": "direct_map",
+          "evidence": {
+            "name": 0.95,
+            "hierarchy": 0.9,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
         }
       },
       "root_resolution": {
@@ -331,6 +447,23 @@
           "root_head_off_ground_center",
           "root_tail_mismatch_hip"
         ],
+        "spec_references": [
+          "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+          "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
+          "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
+        ],
+        "source_translation_offset": [
+          0.0,
+          -0.11767493560910225,
+          -0.9279463421553373
+        ],
+        "diagnostic_notes": [
+          "root_head_delta_forward=0.117675",
+          "root_head_delta_side=0.000000",
+          "root_head_delta_up=0.927946",
+          "root_origin_violation_against_asam_7_3_3_1",
+          "root_ground_projection_violation_against_asam_7_3_3_1"
+        ],
         "target_head": [
           0.0,
           -0.06670395284891129,
@@ -339,7 +472,7 @@
         "target_tail": [
           0.0,
           -0.06670395284891129,
-          0.9532261490821838
+          0.025279806926846504
         ],
         "up_axis": {
           "index": 2,
@@ -383,6 +516,10 @@
           "sign": 1
         }
       },
+      "mesh_binding": {
+        "armature_object_name": "metarig",
+        "meshes": []
+      },
       "proposed_asam_hierarchy": {
         "object_nodes": [
           {
@@ -401,20 +538,28 @@
           "Upper_Spine": "Lower_Spine",
           "Neck": "Upper_Spine",
           "Head": "Neck",
+          "Eye_Left": "Head",
+          "Eye_Right": "Head",
           "Shoulder_Left": "Upper_Spine",
           "Upper_Arm_Left": "Shoulder_Left",
           "Lower_Arm_Left": "Upper_Arm_Left",
           "Hand_Left": "Lower_Arm_Left",
+          "Full_Thumb_Left": "Hand_Left",
+          "Full_Fingers_Left": "Hand_Left",
           "Shoulder_Right": "Upper_Spine",
           "Upper_Arm_Right": "Shoulder_Right",
           "Lower_Arm_Right": "Upper_Arm_Right",
           "Hand_Right": "Lower_Arm_Right",
+          "Full_Thumb_Right": "Hand_Right",
+          "Full_Fingers_Right": "Hand_Right",
           "Upper_Leg_Left": "Hip",
           "Lower_Leg_Left": "Upper_Leg_Left",
           "Foot_Left": "Lower_Leg_Left",
+          "Full_Toes_Left": "Foot_Left",
           "Upper_Leg_Right": "Hip",
           "Lower_Leg_Right": "Upper_Leg_Right",
-          "Foot_Right": "Lower_Leg_Right"
+          "Foot_Right": "Lower_Leg_Right",
+          "Full_Toes_Right": "Foot_Right"
         }
       },
       "extras_preserved": [
@@ -445,18 +590,6 @@
         {
           "bone_name": "spine.006",
           "reason": "supporting_chain_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "toe.L",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "toe.R",
-          "reason": "deferred_semantic_detail",
           "origin": "primary",
           "role": "unknown"
         }
@@ -494,22 +627,55 @@
           "target": "Head",
           "reason": [],
           "confidence": 0.5
+        },
+        {
+          "target": "Eye_Left",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.208
+        },
+        {
+          "target": "Eye_Right",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.208
+        },
+        {
+          "target": "Full_Thumb_Left",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.225
+        },
+        {
+          "target": "Full_Fingers_Left",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.225
+        },
+        {
+          "target": "Full_Thumb_Right",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.225
+        },
+        {
+          "target": "Full_Fingers_Right",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.225
         }
       ],
       "review_flags": [
         "insufficient_head_evidence",
         "root_noncompliant"
       ],
-      "deferred_targets": [
-        "Eye_Left",
-        "Eye_Right",
-        "Full_Thumb_Left",
-        "Full_Thumb_Right",
-        "Full_Fingers_Left",
-        "Full_Fingers_Right",
-        "Full_Toes_Left",
-        "Full_Toes_Right"
-      ]
+      "deferred_targets": []
     },
     {
       "armature_name": "rig",
@@ -520,14 +686,14 @@
         "source_file": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\sample_assets\\LowPolyCharacter4.blend"
       },
       "summary": {
-        "mapped_core_targets": 20,
-        "direct_map_targets": 18,
+        "mapped_core_targets": 22,
+        "direct_map_targets": 20,
         "alias_map_targets": 0,
         "repair_targets": 2,
-        "review_targets": 0,
+        "review_targets": 6,
         "missing_core_targets": 0,
         "average_confidence": 0.943,
-        "ranking_score": 110.93
+        "ranking_score": 116.43
       },
       "asam_targets": {
         "Root": {
@@ -621,6 +787,38 @@
             "support_fallback"
           ]
         },
+        "Eye_Left": {
+          "source_bone": null,
+          "confidence": 0.418,
+          "action": "review",
+          "evidence": {
+            "name": 0.0,
+            "hierarchy": 0.9,
+            "geometry": 0.74,
+            "source_origin": "support",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict",
+            "support_fallback"
+          ]
+        },
+        "Eye_Right": {
+          "source_bone": null,
+          "confidence": 0.418,
+          "action": "review",
+          "evidence": {
+            "name": 0.0,
+            "hierarchy": 0.9,
+            "geometry": 0.74,
+            "source_origin": "support",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict",
+            "support_fallback"
+          ]
+        },
         "Shoulder_Left": {
           "source_bone": "ORG-shoulder.L",
           "confidence": 0.91,
@@ -674,6 +872,36 @@
             "role": "unknown"
           },
           "notes": []
+        },
+        "Full_Thumb_Left": {
+          "source_bone": null,
+          "confidence": 0.225,
+          "action": "review",
+          "evidence": {
+            "name": 0.05,
+            "hierarchy": 0.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
+        },
+        "Full_Fingers_Left": {
+          "source_bone": null,
+          "confidence": 0.225,
+          "action": "review",
+          "evidence": {
+            "name": 0.05,
+            "hierarchy": 0.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
         },
         "Shoulder_Right": {
           "source_bone": "ORG-shoulder.R",
@@ -729,6 +957,36 @@
           },
           "notes": []
         },
+        "Full_Thumb_Right": {
+          "source_bone": null,
+          "confidence": 0.225,
+          "action": "review",
+          "evidence": {
+            "name": 0.05,
+            "hierarchy": 0.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
+        },
+        "Full_Fingers_Right": {
+          "source_bone": null,
+          "confidence": 0.225,
+          "action": "review",
+          "evidence": {
+            "name": 0.05,
+            "hierarchy": 0.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": [
+            "candidate_conflict"
+          ]
+        },
         "Upper_Leg_Left": {
           "source_bone": "DEF-thigh.L",
           "confidence": 1.0,
@@ -762,6 +1020,19 @@
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
+        "Full_Toes_Left": {
+          "source_bone": "DEF-toe.L",
+          "confidence": 0.945,
+          "action": "direct_map",
+          "evidence": {
+            "name": 0.95,
+            "hierarchy": 0.9,
             "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
@@ -806,6 +1077,19 @@
             "role": "unknown"
           },
           "notes": []
+        },
+        "Full_Toes_Right": {
+          "source_bone": "DEF-toe.R",
+          "confidence": 0.945,
+          "action": "direct_map",
+          "evidence": {
+            "name": 0.95,
+            "hierarchy": 0.9,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
         }
       },
       "root_resolution": {
@@ -820,6 +1104,23 @@
           "root_not_vertical",
           "root_tail_mismatch_hip"
         ],
+        "spec_references": [
+          "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+          "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
+          "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
+        ],
+        "source_translation_offset": [
+          5.960464477539063e-08,
+          0.05099785327911377,
+          0.0033478213008493185
+        ],
+        "diagnostic_notes": [
+          "root_head_delta_forward=-0.050998",
+          "root_head_delta_side=-0.000000",
+          "root_head_delta_up=-0.003348",
+          "root_origin_violation_against_asam_7_3_3_1",
+          "mesh_bounds_offset_detected_root_at_local_origin"
+        ],
         "target_head": [
           5.960464477539063e-08,
           0.05099785327911377,
@@ -828,7 +1129,7 @@
         "target_tail": [
           5.960464477539063e-08,
           0.05099785327911377,
-          0.9532261490821838
+          0.9565739703830332
         ],
         "up_axis": {
           "index": 2,
@@ -874,6 +1175,207 @@
           "sign": 1
         }
       },
+      "mesh_binding": {
+        "armature_object_name": "rig",
+        "meshes": [
+          {
+            "mesh_name": "Cube",
+            "armature_link": "parent_and_modifier",
+            "modifiers": [
+              {
+                "stack_index": 0,
+                "type": "ARMATURE",
+                "name": "Armature",
+                "object": "rig"
+              }
+            ],
+            "vertex_groups": [
+              "DEF-foot.L",
+              "DEF-foot.R",
+              "DEF-forearm.L",
+              "DEF-forearm.L.001",
+              "DEF-forearm.R",
+              "DEF-forearm.R.001",
+              "DEF-hand.L",
+              "DEF-hand.R",
+              "DEF-pelvis.L",
+              "DEF-pelvis.R",
+              "DEF-shin.L",
+              "DEF-shin.L.001",
+              "DEF-shin.R",
+              "DEF-shin.R.001",
+              "DEF-shoulder.L",
+              "DEF-shoulder.R",
+              "DEF-spine",
+              "DEF-spine.001",
+              "DEF-spine.002",
+              "DEF-spine.003",
+              "DEF-spine.004",
+              "DEF-spine.005",
+              "DEF-spine.006",
+              "DEF-thigh.L",
+              "DEF-thigh.L.001",
+              "DEF-thigh.R",
+              "DEF-thigh.R.001",
+              "DEF-toe.L",
+              "DEF-toe.R",
+              "DEF-upper_arm.L",
+              "DEF-upper_arm.L.001",
+              "DEF-upper_arm.R",
+              "DEF-upper_arm.R.001",
+              "Hair_Front"
+            ],
+            "vertex_group_stats": {
+              "non_empty_group_count": 31,
+              "per_group": [
+                {
+                  "name": "DEF-foot.L",
+                  "weighted_vertex_count": 15
+                },
+                {
+                  "name": "DEF-foot.R",
+                  "weighted_vertex_count": 15
+                },
+                {
+                  "name": "DEF-forearm.L",
+                  "weighted_vertex_count": 23
+                },
+                {
+                  "name": "DEF-forearm.L.001",
+                  "weighted_vertex_count": 22
+                },
+                {
+                  "name": "DEF-forearm.R",
+                  "weighted_vertex_count": 23
+                },
+                {
+                  "name": "DEF-forearm.R.001",
+                  "weighted_vertex_count": 22
+                },
+                {
+                  "name": "DEF-hand.L",
+                  "weighted_vertex_count": 10
+                },
+                {
+                  "name": "DEF-hand.R",
+                  "weighted_vertex_count": 10
+                },
+                {
+                  "name": "DEF-pelvis.L",
+                  "weighted_vertex_count": 38
+                },
+                {
+                  "name": "DEF-pelvis.R",
+                  "weighted_vertex_count": 37
+                },
+                {
+                  "name": "DEF-shin.L",
+                  "weighted_vertex_count": 15
+                },
+                {
+                  "name": "DEF-shin.L.001",
+                  "weighted_vertex_count": 17
+                },
+                {
+                  "name": "DEF-shin.R",
+                  "weighted_vertex_count": 15
+                },
+                {
+                  "name": "DEF-shin.R.001",
+                  "weighted_vertex_count": 17
+                },
+                {
+                  "name": "DEF-shoulder.L",
+                  "weighted_vertex_count": 11
+                },
+                {
+                  "name": "DEF-shoulder.R",
+                  "weighted_vertex_count": 11
+                },
+                {
+                  "name": "DEF-spine",
+                  "weighted_vertex_count": 38
+                },
+                {
+                  "name": "DEF-spine.001",
+                  "weighted_vertex_count": 49
+                },
+                {
+                  "name": "DEF-spine.002",
+                  "weighted_vertex_count": 56
+                },
+                {
+                  "name": "DEF-spine.003",
+                  "weighted_vertex_count": 6
+                },
+                {
+                  "name": "DEF-spine.004",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "DEF-spine.005",
+                  "weighted_vertex_count": 3
+                },
+                {
+                  "name": "DEF-spine.006",
+                  "weighted_vertex_count": 79
+                },
+                {
+                  "name": "DEF-thigh.L",
+                  "weighted_vertex_count": 14
+                },
+                {
+                  "name": "DEF-thigh.L.001",
+                  "weighted_vertex_count": 19
+                },
+                {
+                  "name": "DEF-thigh.R",
+                  "weighted_vertex_count": 13
+                },
+                {
+                  "name": "DEF-thigh.R.001",
+                  "weighted_vertex_count": 19
+                },
+                {
+                  "name": "DEF-toe.L",
+                  "weighted_vertex_count": 10
+                },
+                {
+                  "name": "DEF-toe.R",
+                  "weighted_vertex_count": 10
+                },
+                {
+                  "name": "DEF-upper_arm.L",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "DEF-upper_arm.L.001",
+                  "weighted_vertex_count": 10
+                },
+                {
+                  "name": "DEF-upper_arm.R",
+                  "weighted_vertex_count": 0
+                },
+                {
+                  "name": "DEF-upper_arm.R.001",
+                  "weighted_vertex_count": 10
+                },
+                {
+                  "name": "Hair_Front",
+                  "weighted_vertex_count": 1
+                }
+              ]
+            },
+            "material_slots": [
+              {
+                "slot_index": 0,
+                "material_name": "Body"
+              }
+            ],
+            "warnings": []
+          }
+        ]
+      },
       "proposed_asam_hierarchy": {
         "object_nodes": [
           {
@@ -892,20 +1394,28 @@
           "Upper_Spine": "Lower_Spine",
           "Neck": "Upper_Spine",
           "Head": "Neck",
+          "Eye_Left": "Head",
+          "Eye_Right": "Head",
           "Shoulder_Left": "Upper_Spine",
           "Upper_Arm_Left": "Shoulder_Left",
           "Lower_Arm_Left": "Upper_Arm_Left",
           "Hand_Left": "Lower_Arm_Left",
+          "Full_Thumb_Left": "Hand_Left",
+          "Full_Fingers_Left": "Hand_Left",
           "Shoulder_Right": "Upper_Spine",
           "Upper_Arm_Right": "Shoulder_Right",
           "Lower_Arm_Right": "Upper_Arm_Right",
           "Hand_Right": "Lower_Arm_Right",
+          "Full_Thumb_Right": "Hand_Right",
+          "Full_Fingers_Right": "Hand_Right",
           "Upper_Leg_Left": "Hip",
           "Lower_Leg_Left": "Upper_Leg_Left",
           "Foot_Left": "Lower_Leg_Left",
+          "Full_Toes_Left": "Foot_Left",
           "Upper_Leg_Right": "Hip",
           "Lower_Leg_Right": "Upper_Leg_Right",
-          "Foot_Right": "Lower_Leg_Right"
+          "Foot_Right": "Lower_Leg_Right",
+          "Full_Toes_Right": "Foot_Right"
         }
       },
       "extras_preserved": [
@@ -972,18 +1482,6 @@
         {
           "bone_name": "DEF-thigh.R.001",
           "reason": "supporting_chain_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "DEF-toe.L",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "DEF-toe.R",
-          "reason": "deferred_semantic_detail",
           "origin": "primary",
           "role": "unknown"
         },
@@ -2095,21 +2593,57 @@
         }
       ],
       "missing_core_targets": [],
-      "ambiguous_targets": [],
+      "ambiguous_targets": [
+        {
+          "target": "Eye_Left",
+          "reason": [
+            "candidate_conflict",
+            "support_fallback"
+          ],
+          "confidence": 0.418
+        },
+        {
+          "target": "Eye_Right",
+          "reason": [
+            "candidate_conflict",
+            "support_fallback"
+          ],
+          "confidence": 0.418
+        },
+        {
+          "target": "Full_Thumb_Left",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.225
+        },
+        {
+          "target": "Full_Fingers_Left",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.225
+        },
+        {
+          "target": "Full_Thumb_Right",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.225
+        },
+        {
+          "target": "Full_Fingers_Right",
+          "reason": [
+            "candidate_conflict"
+          ],
+          "confidence": 0.225
+        }
+      ],
       "review_flags": [
         "multiple_roots",
         "root_noncompliant"
       ],
-      "deferred_targets": [
-        "Eye_Left",
-        "Eye_Right",
-        "Full_Thumb_Left",
-        "Full_Thumb_Right",
-        "Full_Fingers_Left",
-        "Full_Fingers_Right",
-        "Full_Toes_Left",
-        "Full_Toes_Right"
-      ]
+      "deferred_targets": []
     }
   ],
   "recommended_primary_armature": "rig",
@@ -2205,6 +2739,38 @@
         "support_fallback"
       ]
     },
+    "Eye_Left": {
+      "source_bone": null,
+      "confidence": 0.418,
+      "action": "review",
+      "evidence": {
+        "name": 0.0,
+        "hierarchy": 0.9,
+        "geometry": 0.74,
+        "source_origin": "support",
+        "role": "unknown"
+      },
+      "notes": [
+        "candidate_conflict",
+        "support_fallback"
+      ]
+    },
+    "Eye_Right": {
+      "source_bone": null,
+      "confidence": 0.418,
+      "action": "review",
+      "evidence": {
+        "name": 0.0,
+        "hierarchy": 0.9,
+        "geometry": 0.74,
+        "source_origin": "support",
+        "role": "unknown"
+      },
+      "notes": [
+        "candidate_conflict",
+        "support_fallback"
+      ]
+    },
     "Shoulder_Left": {
       "source_bone": "ORG-shoulder.L",
       "confidence": 0.91,
@@ -2258,6 +2824,36 @@
         "role": "unknown"
       },
       "notes": []
+    },
+    "Full_Thumb_Left": {
+      "source_bone": null,
+      "confidence": 0.225,
+      "action": "review",
+      "evidence": {
+        "name": 0.05,
+        "hierarchy": 0.0,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": [
+        "candidate_conflict"
+      ]
+    },
+    "Full_Fingers_Left": {
+      "source_bone": null,
+      "confidence": 0.225,
+      "action": "review",
+      "evidence": {
+        "name": 0.05,
+        "hierarchy": 0.0,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": [
+        "candidate_conflict"
+      ]
     },
     "Shoulder_Right": {
       "source_bone": "ORG-shoulder.R",
@@ -2313,6 +2909,36 @@
       },
       "notes": []
     },
+    "Full_Thumb_Right": {
+      "source_bone": null,
+      "confidence": 0.225,
+      "action": "review",
+      "evidence": {
+        "name": 0.05,
+        "hierarchy": 0.0,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": [
+        "candidate_conflict"
+      ]
+    },
+    "Full_Fingers_Right": {
+      "source_bone": null,
+      "confidence": 0.225,
+      "action": "review",
+      "evidence": {
+        "name": 0.05,
+        "hierarchy": 0.0,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": [
+        "candidate_conflict"
+      ]
+    },
     "Upper_Leg_Left": {
       "source_bone": "DEF-thigh.L",
       "confidence": 1.0,
@@ -2346,6 +2972,19 @@
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
+    },
+    "Full_Toes_Left": {
+      "source_bone": "DEF-toe.L",
+      "confidence": 0.945,
+      "action": "direct_map",
+      "evidence": {
+        "name": 0.95,
+        "hierarchy": 0.9,
         "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
@@ -2390,6 +3029,19 @@
         "role": "unknown"
       },
       "notes": []
+    },
+    "Full_Toes_Right": {
+      "source_bone": "DEF-toe.R",
+      "confidence": 0.945,
+      "action": "direct_map",
+      "evidence": {
+        "name": 0.95,
+        "hierarchy": 0.9,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
     }
   },
   "root_resolution": {
@@ -2404,6 +3056,23 @@
       "root_not_vertical",
       "root_tail_mismatch_hip"
     ],
+    "spec_references": [
+      "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+      "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
+      "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
+    ],
+    "source_translation_offset": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.0033478213008493185
+    ],
+    "diagnostic_notes": [
+      "root_head_delta_forward=-0.050998",
+      "root_head_delta_side=-0.000000",
+      "root_head_delta_up=-0.003348",
+      "root_origin_violation_against_asam_7_3_3_1",
+      "mesh_bounds_offset_detected_root_at_local_origin"
+    ],
     "target_head": [
       5.960464477539063e-08,
       0.05099785327911377,
@@ -2412,7 +3081,7 @@
     "target_tail": [
       5.960464477539063e-08,
       0.05099785327911377,
-      0.9532261490821838
+      0.9565739703830332
     ],
     "up_axis": {
       "index": 2,
@@ -2458,8 +3127,254 @@
       "sign": 1
     }
   },
+  "mesh_binding": {
+    "armature_object_name": "rig",
+    "meshes": [
+      {
+        "mesh_name": "Cube",
+        "armature_link": "parent_and_modifier",
+        "modifiers": [
+          {
+            "stack_index": 0,
+            "type": "ARMATURE",
+            "name": "Armature",
+            "object": "rig"
+          }
+        ],
+        "vertex_groups": [
+          "DEF-foot.L",
+          "DEF-foot.R",
+          "DEF-forearm.L",
+          "DEF-forearm.L.001",
+          "DEF-forearm.R",
+          "DEF-forearm.R.001",
+          "DEF-hand.L",
+          "DEF-hand.R",
+          "DEF-pelvis.L",
+          "DEF-pelvis.R",
+          "DEF-shin.L",
+          "DEF-shin.L.001",
+          "DEF-shin.R",
+          "DEF-shin.R.001",
+          "DEF-shoulder.L",
+          "DEF-shoulder.R",
+          "DEF-spine",
+          "DEF-spine.001",
+          "DEF-spine.002",
+          "DEF-spine.003",
+          "DEF-spine.004",
+          "DEF-spine.005",
+          "DEF-spine.006",
+          "DEF-thigh.L",
+          "DEF-thigh.L.001",
+          "DEF-thigh.R",
+          "DEF-thigh.R.001",
+          "DEF-toe.L",
+          "DEF-toe.R",
+          "DEF-upper_arm.L",
+          "DEF-upper_arm.L.001",
+          "DEF-upper_arm.R",
+          "DEF-upper_arm.R.001",
+          "Hair_Front"
+        ],
+        "vertex_group_stats": {
+          "non_empty_group_count": 31,
+          "per_group": [
+            {
+              "name": "DEF-foot.L",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-foot.R",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-forearm.L",
+              "weighted_vertex_count": 23
+            },
+            {
+              "name": "DEF-forearm.L.001",
+              "weighted_vertex_count": 22
+            },
+            {
+              "name": "DEF-forearm.R",
+              "weighted_vertex_count": 23
+            },
+            {
+              "name": "DEF-forearm.R.001",
+              "weighted_vertex_count": 22
+            },
+            {
+              "name": "DEF-hand.L",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-hand.R",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-pelvis.L",
+              "weighted_vertex_count": 38
+            },
+            {
+              "name": "DEF-pelvis.R",
+              "weighted_vertex_count": 37
+            },
+            {
+              "name": "DEF-shin.L",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-shin.L.001",
+              "weighted_vertex_count": 17
+            },
+            {
+              "name": "DEF-shin.R",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-shin.R.001",
+              "weighted_vertex_count": 17
+            },
+            {
+              "name": "DEF-shoulder.L",
+              "weighted_vertex_count": 11
+            },
+            {
+              "name": "DEF-shoulder.R",
+              "weighted_vertex_count": 11
+            },
+            {
+              "name": "DEF-spine",
+              "weighted_vertex_count": 38
+            },
+            {
+              "name": "DEF-spine.001",
+              "weighted_vertex_count": 49
+            },
+            {
+              "name": "DEF-spine.002",
+              "weighted_vertex_count": 56
+            },
+            {
+              "name": "DEF-spine.003",
+              "weighted_vertex_count": 6
+            },
+            {
+              "name": "DEF-spine.004",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-spine.005",
+              "weighted_vertex_count": 3
+            },
+            {
+              "name": "DEF-spine.006",
+              "weighted_vertex_count": 79
+            },
+            {
+              "name": "DEF-thigh.L",
+              "weighted_vertex_count": 14
+            },
+            {
+              "name": "DEF-thigh.L.001",
+              "weighted_vertex_count": 19
+            },
+            {
+              "name": "DEF-thigh.R",
+              "weighted_vertex_count": 13
+            },
+            {
+              "name": "DEF-thigh.R.001",
+              "weighted_vertex_count": 19
+            },
+            {
+              "name": "DEF-toe.L",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-toe.R",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-upper_arm.L",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-upper_arm.L.001",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-upper_arm.R",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-upper_arm.R.001",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "Hair_Front",
+              "weighted_vertex_count": 1
+            }
+          ]
+        },
+        "material_slots": [
+          {
+            "slot_index": 0,
+            "material_name": "Body"
+          }
+        ],
+        "warnings": []
+      }
+    ]
+  },
   "missing_targets": [],
-  "ambiguous_targets": [],
+  "ambiguous_targets": [
+    {
+      "target": "Eye_Left",
+      "reason": [
+        "candidate_conflict",
+        "support_fallback"
+      ],
+      "confidence": 0.418
+    },
+    {
+      "target": "Eye_Right",
+      "reason": [
+        "candidate_conflict",
+        "support_fallback"
+      ],
+      "confidence": 0.418
+    },
+    {
+      "target": "Full_Thumb_Left",
+      "reason": [
+        "candidate_conflict"
+      ],
+      "confidence": 0.225
+    },
+    {
+      "target": "Full_Fingers_Left",
+      "reason": [
+        "candidate_conflict"
+      ],
+      "confidence": 0.225
+    },
+    {
+      "target": "Full_Thumb_Right",
+      "reason": [
+        "candidate_conflict"
+      ],
+      "confidence": 0.225
+    },
+    {
+      "target": "Full_Fingers_Right",
+      "reason": [
+        "candidate_conflict"
+      ],
+      "confidence": 0.225
+    }
+  ],
   "unclassified_bones": [
     {
       "bone_name": "DEF-pelvis.R",
@@ -2868,14 +3783,5 @@
     "multiple_roots",
     "root_noncompliant"
   ],
-  "deferred_targets": [
-    "Eye_Left",
-    "Eye_Right",
-    "Full_Thumb_Left",
-    "Full_Thumb_Right",
-    "Full_Fingers_Left",
-    "Full_Fingers_Right",
-    "Full_Toes_Left",
-    "Full_Toes_Right"
-  ]
+  "deferred_targets": []
 }

@@ -5,9 +5,19 @@ from __future__ import annotations
 from typing import List, Optional
 
 try:
-    from .builder import GENERATED_ASSET_KEY, GENERATED_MARKER_KEY, choose_generated_collection_action
+    from .builder import (
+        GENERATED_ASSET_KEY,
+        GENERATED_MARKER_KEY,
+        choose_generated_collection_action,
+        compute_vertex_group_remap_plan,
+    )
 except ImportError:  # pragma: no cover - Blender script path fallback
-    from builder import GENERATED_ASSET_KEY, GENERATED_MARKER_KEY, choose_generated_collection_action
+    from builder import (
+        GENERATED_ASSET_KEY,
+        GENERATED_MARKER_KEY,
+        choose_generated_collection_action,
+        compute_vertex_group_remap_plan,
+    )
 
 
 def snapshot_existing_collections(bpy_module) -> List[dict]:
@@ -243,12 +253,31 @@ def _duplicate_bound_meshes(
         if record.get("armature_link") == "parent" and not retargeted:
             mesh_warnings.append("parent_only_no_armature_modifier:{0}".format(mesh_name))
 
+        group_names = _vertex_group_names(generated_mesh)
+        remap_plan = compute_vertex_group_remap_plan(
+            build_spec.get("bones", []),
+            group_names,
+        )
+        _apply_vertex_group_renames(generated_mesh, remap_plan["renames"])
+        if remap_plan["unmapped_groups"]:
+            mesh_warnings.append("unmapped_vertex_groups:{0}".format(mesh_name))
+        if remap_plan["asam_targets_without_source_group"]:
+            mesh_warnings.append("missing_source_groups:{0}".format(mesh_name))
+        if remap_plan["name_collisions"]:
+            mesh_warnings.append("vertex_group_name_collision:{0}".format(mesh_name))
+
         duplicated_meshes.append(
             {
                 "source_mesh_name": mesh_name,
                 "generated_mesh_name": generated_mesh.name,
                 "armature_link": record.get("armature_link"),
                 "retargeted_armature_modifiers": retargeted,
+                "vertex_group_remap": {
+                    "renamed": remap_plan["renames"],
+                    "unmapped": remap_plan["unmapped_groups"],
+                    "missing_source_groups": remap_plan["asam_targets_without_source_group"],
+                    "collisions": remap_plan["name_collisions"],
+                },
             }
         )
 
@@ -320,6 +349,41 @@ def _retarget_armature_modifiers(mesh_obj, source_armature, generated_armature) 
         modifier.object = generated_armature
         retargeted.append(getattr(modifier, "name", ""))
     return sorted(retargeted)
+
+
+def _vertex_group_names(mesh_obj) -> List[str]:
+    """Return current vertex group names on mesh_obj, working for real Blender or the test fake."""
+    names: List[str] = []
+    for group in getattr(mesh_obj, "vertex_groups", []):
+        # Real Blender VertexGroup has a .name attribute; the test fake uses plain strings.
+        name = getattr(group, "name", group)
+        names.append(name)
+    return names
+
+
+def _apply_vertex_group_renames(mesh_obj, renames: List[dict]) -> None:
+    """
+    Apply a list of {"source": <old>, "target": <new>} renames to a mesh's vertex groups.
+
+    Supports both real Blender VertexGroup objects (set .name) and the pure-Python test
+    fake where vertex_groups is a list of strings (mutate the list element).
+    """
+    if not renames:
+        return
+    rename_lookup = {entry["source"]: entry["target"] for entry in renames}
+    groups = getattr(mesh_obj, "vertex_groups", None)
+    if groups is None:
+        return
+    for index, group in enumerate(groups):
+        current_name = getattr(group, "name", group)
+        new_name = rename_lookup.get(current_name)
+        if new_name is None:
+            continue
+        if hasattr(group, "name"):
+            group.name = new_name
+        else:
+            # The fake exposes vertex_groups as a list[str]; mutate in place.
+            groups[index] = new_name
 
 
 def _populate_edit_bones(bpy_module, armature_object, bones: List[dict]) -> None:

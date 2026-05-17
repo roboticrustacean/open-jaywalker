@@ -64,6 +64,10 @@
         "target": "Foot_Left"
       },
       {
+        "source": "DEF-toe.L",
+        "target": "Full_Toes_Left"
+      },
+      {
         "source": "DEF-thigh.R",
         "target": "Upper_Leg_Right"
       },
@@ -74,6 +78,10 @@
       {
         "source": "DEF-foot.R",
         "target": "Foot_Right"
+      },
+      {
+        "source": "DEF-toe.R",
+        "target": "Full_Toes_Right"
       }
     ],
     "create": []
@@ -90,6 +98,23 @@
       "root_not_vertical",
       "root_tail_mismatch_hip"
     ],
+    "spec_references": [
+      "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+      "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
+      "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
+    ],
+    "source_translation_offset": [
+      5.960464477539063e-08,
+      0.05099785327911377,
+      0.0033478213008493185
+    ],
+    "diagnostic_notes": [
+      "root_head_delta_forward=-0.050998",
+      "root_head_delta_side=-0.000000",
+      "root_head_delta_up=-0.003348",
+      "root_origin_violation_against_asam_7_3_3_1",
+      "mesh_bounds_offset_detected_root_at_local_origin"
+    ],
     "target_head": [
       5.960464477539063e-08,
       0.05099785327911377,
@@ -98,7 +123,7 @@
     "target_tail": [
       5.960464477539063e-08,
       0.05099785327911377,
-      0.9532261490821838
+      0.9565739703830332
     ],
     "up_axis": {
       "index": 2,
@@ -144,6 +169,207 @@
       "sign": 1
     }
   },
+  "mesh_binding": {
+    "armature_object_name": "rig",
+    "meshes": [
+      {
+        "mesh_name": "Cube",
+        "armature_link": "parent_and_modifier",
+        "modifiers": [
+          {
+            "stack_index": 0,
+            "type": "ARMATURE",
+            "name": "Armature",
+            "object": "rig"
+          }
+        ],
+        "vertex_groups": [
+          "DEF-foot.L",
+          "DEF-foot.R",
+          "DEF-forearm.L",
+          "DEF-forearm.L.001",
+          "DEF-forearm.R",
+          "DEF-forearm.R.001",
+          "DEF-hand.L",
+          "DEF-hand.R",
+          "DEF-pelvis.L",
+          "DEF-pelvis.R",
+          "DEF-shin.L",
+          "DEF-shin.L.001",
+          "DEF-shin.R",
+          "DEF-shin.R.001",
+          "DEF-shoulder.L",
+          "DEF-shoulder.R",
+          "DEF-spine",
+          "DEF-spine.001",
+          "DEF-spine.002",
+          "DEF-spine.003",
+          "DEF-spine.004",
+          "DEF-spine.005",
+          "DEF-spine.006",
+          "DEF-thigh.L",
+          "DEF-thigh.L.001",
+          "DEF-thigh.R",
+          "DEF-thigh.R.001",
+          "DEF-toe.L",
+          "DEF-toe.R",
+          "DEF-upper_arm.L",
+          "DEF-upper_arm.L.001",
+          "DEF-upper_arm.R",
+          "DEF-upper_arm.R.001",
+          "Hair_Front"
+        ],
+        "vertex_group_stats": {
+          "non_empty_group_count": 31,
+          "per_group": [
+            {
+              "name": "DEF-foot.L",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-foot.R",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-forearm.L",
+              "weighted_vertex_count": 23
+            },
+            {
+              "name": "DEF-forearm.L.001",
+              "weighted_vertex_count": 22
+            },
+            {
+              "name": "DEF-forearm.R",
+              "weighted_vertex_count": 23
+            },
+            {
+              "name": "DEF-forearm.R.001",
+              "weighted_vertex_count": 22
+            },
+            {
+              "name": "DEF-hand.L",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-hand.R",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-pelvis.L",
+              "weighted_vertex_count": 38
+            },
+            {
+              "name": "DEF-pelvis.R",
+              "weighted_vertex_count": 37
+            },
+            {
+              "name": "DEF-shin.L",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-shin.L.001",
+              "weighted_vertex_count": 17
+            },
+            {
+              "name": "DEF-shin.R",
+              "weighted_vertex_count": 15
+            },
+            {
+              "name": "DEF-shin.R.001",
+              "weighted_vertex_count": 17
+            },
+            {
+              "name": "DEF-shoulder.L",
+              "weighted_vertex_count": 11
+            },
+            {
+              "name": "DEF-shoulder.R",
+              "weighted_vertex_count": 11
+            },
+            {
+              "name": "DEF-spine",
+              "weighted_vertex_count": 38
+            },
+            {
+              "name": "DEF-spine.001",
+              "weighted_vertex_count": 49
+            },
+            {
+              "name": "DEF-spine.002",
+              "weighted_vertex_count": 56
+            },
+            {
+              "name": "DEF-spine.003",
+              "weighted_vertex_count": 6
+            },
+            {
+              "name": "DEF-spine.004",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-spine.005",
+              "weighted_vertex_count": 3
+            },
+            {
+              "name": "DEF-spine.006",
+              "weighted_vertex_count": 79
+            },
+            {
+              "name": "DEF-thigh.L",
+              "weighted_vertex_count": 14
+            },
+            {
+              "name": "DEF-thigh.L.001",
+              "weighted_vertex_count": 19
+            },
+            {
+              "name": "DEF-thigh.R",
+              "weighted_vertex_count": 13
+            },
+            {
+              "name": "DEF-thigh.R.001",
+              "weighted_vertex_count": 19
+            },
+            {
+              "name": "DEF-toe.L",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-toe.R",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-upper_arm.L",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-upper_arm.L.001",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "DEF-upper_arm.R",
+              "weighted_vertex_count": 0
+            },
+            {
+              "name": "DEF-upper_arm.R.001",
+              "weighted_vertex_count": 10
+            },
+            {
+              "name": "Hair_Front",
+              "weighted_vertex_count": 1
+            }
+          ]
+        },
+        "material_slots": [
+          {
+            "slot_index": 0,
+            "material_name": "Body"
+          }
+        ],
+        "warnings": []
+      }
+    ]
+  },
   "proposed_asam_hierarchy": {
     "object_nodes": [
       {
@@ -162,20 +388,28 @@
       "Upper_Spine": "Lower_Spine",
       "Neck": "Upper_Spine",
       "Head": "Neck",
+      "Eye_Left": "Head",
+      "Eye_Right": "Head",
       "Shoulder_Left": "Upper_Spine",
       "Upper_Arm_Left": "Shoulder_Left",
       "Lower_Arm_Left": "Upper_Arm_Left",
       "Hand_Left": "Lower_Arm_Left",
+      "Full_Thumb_Left": "Hand_Left",
+      "Full_Fingers_Left": "Hand_Left",
       "Shoulder_Right": "Upper_Spine",
       "Upper_Arm_Right": "Shoulder_Right",
       "Lower_Arm_Right": "Upper_Arm_Right",
       "Hand_Right": "Lower_Arm_Right",
+      "Full_Thumb_Right": "Hand_Right",
+      "Full_Fingers_Right": "Hand_Right",
       "Upper_Leg_Left": "Hip",
       "Lower_Leg_Left": "Upper_Leg_Left",
       "Foot_Left": "Lower_Leg_Left",
+      "Full_Toes_Left": "Foot_Left",
       "Upper_Leg_Right": "Hip",
       "Lower_Leg_Right": "Upper_Leg_Right",
-      "Foot_Right": "Lower_Leg_Right"
+      "Foot_Right": "Lower_Leg_Right",
+      "Full_Toes_Right": "Foot_Right"
     }
   },
   "extras_preserved": [
@@ -242,18 +476,6 @@
     {
       "bone_name": "DEF-thigh.R.001",
       "reason": "supporting_chain_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "DEF-toe.L",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "DEF-toe.R",
-      "reason": "deferred_semantic_detail",
       "origin": "primary",
       "role": "unknown"
     },

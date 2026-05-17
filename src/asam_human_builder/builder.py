@@ -17,6 +17,14 @@ RECOVERABLE_ACTIONS = {"direct_map", "alias_map", "repair_in_builder"}
 GENERATED_MARKER_KEY = "open_jaywalker_generated"
 GENERATED_ASSET_KEY = "open_jaywalker_asset"
 
+# build_spec["bones"][i]["geometry_source"] values where "source_bone" carries a real
+# source bone name suitable for vertex group remapping. Synthesized values (mirrored,
+# interpolated, extrapolated, placement_fallback) instead hold an ASAM target name
+# in source_bone and must be skipped by the remap planner.
+SOURCE_NAMED_GEOMETRY_SOURCES = frozenset(
+    {"source_bone", "source_root", "centered_pelvis_pair", "root_resolution"}
+)
+
 REQUIRED_REPORT_FIELDS = {
     "recommended_primary_armature",
     "semantic_mapping",
@@ -133,6 +141,97 @@ def validate_builder_inputs(classifier_report: dict, build_plan: dict) -> None:
             raise ValueError(
                 "build_plan.root_resolution.source_translation_offset entries must be numeric"
             ) from exc
+
+
+def compute_vertex_group_remap_plan(
+    bones: Sequence[dict],
+    vertex_group_names: Sequence[str],
+) -> Dict[str, list]:
+    """
+    Plan how to rename a duplicated mesh's vertex groups so that they match the
+    generated ASAM armature's bone names.
+
+    For each spec bone whose geometry source carries a real source bone name
+    (see SOURCE_NAMED_GEOMETRY_SOURCES), the source bone name on the source mesh's
+    vertex group should be renamed to the ASAM target bone name. Identity renames
+    (source name already equals target) are skipped. A rename is suppressed when
+    the target name already exists as a separate vertex group on the mesh, to
+    avoid clobbering weights; the conflict is reported instead.
+
+    Args:
+        bones: build_spec["bones"] entries (each has "name", "source_bone",
+            "geometry_source"). May include synthesized bones; those are skipped.
+        vertex_group_names: existing vertex group names on the duplicated mesh.
+
+    Returns:
+        {
+            "renames": [{"source": ..., "target": ...}, ...] sorted by source name,
+            "unmapped_groups": sorted list of group names with no ASAM target,
+            "asam_targets_without_source_group": sorted list of ASAM targets whose
+                expected source vertex group is not on the mesh,
+            "name_collisions": sorted list of {"source", "target", "existing_group"}
+                where rename would clobber an existing group of the target name.
+        }
+    """
+    existing_groups = set(vertex_group_names)
+
+    # Build source -> target map from bones whose source_bone is a real source name.
+    source_to_target: Dict[str, str] = {}
+    for bone in bones:
+        source_name = bone.get("source_bone")
+        target_name = bone.get("name")
+        geometry_source = bone.get("geometry_source")
+        if not source_name or not target_name:
+            continue
+        if geometry_source not in SOURCE_NAMED_GEOMETRY_SOURCES:
+            continue
+        if source_name == target_name:
+            continue  # identity - no rename needed
+        # Last-write-wins is deterministic because the caller's bones list is in
+        # CORE_TARGETS order; collisions in source_to_target are not expected because
+        # the classifier should not map one source bone to multiple ASAM targets.
+        source_to_target.setdefault(source_name, target_name)
+
+    renames: List[Dict[str, str]] = []
+    collisions: List[Dict[str, str]] = []
+
+    for group_name in sorted(existing_groups):
+        if group_name not in source_to_target:
+            continue
+        target = source_to_target[group_name]
+        if target in existing_groups and target != group_name:
+            collisions.append(
+                {"source": group_name, "target": target, "existing_group": target}
+            )
+            continue
+        renames.append({"source": group_name, "target": target})
+
+    # Unmapped: groups that are not in source_to_target AND are not already an ASAM
+    # target name (a group already named after a generated bone is fine - Blender will
+    # bind it directly to that bone).
+    asam_target_names = {bone.get("name") for bone in bones if bone.get("name")}
+    unmapped_groups = sorted(
+        group_name
+        for group_name in existing_groups
+        if group_name not in source_to_target and group_name not in asam_target_names
+    )
+
+    # ASAM targets whose source vertex group is not present on this mesh.
+    missing_targets = sorted(
+        target
+        for source_name, target in source_to_target.items()
+        if source_name not in existing_groups
+    )
+
+    return {
+        "renames": renames,
+        "unmapped_groups": unmapped_groups,
+        "asam_targets_without_source_group": missing_targets,
+        "name_collisions": sorted(
+            collisions,
+            key=lambda entry: (entry["source"], entry["target"]),
+        ),
+    }
 
 
 def choose_generated_collection_action(existing_collections: Sequence[dict], expected_name: str, asset_name: str) -> str:
