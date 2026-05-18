@@ -549,7 +549,7 @@ def _resolve_preserved_pelvis_pair(
     entries = [
         {
             "source_bone_name": name,
-            "generated_bone_name": name,
+            "generated_bone_name": _spec_style_side_suffix(name),
             "geometry": copy.deepcopy(source_bones[name]),
         }
         for name in names
