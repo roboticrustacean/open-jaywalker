@@ -623,6 +623,28 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertNotIn("pelvis.L", report["built_core_targets"])
         self.assertNotIn("pelvis.R", report["built_core_targets"])
 
+    def test_spec_style_side_suffix_rewrites_common_conventions(self):
+        from asam_human_builder.builder import _spec_style_side_suffix
+        cases = [
+            ("DEF-pelvis.L", "DEF-pelvis_Left"),
+            ("DEF-pelvis.R", "DEF-pelvis_Right"),
+            ("pelvis.L", "pelvis_Left"),
+            ("pelvis.R", "pelvis_Right"),
+            ("mixamorig_LeftUpLeg_L", "mixamorig_LeftUpLeg_Left"),
+            ("hip_R", "hip_Right"),
+            ("Pelvis-L", "Pelvis_Left"),
+            ("Pelvis-R", "Pelvis_Right"),
+            # already spec-style: leave unchanged
+            ("DEF-pelvis_Left", "DEF-pelvis_Left"),
+            ("DEF-pelvis_Right", "DEF-pelvis_Right"),
+            # no recognizable side suffix: leave unchanged
+            ("DEF-spine", "DEF-spine"),
+            ("Hip", "Hip"),
+        ]
+        for source, expected in cases:
+            with self.subTest(source=source):
+                self.assertEqual(_spec_style_side_suffix(source), expected)
+
     def test_missing_right_limb_prefers_mirror_geometry(self):
         classifier_report = _base_classifier_report()
         build_plan = _base_build_plan()

@@ -624,6 +624,34 @@ def _find_opposite_pelvis_geometry(source_bone_name: Optional[str], source_bones
     return None
 
 
+def _spec_style_side_suffix(name: str) -> str:
+    """
+    Rewrite a source-style L/R side suffix to ASAM-style _Left/_Right.
+
+    ASAM OpenMATERIAL 3D §7.3.3.2: "The left and right side of the armature are
+    indicated with the keywords 'Left' and 'Right' as a suffix." Extension bones
+    that mirror a left/right pair should follow the same convention so consumer
+    tooling treats them uniformly with the 28 core targets.
+
+    Returns the input unchanged when no recognizable side suffix is present or
+    when the name already uses the spec-style suffix.
+    """
+    if name.endswith("_Left") or name.endswith("_Right"):
+        return name
+    replacements = [
+        (".L", "_Left"),
+        (".R", "_Right"),
+        ("_L", "_Left"),
+        ("_R", "_Right"),
+        ("-L", "_Left"),
+        ("-R", "_Right"),
+    ]
+    for src_suffix, target_suffix in replacements:
+        if name.endswith(src_suffix):
+            return name[: -len(src_suffix)] + target_suffix
+    return name
+
+
 def _opposite_name_candidates(name: str) -> List[str]:
     replacements = [
         (".L", ".R"),
