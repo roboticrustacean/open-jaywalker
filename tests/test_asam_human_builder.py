@@ -530,6 +530,99 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertAlmostEqual(hip_bone["head"][side_axis], centerline)
         self.assertAlmostEqual(hip_bone["tail"][side_axis], centerline)
 
+    def test_paired_pelvis_preserved_as_hip_children(self):
+        """Both source pelvis bones are added to the build spec as children of Hip."""
+        classifier_report = _base_classifier_report()
+        build_plan = _base_build_plan()
+        classifier_report["semantic_mapping"]["Hip"]["action"] = "repair_in_builder"
+        classifier_report["semantic_mapping"]["Hip"]["source_bone"] = "pelvis.L"
+        classifier_report["semantic_mapping"]["Hip"]["notes"] = ["paired_sided_pelvis_requires_centering"]
+
+        source_bones = {
+            "pelvis.L": _bone("pelvis.L", "Root", (0.0, 0.0, 1.0), (0.15, 0.0, 1.1)),
+            "pelvis.R": _bone("pelvis.R", "Root", (0.0, 0.0, 1.0), (-0.15, 0.0, 1.1)),
+        }
+
+        build_spec = build_armature_spec(classifier_report, build_plan, source_bones)
+
+        # Both preserved bones land in the spec with their source names and parent=Hip.
+        bone_names = [bone["name"] for bone in build_spec["bones"]]
+        self.assertIn("pelvis.L", bone_names)
+        self.assertIn("pelvis.R", bone_names)
+        for preserved_name in ("pelvis.L", "pelvis.R"):
+            preserved = _spec_bone(build_spec, preserved_name)
+            self.assertEqual(preserved["parent_bone"], "Hip")
+            self.assertEqual(preserved["geometry_source"], "source_bone")
+            self.assertEqual(preserved["source_bone"], preserved_name)
+            self.assertEqual(preserved["semantic_action"], "preserve_paired_pelvis")
+
+        # build_spec advertises the preservation in deterministic order.
+        self.assertEqual(
+            build_spec["preserved_pelvis_pair"],
+            [
+                {"source_bone_name": "pelvis.L", "generated_bone_name": "pelvis.L", "parent": "Hip"},
+                {"source_bone_name": "pelvis.R", "generated_bone_name": "pelvis.R", "parent": "Hip"},
+            ],
+        )
+
+    def test_paired_pelvis_vertex_groups_remap_is_no_op(self):
+        """After preservation, pelvis vertex groups bind directly with no rename."""
+        classifier_report = _base_classifier_report()
+        build_plan = _base_build_plan()
+        classifier_report["semantic_mapping"]["Hip"]["action"] = "repair_in_builder"
+        classifier_report["semantic_mapping"]["Hip"]["source_bone"] = "pelvis.L"
+        classifier_report["semantic_mapping"]["Hip"]["notes"] = ["paired_sided_pelvis_requires_centering"]
+
+        source_bones = {
+            "pelvis.L": _bone("pelvis.L", "Root", (0.0, 0.0, 1.0), (0.15, 0.0, 1.1)),
+            "pelvis.R": _bone("pelvis.R", "Root", (0.0, 0.0, 1.0), (-0.15, 0.0, 1.1)),
+        }
+
+        build_spec = build_armature_spec(classifier_report, build_plan, source_bones)
+        plan = compute_vertex_group_remap_plan(
+            build_spec["bones"],
+            ["pelvis.L", "pelvis.R", "Hip"],
+        )
+
+        # No pelvis group is renamed; both bind directly to preserved bones.
+        for rename in plan["renames"]:
+            self.assertNotIn(rename["source"], ("pelvis.L", "pelvis.R"))
+        # Neither pelvis group is reported as unmapped.
+        self.assertNotIn("pelvis.L", plan["unmapped_groups"])
+        self.assertNotIn("pelvis.R", plan["unmapped_groups"])
+
+    def test_builder_report_includes_preserved_pelvis_pair_field(self):
+        """build_builder_report carries the preservation entries through verbatim."""
+        classifier_report = _base_classifier_report()
+        build_plan = _base_build_plan()
+        classifier_report["semantic_mapping"]["Hip"]["action"] = "repair_in_builder"
+        classifier_report["semantic_mapping"]["Hip"]["source_bone"] = "pelvis.L"
+        classifier_report["semantic_mapping"]["Hip"]["notes"] = ["paired_sided_pelvis_requires_centering"]
+
+        source_bones = {
+            "pelvis.L": _bone("pelvis.L", "Root", (0.0, 0.0, 1.0), (0.15, 0.0, 1.1)),
+            "pelvis.R": _bone("pelvis.R", "Root", (0.0, 0.0, 1.0), (-0.15, 0.0, 1.1)),
+        }
+
+        build_spec = build_armature_spec(classifier_report, build_plan, source_bones)
+        execution_result = {
+            "generated_collection_name": build_spec["generated_collection_name"],
+            "group_root_name": build_spec["group_root_name"],
+            "generated_armature_name": build_spec["generated_armature_name"],
+            "collection_action": "create",
+            "duplicated_meshes": [],
+            "skipped_meshes": [],
+            "mesh_warnings": [],
+        }
+        report = build_builder_report(build_spec, execution_result)
+
+        # Preserved pair carried through verbatim.
+        self.assertEqual(report["preserved_pelvis_pair"], build_spec["preserved_pelvis_pair"])
+        # built_core_targets covers only the 28 ASAM core bones - preserved extras are not counted.
+        self.assertEqual(set(report["built_core_targets"]), set(CORE_TARGETS))
+        self.assertNotIn("pelvis.L", report["built_core_targets"])
+        self.assertNotIn("pelvis.R", report["built_core_targets"])
+
     def test_missing_right_limb_prefers_mirror_geometry(self):
         classifier_report = _base_classifier_report()
         build_plan = _base_build_plan()
@@ -1380,24 +1473,26 @@ class ComputeVertexGroupRemapPlanTests(unittest.TestCase):
         # Those groups have no bone in the generated armature - they are orphans.
         self.assertEqual(plan["unmapped_groups"], ["Hip", "Lower_Arm_Left", "Neck"])
 
-    def test_includes_source_root_and_centered_pelvis_pair(self):
+    def test_centered_pelvis_pair_does_not_rename_pelvis_groups(self):
+        # When Hip is built via paired-pelvis centering, the synthetic Hip bone must
+        # NOT claim either side's vertex group. Both source pelvis bones are preserved
+        # as separate children of Hip (added to build_spec["bones"] by
+        # _resolve_preserved_pelvis_pair), so the pelvis vertex groups bind directly
+        # to the preserved bones with no rename.
         bones = [
             _remap_bone("Root", "root", geometry_source="root_resolution"),
             _remap_bone("Hip", "DEF-pelvis.L", geometry_source="centered_pelvis_pair"),
+            _remap_bone("DEF-pelvis.L", "DEF-pelvis.L", geometry_source="source_bone"),
+            _remap_bone("DEF-pelvis.R", "DEF-pelvis.R", geometry_source="source_bone"),
         ]
         groups = ["root", "DEF-pelvis.L", "DEF-pelvis.R"]
 
         plan = compute_vertex_group_remap_plan(bones, groups)
 
-        self.assertEqual(
-            plan["renames"],
-            [
-                {"source": "DEF-pelvis.L", "target": "Hip"},
-                {"source": "root", "target": "Root"},
-            ],
-        )
-        # DEF-pelvis.R was not selected by the build plan - reported as unmapped (future many-to-one merge).
-        self.assertEqual(plan["unmapped_groups"], ["DEF-pelvis.R"])
+        # Only the root rename happens; the pelvis groups already match preserved bone names.
+        self.assertEqual(plan["renames"], [{"source": "root", "target": "Root"}])
+        # Neither pelvis group is orphaned - they bind directly to preserved bones.
+        self.assertEqual(plan["unmapped_groups"], [])
 
     def test_handles_empty_inputs(self):
         self.assertEqual(

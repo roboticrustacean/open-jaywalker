@@ -21,8 +21,13 @@ GENERATED_ASSET_KEY = "open_jaywalker_asset"
 # source bone name suitable for vertex group remapping. Synthesized values (mirrored,
 # interpolated, extrapolated, placement_fallback) instead hold an ASAM target name
 # in source_bone and must be skipped by the remap planner.
+#
+# "centered_pelvis_pair" is intentionally absent: when Hip is built via paired-pelvis
+# centering, both source pelvis bones are preserved as separate children of Hip
+# (see _resolve_preserved_pelvis_pair), and the synthetic Hip must not steal either
+# side's vertex group.
 SOURCE_NAMED_GEOMETRY_SOURCES = frozenset(
-    {"source_bone", "source_root", "centered_pelvis_pair", "root_resolution"}
+    {"source_bone", "source_root", "root_resolution"}
 )
 
 REQUIRED_REPORT_FIELDS = {
@@ -326,6 +331,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         "extras_preserved": copy.deepcopy(build_plan.get("extras_preserved", [])),
         "source_translation_offset": list(source_translation_offset),
         "bones": [],
+        "preserved_pelvis_pair": [],
         "warnings": [],
     }
 
@@ -358,14 +364,38 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
             }
         )
 
+    for entry in _resolve_preserved_pelvis_pair(semantic_mapping, translated_source_bones):
+        spec["bones"].append(
+            {
+                "name": entry["generated_bone_name"],
+                "parent_bone": "Hip",
+                "head": entry["geometry"]["head"],
+                "tail": entry["geometry"]["tail"],
+                "use_connect": False,
+                "geometry_source": "source_bone",
+                "source_bone": entry["source_bone_name"],
+                "semantic_action": "preserve_paired_pelvis",
+            }
+        )
+        spec["preserved_pelvis_pair"].append(
+            {
+                "source_bone_name": entry["source_bone_name"],
+                "generated_bone_name": entry["generated_bone_name"],
+                "parent": "Hip",
+            }
+        )
+
     return spec
 
 
 def build_builder_report(build_spec: dict, execution_result: dict) -> dict:
     """Summarize a finished builder run for traceability."""
+    core_target_names = set(CORE_TARGETS)
     source_targets = []
     created_targets = []
     for bone in build_spec["bones"]:
+        if bone["name"] not in core_target_names:
+            continue
         if bone["geometry_source"] in {"source_bone", "source_root"}:
             source_targets.append(bone["name"])
         else:
@@ -381,10 +411,11 @@ def build_builder_report(build_spec: dict, execution_result: dict) -> dict:
         "duplicated_meshes": copy.deepcopy(execution_result.get("duplicated_meshes", [])),
         "skipped_meshes": copy.deepcopy(execution_result.get("skipped_meshes", [])),
         "mesh_warnings": list(execution_result.get("mesh_warnings", [])),
-        "built_core_targets": [bone["name"] for bone in build_spec["bones"]],
+        "built_core_targets": [bone["name"] for bone in build_spec["bones"] if bone["name"] in core_target_names],
         "targets_from_source_geometry": source_targets,
         "targets_created_heuristically": created_targets,
         "preserved_extras_count": len(build_spec.get("extras_preserved", [])),
+        "preserved_pelvis_pair": copy.deepcopy(build_spec.get("preserved_pelvis_pair", [])),
         "warnings": list(build_spec.get("warnings", [])),
     }
 
@@ -425,6 +456,13 @@ def print_builder_summary(builder_report: dict, report_path: Path) -> None:
         )
     )
     print("Preserved extras count: {0}".format(builder_report["preserved_extras_count"]))
+    preserved_pair = builder_report.get("preserved_pelvis_pair", [])
+    if preserved_pair:
+        print(
+            "Preserved pelvis pair: {0}".format(
+                ", ".join(entry["generated_bone_name"] for entry in preserved_pair)
+            )
+        )
     if builder_report["warnings"]:
         print("Warnings: {0}".format(", ".join(builder_report["warnings"])))
     print("Builder report written to: {0}".format(report_path))
@@ -481,6 +519,43 @@ def _hip_requires_centered_pelvis_pair(payload: dict) -> bool:
     return payload.get("action") == "repair_in_builder" and "paired_sided_pelvis_requires_centering" in set(
         payload.get("notes", [])
     )
+
+
+def _resolve_preserved_pelvis_pair(
+    semantic_mapping: dict,
+    source_bones: Dict[str, dict],
+) -> List[dict]:
+    """
+    When Hip is built via paired-pelvis centering, preserve both source pelvis bones
+    as children of the synthetic Hip so their vertex weights are not destroyed.
+
+    Returns a list of {"source_bone_name", "generated_bone_name", "geometry"} entries
+    in deterministic (sorted) order. Empty list when the case does not apply.
+    """
+    hip_payload = semantic_mapping.get("Hip", {})
+    if not _hip_requires_centered_pelvis_pair(hip_payload):
+        return []
+
+    primary_name = hip_payload.get("source_bone")
+    if not primary_name or primary_name not in source_bones:
+        return []
+
+    names: List[str] = [primary_name]
+    for candidate in _opposite_name_candidates(primary_name):
+        if candidate in source_bones and candidate not in names:
+            names.append(candidate)
+            break
+
+    entries = [
+        {
+            "source_bone_name": name,
+            "generated_bone_name": name,
+            "geometry": copy.deepcopy(source_bones[name]),
+        }
+        for name in names
+    ]
+    entries.sort(key=lambda entry: entry["source_bone_name"])
+    return entries
 
 
 def _resolve_centered_hip_geometry(
