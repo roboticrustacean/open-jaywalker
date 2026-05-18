@@ -678,6 +678,42 @@ class AsamHumanBuilderTests(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertEqual(_spec_style_side_suffix(source), expected)
 
+    def test_bone_has_skin_weight_reads_mesh_binding_stats(self):
+        from asam_human_builder.builder import _bone_has_skin_weight
+        mesh_binding = {
+            "armature_object_name": "Rig",
+            "meshes": [
+                {
+                    "mesh_name": "BodyMesh",
+                    "vertex_group_stats": {
+                        "non_empty_group_count": 1,
+                        "per_group": [
+                            {"name": "pelvis.L", "weighted_vertex_count": 12},
+                            {"name": "pelvis.R", "weighted_vertex_count": 0},
+                        ],
+                    },
+                },
+                {
+                    "mesh_name": "Hair",
+                    "vertex_group_stats": {
+                        "non_empty_group_count": 0,
+                        "per_group": [
+                            {"name": "pelvis.R", "weighted_vertex_count": 0},
+                        ],
+                    },
+                },
+            ],
+        }
+        # Weighted on at least one mesh: True.
+        self.assertTrue(_bone_has_skin_weight("pelvis.L", mesh_binding))
+        # Zero weight across all meshes that mention it: False.
+        self.assertFalse(_bone_has_skin_weight("pelvis.R", mesh_binding))
+        # Not present in any mesh's vertex_group_stats: False.
+        self.assertFalse(_bone_has_skin_weight("nonexistent", mesh_binding))
+        # Empty mesh_binding: False (and must not raise).
+        self.assertFalse(_bone_has_skin_weight("pelvis.L", {}))
+        self.assertFalse(_bone_has_skin_weight("pelvis.L", {"meshes": []}))
+
     def test_missing_right_limb_prefers_mirror_geometry(self):
         classifier_report = _base_classifier_report()
         build_plan = _base_build_plan()

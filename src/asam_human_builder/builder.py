@@ -521,6 +521,32 @@ def _hip_requires_centered_pelvis_pair(payload: dict) -> bool:
     )
 
 
+def _bone_has_skin_weight(source_bone_name: str, mesh_binding: dict) -> bool:
+    """
+    Return True iff any mesh in mesh_binding has a vertex group named
+    `source_bone_name` with weighted_vertex_count > 0.
+
+    Tolerates missing keys: empty mesh_binding, missing vertex_group_stats,
+    missing per_group, and missing weighted_vertex_count all yield False
+    rather than raise. The inspector always populates the per_group list,
+    so missing entries mean "not weighted on this mesh" and not "unknown".
+    """
+    if not source_bone_name or not isinstance(mesh_binding, dict):
+        return False
+    for mesh in mesh_binding.get("meshes", []) or []:
+        stats = mesh.get("vertex_group_stats") or {}
+        for group in stats.get("per_group", []) or []:
+            if group.get("name") != source_bone_name:
+                continue
+            count = group.get("weighted_vertex_count")
+            try:
+                if int(count) > 0:
+                    return True
+            except (TypeError, ValueError):
+                continue
+    return False
+
+
 def _resolve_preserved_pelvis_pair(
     semantic_mapping: dict,
     source_bones: Dict[str, dict],
