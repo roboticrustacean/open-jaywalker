@@ -656,6 +656,69 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertNotIn("pelvis_Left", report["built_core_targets"])
         self.assertNotIn("pelvis_Right", report["built_core_targets"])
 
+    def test_unweighted_paired_pelvis_is_not_preserved(self):
+        """When neither pelvis source bone carries skin weights, no extension
+        bones are added — the synthetic Hip stands alone."""
+        classifier_report = _base_classifier_report()
+        build_plan = _base_build_plan()
+        classifier_report["semantic_mapping"]["Hip"]["action"] = "repair_in_builder"
+        classifier_report["semantic_mapping"]["Hip"]["source_bone"] = "pelvis.L"
+        classifier_report["semantic_mapping"]["Hip"]["notes"] = ["paired_sided_pelvis_requires_centering"]
+        build_plan["mesh_binding"]["meshes"][0]["vertex_group_stats"] = {
+            "non_empty_group_count": 0,
+            "per_group": [
+                {"name": "pelvis.L", "weighted_vertex_count": 0},
+                {"name": "pelvis.R", "weighted_vertex_count": 0},
+            ],
+        }
+
+        source_bones = {
+            "pelvis.L": _bone("pelvis.L", "Root", (0.0, 0.0, 1.0), (0.15, 0.0, 1.1)),
+            "pelvis.R": _bone("pelvis.R", "Root", (0.0, 0.0, 1.0), (-0.15, 0.0, 1.1)),
+        }
+
+        build_spec = build_armature_spec(classifier_report, build_plan, source_bones)
+
+        self.assertEqual(build_spec["preserved_pelvis_pair"], [])
+        bone_names = [bone["name"] for bone in build_spec["bones"]]
+        self.assertNotIn("pelvis_Left", bone_names)
+        self.assertNotIn("pelvis_Right", bone_names)
+        self.assertNotIn("pelvis.L", bone_names)
+        self.assertNotIn("pelvis.R", bone_names)
+        # Hip itself is still in the build spec — only the extras are gated.
+        self.assertEqual(_spec_bone(build_spec, "Hip")["geometry_source"], "centered_pelvis_pair")
+
+    def test_one_sided_weighted_paired_pelvis_preserves_only_weighted_side(self):
+        """If only one pelvis side carries skin weight, only that side is preserved.
+        The other side is dead weight in the source rig and would not deform anything."""
+        classifier_report = _base_classifier_report()
+        build_plan = _base_build_plan()
+        classifier_report["semantic_mapping"]["Hip"]["action"] = "repair_in_builder"
+        classifier_report["semantic_mapping"]["Hip"]["source_bone"] = "pelvis.L"
+        classifier_report["semantic_mapping"]["Hip"]["notes"] = ["paired_sided_pelvis_requires_centering"]
+        build_plan["mesh_binding"]["meshes"][0]["vertex_group_stats"] = {
+            "non_empty_group_count": 1,
+            "per_group": [
+                {"name": "pelvis.L", "weighted_vertex_count": 12},
+                {"name": "pelvis.R", "weighted_vertex_count": 0},
+            ],
+        }
+
+        source_bones = {
+            "pelvis.L": _bone("pelvis.L", "Root", (0.0, 0.0, 1.0), (0.15, 0.0, 1.1)),
+            "pelvis.R": _bone("pelvis.R", "Root", (0.0, 0.0, 1.0), (-0.15, 0.0, 1.1)),
+        }
+
+        build_spec = build_armature_spec(classifier_report, build_plan, source_bones)
+
+        self.assertEqual(
+            build_spec["preserved_pelvis_pair"],
+            [{"source_bone_name": "pelvis.L", "generated_bone_name": "pelvis_Left", "parent": "Hip"}],
+        )
+        bone_names = [bone["name"] for bone in build_spec["bones"]]
+        self.assertIn("pelvis_Left", bone_names)
+        self.assertNotIn("pelvis_Right", bone_names)
+
     def test_spec_style_side_suffix_rewrites_common_conventions(self):
         from asam_human_builder.builder import _spec_style_side_suffix
         cases = [

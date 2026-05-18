@@ -364,7 +364,11 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
             }
         )
 
-    for entry in _resolve_preserved_pelvis_pair(semantic_mapping, translated_source_bones):
+    for entry in _resolve_preserved_pelvis_pair(
+        semantic_mapping,
+        translated_source_bones,
+        build_plan["mesh_binding"],
+    ):
         spec["bones"].append(
             {
                 "name": entry["generated_bone_name"],
@@ -550,13 +554,19 @@ def _bone_has_skin_weight(source_bone_name: str, mesh_binding: dict) -> bool:
 def _resolve_preserved_pelvis_pair(
     semantic_mapping: dict,
     source_bones: Dict[str, dict],
+    mesh_binding: dict,
 ) -> List[dict]:
     """
     When Hip is built via paired-pelvis centering, preserve both source pelvis bones
     as children of the synthetic Hip so their vertex weights are not destroyed.
 
+    A pelvis side is only preserved when at least one mesh in mesh_binding records
+    weighted_vertex_count > 0 for that source bone — unweighted extras would clutter
+    the generated armature without deforming anything.
+
     Returns a list of {"source_bone_name", "generated_bone_name", "geometry"} entries
-    in deterministic (sorted) order. Empty list when the case does not apply.
+    in deterministic (sorted) order. Empty list when the case does not apply or no
+    side carries skin weight.
     """
     hip_payload = semantic_mapping.get("Hip", {})
     if not _hip_requires_centered_pelvis_pair(hip_payload):
@@ -572,13 +582,14 @@ def _resolve_preserved_pelvis_pair(
             names.append(candidate)
             break
 
+    weighted_names = [name for name in names if _bone_has_skin_weight(name, mesh_binding)]
     entries = [
         {
             "source_bone_name": name,
             "generated_bone_name": _spec_style_side_suffix(name),
             "geometry": copy.deepcopy(source_bones[name]),
         }
-        for name in names
+        for name in weighted_names
     ]
     entries.sort(key=lambda entry: entry["source_bone_name"])
     return entries
