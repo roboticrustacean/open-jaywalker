@@ -40,7 +40,11 @@ from _harness import (  # noqa: E402
     reload_pipeline_modules,
     run_full_pipeline,
 )
-from _reduced_rig import LOWPOLY_REDUCED_DELETION_PATTERNS, reduce_armature_in_place  # noqa: E402
+from _reduced_rig import (  # noqa: E402
+    LOWPOLY_REDUCED_DELETION_PATTERNS,
+    LOWPOLY_REDUCED_KEEP_NAMES,
+    reduce_armature_in_place,
+)
 
 # Core targets that should become unrecoverable once we drop hands/feet/spine
 # subdivisions on the source. The classifier should mark each of these with an
@@ -175,7 +179,10 @@ def main() -> None:
     deleted: list = []
     for armature_obj in armatures:
         per_armature_deleted = reduce_armature_in_place(
-            bpy, armature_obj, LOWPOLY_REDUCED_DELETION_PATTERNS
+            bpy,
+            armature_obj,
+            LOWPOLY_REDUCED_DELETION_PATTERNS,
+            keep_names=LOWPOLY_REDUCED_KEEP_NAMES,
         )
         deleted.extend("{0}::{1}".format(armature_obj.name, name) for name in per_armature_deleted)
         print(
