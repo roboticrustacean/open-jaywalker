@@ -258,10 +258,18 @@ def build_source_bone_index_from_export(asset_dir: Path, armature_name: str) -> 
 
 
 def resolve_default_asset_dir(blend_filepath: Optional[str], builder_dir: Optional[Path] = None) -> Path:
-    """Resolve the default asset output folder from the open Blender file path."""
-    builder_dir = Path(builder_dir or Path(__file__).resolve().parent)
+    """
+    Resolve the default asset output folder from the open Blender file path.
+
+    Delegates to pipeline_paths.resolve_asset_dir so the location honors the
+    OPEN_JAYWALKER_OUTPUT_ROOT env override. The `builder_dir` argument is
+    accepted for backwards compatibility with callers that pass it but is
+    no longer used to compute the result.
+    """
+    del builder_dir  # signal that the argument is intentionally ignored
     asset_name = Path(blend_filepath).stem if blend_filepath else "unsaved"
-    return (builder_dir.parent / "armature_inspector" / "output" / asset_name).resolve()
+    from pipeline_paths import resolve_asset_dir
+    return resolve_asset_dir(asset_name)
 
 
 def build_armature_spec_from_asset_dir(asset_dir: Path) -> Tuple[dict, dict, dict]:

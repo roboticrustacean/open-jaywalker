@@ -1081,7 +1081,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
 
         self.assertEqual(
             resolved,
-            (REPO_ROOT / "src" / "armature_inspector" / "output" / "openmatexamplehuman").resolve(),
+            (REPO_ROOT / "output" / "openmatexamplehuman").resolve(),
         )
 
     def test_blender_builder_uses_asset_scoped_group_root_name_when_scene_name_is_taken(self):
