@@ -16,7 +16,7 @@ The extension launches a NEW Blender instance. To inspect a specific file:
 
 The output includes a file summary so you can verify which file was inspected.
 
-To refresh exported armature JSON (including mesh_binding) under src/armature_inspector/output/<blend_stem>/:
+To refresh exported armature JSON (including mesh_binding) under output/<blend_stem>/:
   - Open sample_assets/openmatexamplehuman.blend in Blender, run this script (Blender: Run Script), then
   - Open sample_assets/LowPolyCharacter4.blend and run again (or your local paths to those assets).
 Headless example if blender is on PATH: blender -b <path-to-blend> -P <path-to-this-main.py>

@@ -30,7 +30,7 @@ The combined Blender pipeline will:
 
 - Detect `ARMATURE` objects in the file
 - Traverse each armature’s bone hierarchy
-- Export the same Phase 2 JSON files under `src/armature_inspector/output/<asset>`
+- Export the same Phase 2 JSON files under `output/<asset>`
 - Run the Phase 3 classifier on that freshly exported folder
 - Write `classifier_report.json` and `build_plan.json` into the same asset folder
 
@@ -39,11 +39,11 @@ The inspector-only entrypoint will:
 - Detect `ARMATURE` objects in the file
 - Traverse each armature’s bone hierarchy
 - Print a clear, structured tree of bones, including OpenMATERIAL 3D–style skeletons.
-- Export the same Phase 2 JSON files under `src/armature_inspector/output/<asset>`
+- Export the same Phase 2 JSON files under `output/<asset>`
 
 The builder entrypoint will:
 
-- Load `classifier_report.json` and `build_plan.json` from `src/armature_inspector/output/<asset>`
+- Load `classifier_report.json` and `build_plan.json` from `output/<asset>`
 - Validate that the recommended source armature exists in the currently open `.blend`
 - Create or safely rebuild a generated collection named `ASAM_<AssetName>`
 - Create `Grp_Root` and `Armature_<AssetName>` and build the supported ASAM core skeleton scope inside that new armature
@@ -60,18 +60,18 @@ You can run the pipeline in four different ways depending on what you want to do
 
 2. Analysis only
    Open `src/armature_inspector/main.py` in Blender or via the VSCode Blender extension and run it.
-   This only performs the armature inspection and writes the Phase 2 JSON files under `src/armature_inspector/output/<asset>`.
+   This only performs the armature inspection and writes the Phase 2 JSON files under `output/<asset>`.
 
 3. Classification only
-   First make sure the asset already has Phase 2 JSON output under `src/armature_inspector/output/<asset>`.
+   First make sure the asset already has Phase 2 JSON output under `output/<asset>`.
    Then run the classifier separately from any Python environment that has this project's dependencies installed:
 
    ```powershell
-   python src/phase3_classifier/main.py --asset-dir src/armature_inspector/output/<asset>
+   python src/phase3_classifier/main.py --asset-dir output/<asset>
    ```
 
 4. Builder only
-   First make sure the asset already has fresh `classifier_report.json` and `build_plan.json` output under `src/armature_inspector/output/<asset>`.
+   First make sure the asset already has fresh `classifier_report.json` and `build_plan.json` output under `output/<asset>`.
    Then open the same `.blend` file in Blender and run `src/asam_human_builder/main.py`.
    This creates a separate generated ASAM armature instead of mutating the source rig in place.
 
@@ -82,12 +82,17 @@ This split workflow is useful when you want to:
 - keep Blender usage limited to the extraction/analysis step
 - generate a new ASAM-compliant armature without modifying the original rig
 
+Pipeline outputs land in `output/<asset>/` at the repo root. Set the
+`OPEN_JAYWALKER_OUTPUT_ROOT` environment variable to redirect that root
+elsewhere — handy when scripting or running automated tests that should
+not touch the canonical location.
+
 ### Phase 3 Offline Classifier
 
 If you want to run the classifier separately after exporting JSON from Blender, run it from any Python environment that has this project's dependencies installed:
 
 ```powershell
-python src/phase3_classifier/main.py --asset-dir src/armature_inspector/output/openmatexamplehuman
+python src/phase3_classifier/main.py --asset-dir output/openmatexamplehuman
 ```
 
 The classifier will:

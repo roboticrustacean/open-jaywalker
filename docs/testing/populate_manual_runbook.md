@@ -46,7 +46,7 @@ large to commit, so this case is out-of-CI by design.
 7. **Capture posed screenshot**: save as
    `docs/testing/populate_<character>_posed.png`.
 8. **Inspect reports**: open
-   `src/armature_inspector/output/<character>/builder_report.json` and verify:
+   `output/<character>/builder_report.json` and verify:
    - `built_core_targets` contains all 28 ASAM bones.
    - `duplicated_meshes` is non-empty.
    - `mesh_warnings` is either empty or contains only the expected codes

@@ -23,7 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--asset-dir",
         required=True,
-        help="Path to one asset folder under src/armature_inspector/output/<asset>.",
+        help="Path to one asset folder under output/<asset> (or wherever OPEN_JAYWALKER_OUTPUT_ROOT points).",
     )
     return parser
 
