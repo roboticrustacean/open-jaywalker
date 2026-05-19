@@ -89,6 +89,62 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
     }
 
 
+def purge_previous_generated_artifacts(bpy_module) -> int:
+    """
+    Remove every collection, object, and orphan data block left over from a
+    previous builder run (anything carrying our GENERATED_MARKER_KEY).
+
+    Without this step, a re-run inside the same Blender session sees the
+    previous-run's generated `Armature_<asset>` in `bpy.data.objects`. The
+    inspector exports it alongside the source rigs, and the classifier may
+    pick it as the recommended primary armature (because it already carries
+    clean ASAM-named bones). The build then crashes when it tries to look up
+    the source again — its own collection-rebuild step has just removed it.
+
+    Idempotent: returns 0 if nothing was found. Safe to call unconditionally
+    at the start of every pipeline run.
+    """
+    try:
+        bpy_module.ops.object.mode_set(mode="OBJECT")
+    except RuntimeError:
+        pass
+
+    removed = 0
+
+    # Pass 1: remove generated objects and any orphan data blocks they leave behind.
+    for obj in list(bpy_module.data.objects):
+        if not obj.get(GENERATED_MARKER_KEY):
+            continue
+        data_block = obj.data if getattr(obj, "type", None) in ("ARMATURE", "MESH") else None
+        bpy_module.data.objects.remove(obj, do_unlink=True)
+        removed += 1
+        if data_block is None:
+            continue
+        if getattr(data_block, "users", 0) != 0:
+            continue
+        # Use isinstance against bpy.types so we don't have to maintain a
+        # parallel type-name lookup.
+        if isinstance(data_block, bpy_module.types.Armature):
+            bpy_module.data.armatures.remove(data_block)
+        elif isinstance(data_block, bpy_module.types.Mesh):
+            bpy_module.data.meshes.remove(data_block)
+
+    # Pass 2: remove (now-empty) generated collections, unlinking from every scene first.
+    for collection in list(bpy_module.data.collections):
+        if not collection.get(GENERATED_MARKER_KEY):
+            continue
+        for scene in bpy_module.data.scenes:
+            if scene.collection.children.get(collection.name) is not None:
+                scene.collection.children.unlink(collection)
+        for parent in bpy_module.data.collections:
+            if parent.children.get(collection.name) is not None:
+                parent.children.unlink(collection)
+        bpy_module.data.collections.remove(collection)
+        removed += 1
+
+    return removed
+
+
 def _require_bpy():
     try:
         import bpy  # type: ignore

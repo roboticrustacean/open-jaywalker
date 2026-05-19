@@ -22,7 +22,10 @@ from asam_human_builder.builder import (  # noqa: E402
     resolve_default_asset_dir,
     validate_builder_inputs,
 )
-from asam_human_builder.blender_builder import build_armature_in_blender  # noqa: E402
+from asam_human_builder.blender_builder import (  # noqa: E402
+    build_armature_in_blender,
+    purge_previous_generated_artifacts,
+)
 from phase3_classifier.classifier import (  # noqa: E402
     CORE_TARGETS,
     DEFERRED_TARGETS,
@@ -285,6 +288,9 @@ class _FakeObjectStore:
     def __init__(self):
         self._objects = {}
 
+    def __iter__(self):
+        return iter(list(self._objects.values()))
+
     def get(self, name: str):
         return self._objects.get(name)
 
@@ -329,6 +335,22 @@ class _FakeArmatureStore:
 
     def remove(self, armature):
         self._armatures.pop(armature.name, None)
+
+
+class _FakeMeshStore:
+    def __init__(self):
+        self._meshes = {}
+
+    def get(self, name: str):
+        return self._meshes.get(name)
+
+    def new(self, name: str):
+        mesh = _FakeMeshData(name)
+        self._meshes[name] = mesh
+        return mesh
+
+    def remove(self, mesh):
+        self._meshes.pop(mesh.name, None)
 
 
 class _FakeCollectionObjectLinks:
@@ -437,8 +459,13 @@ class _FakeBpy:
         self.data = type("Data", (), {})()
         self.data.objects = _FakeObjectStore()
         self.data.armatures = _FakeArmatureStore()
+        self.data.meshes = _FakeMeshStore()
         self.data.collections = _FakeCollectionStore(self)
         self.data.scenes = [self.context.scene]
+        # Expose isinstance-able type markers for purge_previous_generated_artifacts
+        # to distinguish armature vs mesh data blocks without a parallel type-name
+        # lookup. Real bpy exposes these via bpy.types.Armature / bpy.types.Mesh.
+        self.types = type("Types", (), {"Armature": _FakeArmatureData, "Mesh": _FakeMeshData})()
         self.ops = _FakeOps(self.context)
 
     def add_source_armature(self, name: str):
@@ -1500,6 +1527,67 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertIsNotNone(generated_mesh)
         # matrix_world must be the unmodified copy from the source.
         self.assertEqual(generated_mesh.matrix_world, original_matrix)
+
+    def test_purge_previous_generated_artifacts_removes_marked_objects_and_collections(self):
+        """A FakeBpy with marked artifacts loses them on purge; unmarked source remains."""
+        bpy_module = _FakeBpy()
+        source = bpy_module.add_source_armature("rig")
+
+        generated_collection = bpy_module.data.collections.new("ASAM_Test")
+        generated_collection[GENERATED_MARKER_KEY] = True
+        generated_collection[GENERATED_ASSET_KEY] = "Test"
+        bpy_module.context.scene.collection.children.link(generated_collection)
+
+        generated_armature_data = bpy_module.data.armatures.new("Armature_Test")
+        generated_armature = bpy_module.data.objects.new("Armature_Test", generated_armature_data)
+        generated_armature[GENERATED_MARKER_KEY] = True
+        generated_armature[GENERATED_ASSET_KEY] = "Test"
+        generated_collection.objects.link(generated_armature)
+
+        generated_mesh_data = bpy_module.data.meshes.new("ASAM_BodyMeshData")
+        generated_mesh = bpy_module.data.objects.new("ASAM_BodyMesh", generated_mesh_data)
+        generated_mesh[GENERATED_MARKER_KEY] = True
+        generated_mesh[GENERATED_ASSET_KEY] = "Test"
+        generated_collection.objects.link(generated_mesh)
+
+        removed = purge_previous_generated_artifacts(bpy_module)
+
+        # 2 generated objects + 1 generated collection = 3 removed entries.
+        self.assertEqual(removed, 3)
+        # Unmarked source survives.
+        self.assertIs(bpy_module.data.objects.get("rig"), source)
+        # Generated objects are gone.
+        self.assertIsNone(bpy_module.data.objects.get("Armature_Test"))
+        self.assertIsNone(bpy_module.data.objects.get("ASAM_BodyMesh"))
+        # Their data blocks are orphan-cleaned.
+        self.assertIsNone(bpy_module.data.armatures.get("Armature_Test"))
+        self.assertIsNone(bpy_module.data.meshes.get("ASAM_BodyMeshData"))
+        # Generated collection is gone.
+        self.assertIsNone(bpy_module.data.collections.get("ASAM_Test"))
+
+    def test_purge_previous_generated_artifacts_is_idempotent_on_empty_scene(self):
+        """An empty FakeBpy is a valid input; purge returns 0 and raises nothing."""
+        bpy_module = _FakeBpy()
+        removed = purge_previous_generated_artifacts(bpy_module)
+        self.assertEqual(removed, 0)
+
+    def test_purge_previous_generated_artifacts_leaves_unmarked_collections_alone(self):
+        """Collections without GENERATED_MARKER_KEY survive the purge."""
+        bpy_module = _FakeBpy()
+
+        user_collection = bpy_module.data.collections.new("UserCollection")
+        bpy_module.context.scene.collection.children.link(user_collection)
+
+        generated_collection = bpy_module.data.collections.new("ASAM_Test")
+        generated_collection[GENERATED_MARKER_KEY] = True
+        generated_collection[GENERATED_ASSET_KEY] = "Test"
+        bpy_module.context.scene.collection.children.link(generated_collection)
+
+        removed = purge_previous_generated_artifacts(bpy_module)
+
+        self.assertEqual(removed, 1)
+        self.assertIsNotNone(bpy_module.data.collections.get("UserCollection"))
+        self.assertIsNone(bpy_module.data.collections.get("ASAM_Test"))
 
     def test_deferred_targets_list_is_empty(self):
         """DEFERRED_TARGETS must be empty — all ASAM bones are now promoted to CORE_TARGETS."""
