@@ -40,10 +40,7 @@ from _harness import (  # noqa: E402
     reload_pipeline_modules,
     run_full_pipeline,
 )
-from _reduced_rig import LOWPOLY_REDUCED_DELETIONS, reduce_armature_in_place  # noqa: E402
-
-
-SOURCE_ARMATURE_NAME = "rig"  # matches LowPolyCharacter4 source rig
+from _reduced_rig import LOWPOLY_REDUCED_DELETION_PATTERNS, reduce_armature_in_place  # noqa: E402
 
 # Core targets that should become unrecoverable once we drop hands/feet/spine
 # subdivisions on the source. The classifier should mark each of these with an
@@ -164,15 +161,30 @@ def main() -> None:
     ensure_src_on_path()
     reload_pipeline_modules()
 
-    armature_obj = bpy.data.objects.get(SOURCE_ARMATURE_NAME)
-    if armature_obj is None or armature_obj.type != "ARMATURE":
+    # Rigify rigs ship as a pair: the editing `metarig` and the generated `rig`.
+    # The classifier picks one as primary but both end up in the inspector
+    # export, and either can supply a name-match source bone. Apply the deletion
+    # to every armature in the scene so the missing-source path is genuinely
+    # exercised end-to-end.
+    armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
+    if not armatures:
         raise RuntimeError(
-            "Expected source armature '{0}' is not in the open scene. "
-            "Open sample_assets/LowPolyCharacter4.blend first.".format(SOURCE_ARMATURE_NAME)
+            "No armatures in the open scene. Open sample_assets/LowPolyCharacter4.blend first."
         )
 
-    deleted = reduce_armature_in_place(bpy, armature_obj, LOWPOLY_REDUCED_DELETIONS)
-    print("Deleted {0} bones from source rig: {1}".format(len(deleted), ", ".join(deleted)))
+    deleted: list = []
+    for armature_obj in armatures:
+        per_armature_deleted = reduce_armature_in_place(
+            bpy, armature_obj, LOWPOLY_REDUCED_DELETION_PATTERNS
+        )
+        deleted.extend("{0}::{1}".format(armature_obj.name, name) for name in per_armature_deleted)
+        print(
+            "Deleted {0} bones from armature '{1}': {2}".format(
+                len(per_armature_deleted),
+                armature_obj.name,
+                ", ".join(per_armature_deleted) if per_armature_deleted else "(none)",
+            )
+        )
 
     pipeline_result = run_full_pipeline(bpy)
     asset_dir = pipeline_result["asset_dir"]
