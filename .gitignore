@@ -78,4 +78,8 @@ dmypy.json
 .ruff_cache/
 
 # Output
-# output/ #Will include output from an example blend file 
+# output/ #Will include output from an example blend file
+
+# Pipeline runtime outputs. Inspector + classifier + builder write here by
+# default; redirected via OPEN_JAYWALKER_OUTPUT_ROOT for tests and runbooks.
+/output/
