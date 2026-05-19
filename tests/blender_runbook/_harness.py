@@ -73,15 +73,85 @@ def reload_pipeline_modules() -> None:
                 sys.modules.pop(name, None)
 
 
+def purge_previous_generated_artifacts(bpy_module) -> int:
+    """
+    Remove every collection, object, and orphan data block left over from a
+    previous builder run (anything carrying our GENERATED_MARKER_KEY).
+
+    Without this step, a re-run inside the same Blender session sees the
+    previous-run's generated `Armature_<asset>` in `bpy.data.objects`. The
+    inspector exports it alongside the source rigs, and the classifier may
+    pick it as the recommended primary armature (because it already carries
+    clean ASAM-named bones). The build then crashes when it tries to look up
+    the source again — its own collection-rebuild step has just removed it.
+
+    Idempotent: returns 0 if nothing was found. Safe to call unconditionally
+    at the start of every pipeline run.
+    """
+    ensure_src_on_path()
+    try:
+        from builder import GENERATED_ASSET_KEY, GENERATED_MARKER_KEY  # noqa: F401
+    except ImportError:
+        from asam_human_builder.builder import GENERATED_ASSET_KEY, GENERATED_MARKER_KEY  # noqa: F401
+
+    try:
+        bpy_module.ops.object.mode_set(mode="OBJECT")
+    except RuntimeError:
+        pass
+
+    removed = 0
+
+    # Pass 1: remove generated objects and any orphan data blocks they leave behind.
+    for obj in list(bpy_module.data.objects):
+        if not obj.get(GENERATED_MARKER_KEY):
+            continue
+        data_block = obj.data if getattr(obj, "type", None) in ("ARMATURE", "MESH") else None
+        bpy_module.data.objects.remove(obj, do_unlink=True)
+        removed += 1
+        if data_block is None:
+            continue
+        if getattr(data_block, "users", 0) != 0:
+            continue
+        # Use isinstance against bpy.types so we don't have to maintain a
+        # parallel type-name lookup.
+        if isinstance(data_block, bpy_module.types.Armature):
+            bpy_module.data.armatures.remove(data_block)
+        elif isinstance(data_block, bpy_module.types.Mesh):
+            bpy_module.data.meshes.remove(data_block)
+
+    # Pass 2: remove (now-empty) generated collections, unlinking from every scene first.
+    for collection in list(bpy_module.data.collections):
+        if not collection.get(GENERATED_MARKER_KEY):
+            continue
+        for scene in bpy_module.data.scenes:
+            if scene.collection.children.get(collection.name) is not None:
+                scene.collection.children.unlink(collection)
+        for parent in bpy_module.data.collections:
+            if parent.children.get(collection.name) is not None:
+                parent.children.unlink(collection)
+        bpy_module.data.collections.remove(collection)
+        removed += 1
+
+    return removed
+
+
 def run_full_pipeline(bpy_module) -> dict:
     """
     Run inspector + classifier + builder against the currently open .blend.
+
+    Always purges leftover generated artifacts first so the pipeline starts
+    from a clean state - this is what makes the runbook scripts safe to
+    re-run inside the same Blender session.
 
     Returns a dict with: asset_dir, build_spec, builder_report, builder_report_path,
     generated_armature_name, asset_name.
     """
     ensure_src_on_path()
     reload_pipeline_modules()
+
+    purged = purge_previous_generated_artifacts(bpy_module)
+    if purged:
+        print("Purged {0} leftover generated artifact(s) from a previous run.".format(purged))
 
     from inspector import inspect_scene
     from classifier import write_asset_report

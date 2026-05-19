@@ -37,6 +37,7 @@ import bpy  # noqa: E402
 from _harness import (  # noqa: E402
     DOCS_TESTING,
     ensure_src_on_path,
+    purge_previous_generated_artifacts,
     reload_pipeline_modules,
     run_full_pipeline,
 )
@@ -165,15 +166,34 @@ def main() -> None:
     ensure_src_on_path()
     reload_pipeline_modules()
 
+    # Purge any leftover ASAM_<asset> collection from a previous runbook
+    # execution in the same Blender session. Without this, the generated
+    # armature would still be in bpy.data.objects, the destruction sweep
+    # would damage it, and the classifier could pick it as recommended
+    # primary armature (because its bones are already ASAM-named) — which
+    # would crash the builder downstream.
+    purged = purge_previous_generated_artifacts(bpy)
+    if purged:
+        print("Purged {0} leftover generated artifact(s) before destructive pass.".format(purged))
+
     # Rigify rigs ship as a pair: the editing `metarig` and the generated `rig`.
     # The classifier picks one as primary but both end up in the inspector
     # export, and either can supply a name-match source bone. Apply the deletion
-    # to every armature in the scene so the missing-source path is genuinely
-    # exercised end-to-end.
-    armatures = [obj for obj in bpy.data.objects if obj.type == "ARMATURE"]
+    # to every NON-generated armature in the scene so the missing-source path
+    # is genuinely exercised end-to-end. (Generated armatures would already be
+    # gone after the purge above; the marker filter is belt-and-suspenders.)
+    try:
+        from builder import GENERATED_MARKER_KEY
+    except ImportError:
+        from asam_human_builder.builder import GENERATED_MARKER_KEY
+    armatures = [
+        obj
+        for obj in bpy.data.objects
+        if obj.type == "ARMATURE" and not obj.get(GENERATED_MARKER_KEY)
+    ]
     if not armatures:
         raise RuntimeError(
-            "No armatures in the open scene. Open sample_assets/LowPolyCharacter4.blend first."
+            "No source armatures in the open scene. Open sample_assets/LowPolyCharacter4.blend first."
         )
 
     deleted: list = []
