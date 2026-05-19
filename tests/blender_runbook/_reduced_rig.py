@@ -17,6 +17,9 @@ ASAM axis (e.g. `DEF-spine` so Lower_Spine still has a source).
 Constraints on surviving bones that reference a deleted bone are stripped in
 the same pass to silence the Blender depsgraph's "Failed to add relation"
 warnings - the constraints are inert anyway after their subtarget is gone.
+The sweep checks every reference path a constraint can carry: `.subtarget`
+(most constraints), `.pole_subtarget` (IK), and `.targets[*].subtarget` (the
+Armature constraint that Rigify uses for SWITCH_PARENT).
 """
 
 from __future__ import annotations
@@ -102,7 +105,7 @@ def reduce_armature_in_place(
             stale = [
                 constraint
                 for constraint in pose_bone.constraints
-                if getattr(constraint, "subtarget", "") in targets_set
+                if _constraint_references_deleted_bone(constraint, targets_set)
             ]
             for constraint in stale:
                 pose_bone.constraints.remove(constraint)
@@ -125,3 +128,27 @@ def reduce_armature_in_place(
 
     bpy_module.ops.object.mode_set(mode="OBJECT")
     return deleted
+
+
+def _constraint_references_deleted_bone(constraint, deleted_bone_names) -> bool:
+    """
+    Return True if any of `constraint`'s bone references points at a deleted bone.
+
+    Covers the three reference paths a Blender bone constraint can carry:
+      - `subtarget` — most constraints (Stretch To, Copy *, Damped Track, IK, ...)
+      - `pole_subtarget` — IK constraint's pole target
+      - `targets[*].subtarget` — Armature constraint (used by Rigify SWITCH_PARENT)
+
+    Missing attributes (e.g. constraints without a pole or without a targets
+    collection) are treated as "no reference of that kind" rather than as an
+    error.
+    """
+    for attr in ("subtarget", "pole_subtarget"):
+        if getattr(constraint, attr, "") in deleted_bone_names:
+            return True
+    targets = getattr(constraint, "targets", None)
+    if targets is not None:
+        for target in targets:
+            if getattr(target, "subtarget", "") in deleted_bone_names:
+                return True
+    return False
