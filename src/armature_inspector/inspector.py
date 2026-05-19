@@ -10,6 +10,8 @@ ASAM OpenMATERIAL 3D assets).
 import json
 import os
 import re
+import sys
+from pathlib import Path
 
 import bpy
 
@@ -998,13 +1000,11 @@ def _get_output_dir():
     else:
         blend_name = "unsaved"
 
-    # Lazy import + defensive sys.path patch: the inspector is loaded from
-    # inside Blender via src/pipeline/main.py, which adds src/ to sys.path
-    # before this module runs. Importing at module top would fail in some
-    # test environments that import inspector before configuring sys.path.
-    import sys
-    from pathlib import Path
-    src_dir = str(Path(os.path.abspath(__file__)).resolve().parent.parent)
+    # Defensive sys.path patch + lazy pipeline_paths import: the inspector is
+    # loaded from inside Blender via src/pipeline/main.py, which adds src/ to
+    # sys.path before this module runs. Test environments that import the
+    # inspector directly without configuring sys.path need this fallback.
+    src_dir = str(Path(__file__).resolve().parents[1])
     if src_dir not in sys.path:
         sys.path.append(src_dir)
     from pipeline_paths import resolve_asset_dir
