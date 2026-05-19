@@ -720,7 +720,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertNotIn("pelvis_Right", bone_names)
 
     def test_spec_style_side_suffix_rewrites_common_conventions(self):
-        from asam_human_builder.builder import _spec_style_side_suffix
+        from asam_human_builder.geometry_resolution import _spec_style_side_suffix
         cases = [
             ("DEF-pelvis.L", "DEF-pelvis_Left"),
             ("DEF-pelvis.R", "DEF-pelvis_Right"),
