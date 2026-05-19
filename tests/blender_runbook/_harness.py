@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import importlib
 import math
+import os
 import sys
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -143,11 +145,23 @@ def run_full_pipeline(bpy_module) -> dict:
     from a clean state - this is what makes the runbook scripts safe to
     re-run inside the same Blender session.
 
+    Pipeline outputs (inspector JSONs, classifier_report, build_plan,
+    builder_report) are redirected to a fresh tempdir per call via the
+    OPEN_JAYWALKER_OUTPUT_ROOT env var so the committed test fixtures under
+    `tests/fixtures/` are never touched.
+
     Returns a dict with: asset_dir, build_spec, builder_report, builder_report_path,
     generated_armature_name, asset_name.
     """
     ensure_src_on_path()
     reload_pipeline_modules()
+
+    # Redirect this pipeline run's outputs to a fresh tempdir. The Blender
+    # process keeps the env var set between runs, but each run rewrites it
+    # to a unique location so old artifacts don't leak across calls.
+    runbook_output_root = tempfile.mkdtemp(prefix="open_jaywalker_runbook_")
+    os.environ["OPEN_JAYWALKER_OUTPUT_ROOT"] = runbook_output_root
+    print("Runbook output dir: {0}".format(runbook_output_root))
 
     purged = purge_previous_generated_artifacts(bpy_module)
     if purged:
