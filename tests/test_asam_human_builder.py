@@ -1528,6 +1528,36 @@ class AsamHumanBuilderTests(unittest.TestCase):
         # matrix_world must be the unmodified copy from the source.
         self.assertEqual(generated_mesh.matrix_world, original_matrix)
 
+    def test_blender_builder_refuses_to_build_from_previously_generated_armature(self):
+        """When the source armature carries GENERATED_MARKER_KEY (i.e. it is itself
+        a previously-generated artifact, picked up by the classifier from a stale
+        scene), the builder must hard-fail before mutating any collection."""
+        bpy_module = _FakeBpy()
+        source = bpy_module.add_source_armature("Armature_Test")
+        source[GENERATED_MARKER_KEY] = True
+        source[GENERATED_ASSET_KEY] = "Test"
+
+        build_spec = {
+            "asset_name": "Test",
+            "source_armature_name": "Armature_Test",
+            "generated_collection_name": "ASAM_Test",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_Test_v2",
+            "source_translation_offset": [0.0, 0.0, 0.0],
+            "mesh_binding": _mesh_binding("Armature_Test"),
+            "bones": [],
+        }
+
+        with self.assertRaises(ValueError) as ctx:
+            build_armature_in_blender(build_spec, bpy_module)
+
+        message = str(ctx.exception)
+        self.assertIn("previously-generated armature", message)
+        self.assertIn("Armature_Test", message)
+        # The failure must precede any collection mutation: nothing new in
+        # bpy.data.collections.
+        self.assertIsNone(bpy_module.data.collections.get("ASAM_Test"))
+
     def test_purge_previous_generated_artifacts_removes_marked_objects_and_collections(self):
         """A FakeBpy with marked artifacts loses them on purge; unmarked source remains."""
         bpy_module = _FakeBpy()

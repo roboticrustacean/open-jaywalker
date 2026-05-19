@@ -50,6 +50,19 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
             )
         )
 
+    if source_armature.get(GENERATED_MARKER_KEY):
+        # The classifier picked a previously-generated armature as the source.
+        # If we proceeded, `_remove_generated_collection` below would delete the
+        # collection that contains it and the build would crash on a freed
+        # Blender object. Refuse cleanly and point the user at the upstream fix.
+        raise ValueError(
+            "Refusing to build from a previously-generated armature '{0}'. "
+            "Close the .blend without saving and reopen it, or call "
+            "purge_previous_generated_artifacts(bpy) before re-running the pipeline.".format(
+                build_spec["source_armature_name"]
+            )
+        )
+
     collection_action = choose_generated_collection_action(
         snapshot_existing_collections(bpy_module),
         collection_name,
