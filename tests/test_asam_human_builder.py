@@ -502,6 +502,23 @@ class AsamHumanBuilderTests(unittest.TestCase):
         for hip_value, spine_value in zip(hip_bone["tail"], lower_spine_bone["head"]):
             self.assertAlmostEqual(hip_value, spine_value, places=6)
 
+        # Lock the realistic-data contract: both source pelvis bones must be
+        # preserved as children of Hip under their ASAM spec-style names, and
+        # the synthetic Hip itself must not appear in preserved_pelvis_pair.
+        self.assertEqual(
+            build_spec["preserved_pelvis_pair"],
+            [
+                {"source_bone_name": "DEF-pelvis.L", "generated_bone_name": "DEF-pelvis_Left", "parent": "Hip"},
+                {"source_bone_name": "DEF-pelvis.R", "generated_bone_name": "DEF-pelvis_Right", "parent": "Hip"},
+            ],
+        )
+        for generated_name, source_name in (("DEF-pelvis_Left", "DEF-pelvis.L"), ("DEF-pelvis_Right", "DEF-pelvis.R")):
+            preserved_bone = _spec_bone(build_spec, generated_name)
+            self.assertEqual(preserved_bone["parent_bone"], "Hip")
+            self.assertEqual(preserved_bone["geometry_source"], "source_bone")
+            self.assertEqual(preserved_bone["source_bone"], source_name)
+            self.assertEqual(preserved_bone["semantic_action"], "preserve_paired_pelvis")
+
     def test_repaired_paired_pelvis_creates_centered_hip_between_root_and_spine(self):
         classifier_report = _base_classifier_report()
         build_plan = _base_build_plan()
