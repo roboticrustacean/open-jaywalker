@@ -17,7 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 from phase3_classifier.classifier import write_asset_report  # noqa: E402
 
 
-FIXTURE_ROOT = REPO_ROOT / "src" / "armature_inspector" / "output"
+FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
 CLI_PATH = REPO_ROOT / "src" / "phase3_classifier" / "main.py"
 
 

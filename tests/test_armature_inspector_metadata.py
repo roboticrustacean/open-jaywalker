@@ -103,9 +103,8 @@ class ArmatureInspectorMetadataTests(unittest.TestCase):
     def test_openmatexamplehuman_armature_all_has_mesh_binding(self):
         path = (
             REPO_ROOT
-            / "src"
-            / "armature_inspector"
-            / "output"
+            / "tests"
+            / "fixtures"
             / "openmatexamplehuman"
             / "Armature_all.json"
         )
@@ -131,9 +130,8 @@ class ArmatureInspectorMetadataTests(unittest.TestCase):
     def test_lowpoly_rig_all_has_mesh_binding(self):
         path = (
             REPO_ROOT
-            / "src"
-            / "armature_inspector"
-            / "output"
+            / "tests"
+            / "fixtures"
             / "LowPolyCharacter4"
             / "rig_all.json"
         )

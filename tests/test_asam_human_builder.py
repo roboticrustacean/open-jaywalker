@@ -31,7 +31,7 @@ from phase3_classifier.classifier import (  # noqa: E402
 )
 
 
-FIXTURE_ROOT = REPO_ROOT / "src" / "armature_inspector" / "output"
+FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
 
 
 def _copy_asset_folder(asset_name: str) -> Path:
