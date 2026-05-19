@@ -987,17 +987,29 @@ def _build_hierarchy_dict(armature_obj, prefix_filter=None):
 
 
 def _get_output_dir():
-    """Get the output directory for JSON files."""
-    script_dir = os.path.dirname(os.path.abspath(__file__))
+    """Get the output directory for JSON files.
 
+    Resolves to the shared pipeline output root (configurable via
+    OPEN_JAYWALKER_OUTPUT_ROOT). Falls back to "unsaved" when the .blend
+    has not been saved to disk.
+    """
     if bpy.data.filepath:
         blend_name = os.path.splitext(os.path.basename(bpy.data.filepath))[0]
     else:
         blend_name = "unsaved"
 
-    output_dir = os.path.join(script_dir, "output", blend_name)
-    os.makedirs(output_dir, exist_ok=True)
-    return output_dir
+    # Lazy import + defensive sys.path patch: the inspector is loaded from
+    # inside Blender via src/pipeline/main.py, which adds src/ to sys.path
+    # before this module runs. Importing at module top would fail in some
+    # test environments that import inspector before configuring sys.path.
+    import sys
+    from pathlib import Path
+    src_dir = str(Path(os.path.abspath(__file__)).resolve().parent.parent)
+    if src_dir not in sys.path:
+        sys.path.append(src_dir)
+    from pipeline_paths import resolve_asset_dir
+
+    return str(resolve_asset_dir(blend_name))
 
 
 def get_output_dir():
