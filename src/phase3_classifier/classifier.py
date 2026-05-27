@@ -453,7 +453,6 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
         "summary": _build_armature_summary(
             resolved_targets,
             review_flags,
-            armature_input.primary_data,
             armature_input.primary_data.get("mesh_binding"),
             extras_preserved,
             bones,
@@ -1130,28 +1129,43 @@ def _build_review_flags(resolved_targets: Dict[str, dict], root_resolution: dict
     return sorted(flags)
 
 
-def _compute_mesh_bound_term(mesh_binding: Optional[dict], armature_name: str) -> float:
-    """Score how strongly an armature is bound to a driven mesh.
-
-    Returns 0.0 (no meshes), 6.0 (meshes present, no ARMATURE modifier link),
-    or 10.0 (meshes present AND at least one mesh has an ARMATURE modifier
-    pointing at this armature).
-    """
+def _collect_mesh_binding_stats(
+    mesh_binding: Optional[dict],
+    armature_name: str,
+    armature_bone_names_lower: Set[str],
+) -> dict:
+    """Walk mesh_binding once and return the raw stats needed by armature scoring."""
     if not mesh_binding:
-        return 0.0
+        return {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0}
     meshes = mesh_binding.get("meshes") or []
     if not meshes:
-        return 0.0
+        return {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0}
 
-    term = 6.0
+    has_armature_modifier_link = False
+    vertex_group_names_lower: Set[str] = set()
     for mesh in meshes:
         for modifier in mesh.get("modifiers") or []:
             if modifier.get("type") == "ARMATURE" and modifier.get("object") == armature_name:
-                term = 10.0
-                break
-        if term == 10.0:
-            break
-    return term
+                has_armature_modifier_link = True
+        for group_name in mesh.get("vertex_groups") or []:
+            vertex_group_names_lower.add(_strip_vertex_group_prefix(group_name).lower())
+
+    return {
+        "meshes_count": len(meshes),
+        "has_armature_modifier_link": has_armature_modifier_link,
+        "vertex_group_bone_hits": len(armature_bone_names_lower & vertex_group_names_lower),
+    }
+
+
+def _compute_mesh_bound_term(meshes_count: int, has_armature_modifier_link: bool) -> float:
+    """Score how strongly an armature is bound to a driven mesh.
+
+    Returns 0.0 (no meshes), 6.0 (meshes present, no ARMATURE modifier link
+    to this armature), or 10.0 (at least one ARMATURE modifier links to it).
+    """
+    if meshes_count <= 0:
+        return 0.0
+    return 10.0 if has_armature_modifier_link else 6.0
 
 
 def _strip_vertex_group_prefix(name: str) -> str:
@@ -1161,26 +1175,12 @@ def _strip_vertex_group_prefix(name: str) -> str:
     return name
 
 
-def _compute_deform_evidence_term(mesh_binding: Optional[dict], armature_bone_names_lower: Set[str]) -> float:
+def _compute_deform_evidence_term(vertex_group_bone_hits: int) -> float:
     """Score how many of this armature's bones appear as vertex groups on driven meshes.
 
-    Generic across rig conventions: a 'DEF-' prefix on the vertex group side is
-    stripped before comparison, so Rigify groups like 'DEF-spine' match a bone
-    named 'spine'. Result is dampened by log1p and capped at 6.0.
+    Result is dampened by log1p and capped at 6.0.
     """
-    if not mesh_binding:
-        return 0.0
-    meshes = mesh_binding.get("meshes") or []
-    if not meshes:
-        return 0.0
-
-    vertex_group_names_lower: Set[str] = set()
-    for mesh in meshes:
-        for group_name in mesh.get("vertex_groups") or []:
-            vertex_group_names_lower.add(_strip_vertex_group_prefix(group_name).lower())
-
-    hits = len(armature_bone_names_lower & vertex_group_names_lower)
-    return round(min(math.log1p(hits) * 2.0, 6.0), 3)
+    return round(min(math.log1p(vertex_group_bone_hits) * 2.0, 6.0), 3)
 
 
 def _compute_extras_term(extras_preserved: List[dict]) -> float:
@@ -1191,10 +1191,9 @@ def _compute_extras_term(extras_preserved: List[dict]) -> float:
 def _build_armature_summary(
     resolved_targets: Dict[str, dict],
     review_flags: List[str],
-    primary_data: dict,
     mesh_binding: Optional[dict],
     extras_preserved: List[dict],
-    armature_bones: Dict[str, "BoneInfo"],
+    armature_bones: Dict[str, BoneInfo],
     armature_name: str,
 ) -> dict:
     mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
@@ -1205,26 +1204,15 @@ def _build_armature_summary(
     review_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "review")
     missing_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "create_in_builder")
 
-    mesh_bound_term = _compute_mesh_bound_term(mesh_binding, armature_name)
-
     armature_bone_names_lower = {name.lower() for name in armature_bones.keys()}
-    deform_evidence_term = _compute_deform_evidence_term(mesh_binding, armature_bone_names_lower)
-    extras_term = _compute_extras_term(extras_preserved)
+    mesh_stats = _collect_mesh_binding_stats(mesh_binding, armature_name, armature_bone_names_lower)
 
-    meshes_count = 0
-    has_armature_modifier_link = False
-    vertex_group_bone_hits = 0
-    if mesh_binding:
-        meshes_list = mesh_binding.get("meshes") or []
-        meshes_count = len(meshes_list)
-        vertex_group_names_lower: Set[str] = set()
-        for mesh in meshes_list:
-            for modifier in mesh.get("modifiers") or []:
-                if modifier.get("type") == "ARMATURE" and modifier.get("object") == armature_name:
-                    has_armature_modifier_link = True
-            for group_name in mesh.get("vertex_groups") or []:
-                vertex_group_names_lower.add(_strip_vertex_group_prefix(group_name).lower())
-        vertex_group_bone_hits = len(armature_bone_names_lower & vertex_group_names_lower)
+    mesh_bound_term = _compute_mesh_bound_term(
+        mesh_stats["meshes_count"],
+        mesh_stats["has_armature_modifier_link"],
+    )
+    deform_evidence_term = _compute_deform_evidence_term(mesh_stats["vertex_group_bone_hits"])
+    extras_term = _compute_extras_term(extras_preserved)
 
     ranking_score = round(
         (len(mapped) * 5.0)
@@ -1249,11 +1237,7 @@ def _build_armature_summary(
         "mesh_bound_term": mesh_bound_term,
         "deform_evidence_term": deform_evidence_term,
         "extras_term": extras_term,
-        "deform_evidence": {
-            "meshes_count": meshes_count,
-            "has_armature_modifier_link": has_armature_modifier_link,
-            "vertex_group_bone_hits": vertex_group_bone_hits,
-        },
+        "deform_evidence": mesh_stats,
         "ranking_score": ranking_score,
     }
 

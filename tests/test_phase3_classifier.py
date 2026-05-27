@@ -16,6 +16,7 @@ if str(SRC_ROOT) not in sys.path:
 
 from phase3_classifier.classifier import (  # noqa: E402
     write_asset_report,
+    _collect_mesh_binding_stats,
     _compute_mesh_bound_term,
     _compute_deform_evidence_term,
     _compute_extras_term,
@@ -534,123 +535,76 @@ class Phase3ClassifierTests(unittest.TestCase):
 
 
 class ArmatureScoringHelperTests(unittest.TestCase):
-    def test_mesh_bound_term_zero_when_meshes_empty(self):
-        binding = {"armature_object_name": "rig", "meshes": []}
-        self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 0.0)
+    def test_mesh_bound_term_zero_when_meshes_count_zero(self):
+        self.assertEqual(_compute_mesh_bound_term(0, False), 0.0)
 
-    def test_mesh_bound_term_zero_when_binding_is_none(self):
-        self.assertEqual(_compute_mesh_bound_term(None, "rig"), 0.0)
+    def test_mesh_bound_term_zero_even_when_modifier_link_present_but_no_meshes(self):
+        self.assertEqual(_compute_mesh_bound_term(0, True), 0.0)
 
     def test_mesh_bound_term_partial_when_meshes_present_but_no_modifier_link(self):
-        binding = {
-            "armature_object_name": "rig",
-            "meshes": [
-                {
-                    "mesh_name": "Cube",
-                    "armature_link": "parent",
-                    "modifiers": [],
-                    "vertex_groups": [],
-                }
-            ],
-        }
-        self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 6.0)
+        self.assertEqual(_compute_mesh_bound_term(1, False), 6.0)
 
-    def test_mesh_bound_term_full_credit_when_modifier_links_to_armature(self):
+    def test_mesh_bound_term_full_credit_when_modifier_link_present(self):
+        self.assertEqual(_compute_mesh_bound_term(1, True), 10.0)
+
+    def test_deform_evidence_term_zero_when_no_hits(self):
+        self.assertEqual(_compute_deform_evidence_term(0), 0.0)
+
+    def test_deform_evidence_term_log_dampened_for_small_counts(self):
+        self.assertEqual(_compute_deform_evidence_term(3), round(math.log1p(3) * 2.0, 3))
+
+    def test_deform_evidence_term_caps_at_six(self):
+        self.assertEqual(_compute_deform_evidence_term(1000), 6.0)
+
+    def test_collect_mesh_binding_stats_handles_none(self):
+        result = _collect_mesh_binding_stats(None, "rig", {"spine"})
+        self.assertEqual(
+            result,
+            {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0},
+        )
+
+    def test_collect_mesh_binding_stats_empty_meshes(self):
+        binding = {"armature_object_name": "rig", "meshes": []}
+        result = _collect_mesh_binding_stats(binding, "rig", {"spine"})
+        self.assertEqual(result["meshes_count"], 0)
+        self.assertFalse(result["has_armature_modifier_link"])
+        self.assertEqual(result["vertex_group_bone_hits"], 0)
+
+    def test_collect_mesh_binding_stats_full(self):
         binding = {
             "armature_object_name": "rig",
             "meshes": [
                 {
-                    "mesh_name": "Cube",
-                    "armature_link": "parent_and_modifier",
+                    "mesh_name": "Body",
                     "modifiers": [
                         {"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": "rig"}
                     ],
-                    "vertex_groups": [],
+                    "vertex_groups": ["DEF-spine", "head", "Hair_Front"],
                 }
             ],
         }
-        self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 10.0)
+        result = _collect_mesh_binding_stats(binding, "rig", {"spine", "head"})
+        self.assertEqual(result["meshes_count"], 1)
+        self.assertTrue(result["has_armature_modifier_link"])
+        self.assertEqual(result["vertex_group_bone_hits"], 2)
 
-    def test_mesh_bound_term_partial_when_modifier_links_to_other_armature(self):
+    def test_collect_mesh_binding_stats_modifier_to_other_armature(self):
         binding = {
             "armature_object_name": "rig",
             "meshes": [
                 {
-                    "mesh_name": "Cube",
-                    "armature_link": "parent_and_modifier",
+                    "mesh_name": "Body",
                     "modifiers": [
                         {"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": "other_rig"}
                     ],
-                    "vertex_groups": [],
+                    "vertex_groups": ["spine"],
                 }
             ],
         }
-        self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 6.0)
-
-    def test_deform_evidence_term_zero_when_no_meshes(self):
-        binding = {"armature_object_name": "rig", "meshes": []}
-        bone_names = {"spine", "head", "hand.l"}
-        self.assertEqual(_compute_deform_evidence_term(binding, bone_names), 0.0)
-
-    def test_deform_evidence_term_zero_when_binding_is_none(self):
-        bone_names = {"spine", "head"}
-        self.assertEqual(_compute_deform_evidence_term(None, bone_names), 0.0)
-
-    def test_deform_evidence_term_counts_direct_vertex_group_matches(self):
-        binding = {
-            "armature_object_name": "rig",
-            "meshes": [
-                {
-                    "mesh_name": "Body",
-                    "vertex_groups": ["spine", "head", "Hand.L", "unrelated_group"],
-                    "modifiers": [],
-                }
-            ],
-        }
-        bone_names = {"spine", "head", "hand.l", "ignored_bone"}
-        expected = round(min(math.log1p(3) * 2.0, 6.0), 3)
-        self.assertAlmostEqual(_compute_deform_evidence_term(binding, bone_names), expected, places=3)
-
-    def test_deform_evidence_term_strips_def_prefix_on_vertex_group_side(self):
-        binding = {
-            "armature_object_name": "rig",
-            "meshes": [
-                {
-                    "mesh_name": "Body",
-                    "vertex_groups": ["DEF-spine", "DEF-hand.L", "Hair_Front"],
-                    "modifiers": [],
-                }
-            ],
-        }
-        bone_names = {"spine", "hand.l"}
-        expected = round(min(math.log1p(2) * 2.0, 6.0), 3)
-        self.assertAlmostEqual(_compute_deform_evidence_term(binding, bone_names), expected, places=3)
-
-    def test_deform_evidence_term_counts_unique_bones_across_multiple_meshes(self):
-        binding = {
-            "armature_object_name": "rig",
-            "meshes": [
-                {"mesh_name": "A", "vertex_groups": ["spine"], "modifiers": []},
-                {"mesh_name": "B", "vertex_groups": ["spine", "head"], "modifiers": []},
-            ],
-        }
-        bone_names = {"spine", "head", "extra"}
-        expected = round(min(math.log1p(2) * 2.0, 6.0), 3)
-        self.assertAlmostEqual(_compute_deform_evidence_term(binding, bone_names), expected, places=3)
-
-    def test_deform_evidence_term_caps_at_six(self):
-        bone_names = {"bone_{}".format(i) for i in range(1000)}
-        binding = {
-            "armature_object_name": "rig",
-            "meshes": [
-                {
-                    "mesh_name": "Body",
-                    "vertex_groups": ["bone_{}".format(i) for i in range(1000)],
-                    "modifiers": [],
-                }
-            ],
-        }
-        self.assertEqual(_compute_deform_evidence_term(binding, bone_names), 6.0)
+        result = _collect_mesh_binding_stats(binding, "rig", {"spine"})
+        self.assertFalse(result["has_armature_modifier_link"])
+        self.assertEqual(result["meshes_count"], 1)
+        self.assertEqual(result["vertex_group_bone_hits"], 1)
 
     def test_extras_term_zero_when_empty(self):
         self.assertEqual(_compute_extras_term([]), 0.0)
