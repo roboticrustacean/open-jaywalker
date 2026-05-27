@@ -78,17 +78,18 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
         armature_name,
     )
     collection = _create_collection(bpy_module, collection_name, asset_name)
-    group_root = _create_group_root(bpy_module, group_root_name, asset_name, collection)
+    grp_root_local_origin = build_spec.get("grp_root_local_origin", [0.0, 0.0, 0.0])
+    group_root = _create_group_root(
+        bpy_module, group_root_name, asset_name, collection, grp_root_local_origin
+    )
     armature_object = _create_armature_object(bpy_module, armature_name, asset_name, collection, group_root)
     _populate_edit_bones(bpy_module, armature_object, build_spec["bones"])
-    source_translation_offset = build_spec.get("source_translation_offset", [0.0, 0.0, 0.0])
     mesh_result = _duplicate_bound_meshes(
         bpy_module,
         build_spec,
         collection,
         source_armature,
         armature_object,
-        source_translation_offset,
     )
 
     return {
@@ -259,9 +260,16 @@ def _create_collection(bpy_module, collection_name: str, asset_name: str):
     return collection
 
 
-def _create_group_root(bpy_module, group_root_name: str, asset_name: str, collection):
+def _create_group_root(
+    bpy_module,
+    group_root_name: str,
+    asset_name: str,
+    collection,
+    location,
+):
     group_root = bpy_module.data.objects.new(group_root_name, None)
     group_root.empty_display_type = "PLAIN_AXES"
+    group_root.location = tuple(float(value) for value in location)
     group_root[GENERATED_MARKER_KEY] = True
     group_root[GENERATED_ASSET_KEY] = asset_name
     collection.objects.link(group_root)
@@ -287,7 +295,6 @@ def _duplicate_bound_meshes(
     collection,
     source_armature,
     generated_armature,
-    source_translation_offset: List[float],
 ) -> dict:
     duplicated_meshes = []
     skipped_meshes = []
@@ -316,7 +323,6 @@ def _duplicate_bound_meshes(
             build_spec["asset_name"],
             collection,
             generated_armature,
-            source_translation_offset,
         )
         retargeted = _retarget_armature_modifiers(generated_mesh, source_armature, generated_armature)
         if record.get("armature_link") == "parent" and not retargeted:
@@ -366,9 +372,13 @@ def _copy_mesh_object(
     asset_name: str,
     collection,
     parent_object,
-    source_translation_offset: List[float],
 ):
-    """Duplicate a mesh object, parent it to parent_object, and apply the armature offset."""
+    """Duplicate a mesh object and parent it to parent_object.
+
+    The source mesh's ``matrix_world`` is preserved on the duplicate; Blender's
+    parent-inverse handles the rebase into Grp_Root-local space when the
+    generated armature (a descendant of Grp_Root) becomes the parent.
+    """
     generated_mesh = source_mesh.copy()
     generated_mesh.name = _resolve_unique_name(
         "ASAM_{0}".format(source_mesh.name),
@@ -389,23 +399,7 @@ def _copy_mesh_object(
     generated_mesh.parent = parent_object
     if world_matrix is not None:
         generated_mesh.matrix_world = world_matrix
-    # Propagate the same translation offset that was applied to the armature bones so
-    # the mesh remains aligned with the repositioned generated armature.
-    if any(abs(float(value)) > 1e-9 for value in source_translation_offset):
-        _apply_mesh_world_offset(generated_mesh, source_translation_offset)
     return generated_mesh
-
-
-def _apply_mesh_world_offset(mesh_obj, offset: List[float]) -> None:
-    """Shift mesh_obj's world-space position by offset using mathutils when available."""
-    try:
-        from mathutils import Matrix, Vector  # available inside Blender
-        translation = Matrix.Translation(Vector(offset))
-        mesh_obj.matrix_world = translation @ mesh_obj.matrix_world
-    except ImportError:  # pragma: no cover - only hit outside Blender
-        # Fallback for pure-Python test environments that stub matrix_world.
-        current = getattr(mesh_obj, "matrix_world", None)
-        mesh_obj.matrix_world = ("offset_applied", tuple(offset), current)
 
 
 def _retarget_armature_modifiers(mesh_obj, source_armature, generated_armature) -> List[str]:

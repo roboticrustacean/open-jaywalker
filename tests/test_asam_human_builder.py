@@ -262,6 +262,7 @@ class _FakeObject(_FakeProps):
         self.vertex_groups = []
         self.material_slots = []
         self.matrix_world = ("world", name)
+        self.location = (0.0, 0.0, 0.0)
         if isinstance(data, _FakeArmatureData):
             self.type = "ARMATURE"
         elif isinstance(data, _FakeMeshData):
@@ -487,6 +488,44 @@ class _FakeBpy:
 
 
 class AsamHumanBuilderTests(unittest.TestCase):
+    def test_grp_root_location_set_to_bbox_ground_center(self):
+        """Grp_Root empty's location must equal the source-frame bbox_ground_center."""
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(
+                mesh_record["mesh_name"],
+                bpy_module.data.objects.get("Armature"),
+            )
+        build_armature_in_blender(build_spec, bpy_module)
+        grp_root = bpy_module.data.objects.get("Grp_Root")
+        self.assertIsNotNone(grp_root)
+        expected = build_plan["root_resolutions"][0]["grp_root_local_origin"]
+        for actual, expected_value in zip(grp_root.location, expected):
+            self.assertAlmostEqual(actual, expected_value, places=6)
+
+    def test_mesh_world_matrix_not_translated_by_builder(self):
+        """The duplicated mesh keeps the source mesh's matrix_world unchanged."""
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            mesh = bpy_module.add_source_mesh(
+                mesh_record["mesh_name"],
+                bpy_module.data.objects.get("Armature"),
+            )
+            mesh.matrix_world = ("source_world", mesh_record["mesh_name"])
+        build_armature_in_blender(build_spec, bpy_module)
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            generated = bpy_module.data.objects.get("ASAM_{0}".format(mesh_record["mesh_name"]))
+            self.assertIsNotNone(generated)
+            self.assertEqual(generated.matrix_world, ("source_world", mesh_record["mesh_name"]))
+
     def test_synthesized_path_preserves_source_root_as_sibling_extra(self):
         """When mode == create_new_root and preserve_source_root_as_extra is true,
         the source root bone is appended as a non-ASAM sibling extra parented to
@@ -1434,12 +1473,17 @@ class AsamHumanBuilderTests(unittest.TestCase):
         # The armature itself must still be parented to group_root.
         self.assertIs(generated_armature.parent, group_root)
 
-    def test_blender_builder_applies_offset_to_duplicated_mesh(self):
-        """source_translation_offset must be propagated to the duplicated mesh world matrix."""
+    def test_blender_builder_preserves_duplicated_mesh_world_matrix(self):
+        """The duplicated mesh keeps the source mesh's matrix_world unchanged.
+
+        Grp_Root now carries the bbox-ground-center anchor as its own world
+        location; Blender's parent inverse handles the rebase into Grp_Root-local
+        space when the generated armature (a child of Grp_Root) becomes the
+        duplicated mesh's parent. The builder no longer translates meshes.
+        """
         bpy_module = _FakeBpy()
         source_armature = bpy_module.add_source_armature("Rig")
         source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
-        # Give the source mesh a recognisable world matrix value.
         source_mesh.matrix_world = ("world", "BodyMesh_original")
         build_spec = {
             "asset_name": "SyntheticAsset",
@@ -1447,7 +1491,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
             "generated_collection_name": "ASAM_SyntheticAsset",
             "group_root_name": "Grp_Root",
             "generated_armature_name": "Armature_SyntheticAsset",
-            "source_translation_offset": [0.1, 0.0, 0.05],
+            "grp_root_local_origin": [0.1, 0.0, 0.05],
             "mesh_binding": _mesh_binding("Rig"),
             "bones": [],
         }
@@ -1456,10 +1500,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
 
         generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
         self.assertIsNotNone(generated_mesh)
-        # The fallback encodes the offset application as a 3-tuple.
-        self.assertIsInstance(generated_mesh.matrix_world, tuple)
-        self.assertEqual(generated_mesh.matrix_world[0], "offset_applied")
-        self.assertEqual(generated_mesh.matrix_world[1], (0.1, 0.0, 0.05))
+        self.assertEqual(generated_mesh.matrix_world, ("world", "BodyMesh_original"))
 
     def test_blender_builder_renames_vertex_groups_to_asam_targets(self):
         """Duplicated mesh's Rigify-named vertex groups must be renamed to ASAM targets."""
