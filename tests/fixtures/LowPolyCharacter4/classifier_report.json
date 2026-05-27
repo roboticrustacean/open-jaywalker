@@ -1,7 +1,7 @@
 {
   "asset_summary": {
     "asset_name": "LowPolyCharacter4",
-    "asset_dir": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\.claude\\worktrees\\awesome-pare-c83314\\src\\armature_inspector\\output\\LowPolyCharacter4",
+    "asset_dir": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\tests\\fixtures\\LowPolyCharacter4",
     "armature_count": 2,
     "discovered_armatures": [
       "metarig",
@@ -60,8 +60,6 @@
             "no_root_candidate",
             "root_candidate_missing_root_family",
             "root_children_not_hip_only",
-            "root_head_off_ground",
-            "root_head_off_ground_center",
             "root_tail_mismatch_hip"
           ]
         },
@@ -443,9 +441,11 @@
           "no_root_candidate",
           "root_candidate_missing_root_family",
           "root_children_not_hip_only",
-          "root_head_off_ground",
-          "root_head_off_ground_center",
           "root_tail_mismatch_hip"
+        ],
+        "advisories": [
+          "root_head_off_ground_center_advisory:0.117675",
+          "root_head_off_ground_advisory:0.927946"
         ],
         "spec_references": [
           "ASAM OpenMATERIAL 3D 7.3.3.1 General",
@@ -460,9 +460,7 @@
         "diagnostic_notes": [
           "root_head_delta_forward=0.117675",
           "root_head_delta_side=0.000000",
-          "root_head_delta_up=0.927946",
-          "root_origin_violation_against_asam_7_3_3_1",
-          "root_ground_projection_violation_against_asam_7_3_3_1"
+          "root_head_delta_up=0.927946"
         ],
         "target_head": [
           0.0,
@@ -710,7 +708,6 @@
           "notes": [
             "multiple_source_roots",
             "root_children_not_hip_only",
-            "root_head_off_ground_center",
             "root_not_vertical",
             "root_tail_mismatch_hip",
             "support_fallback"
@@ -1100,9 +1097,12 @@
         "failure_codes": [
           "multiple_source_roots",
           "root_children_not_hip_only",
-          "root_head_off_ground_center",
           "root_not_vertical",
           "root_tail_mismatch_hip"
+        ],
+        "advisories": [
+          "root_head_off_ground_center_advisory:0.050998",
+          "root_head_off_ground_advisory:0.003348"
         ],
         "spec_references": [
           "ASAM OpenMATERIAL 3D 7.3.3.1 General",
@@ -1118,7 +1118,6 @@
           "root_head_delta_forward=-0.050998",
           "root_head_delta_side=-0.000000",
           "root_head_delta_up=-0.003348",
-          "root_origin_violation_against_asam_7_3_3_1",
           "mesh_bounds_offset_detected_root_at_local_origin"
         ],
         "target_head": [
@@ -2662,7 +2661,6 @@
       "notes": [
         "multiple_source_roots",
         "root_children_not_hip_only",
-        "root_head_off_ground_center",
         "root_not_vertical",
         "root_tail_mismatch_hip",
         "support_fallback"
@@ -3052,9 +3050,12 @@
     "failure_codes": [
       "multiple_source_roots",
       "root_children_not_hip_only",
-      "root_head_off_ground_center",
       "root_not_vertical",
       "root_tail_mismatch_hip"
+    ],
+    "advisories": [
+      "root_head_off_ground_center_advisory:0.050998",
+      "root_head_off_ground_advisory:0.003348"
     ],
     "spec_references": [
       "ASAM OpenMATERIAL 3D 7.3.3.1 General",
@@ -3070,7 +3071,6 @@
       "root_head_delta_forward=-0.050998",
       "root_head_delta_side=-0.000000",
       "root_head_delta_up=-0.003348",
-      "root_origin_violation_against_asam_7_3_3_1",
       "mesh_bounds_offset_detected_root_at_local_origin"
     ],
     "target_head": [

@@ -771,6 +771,7 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
     source_translation_offset = _compute_source_translation_offset(candidate_bone, context)
     target_head, target_tail = _build_root_target_geometry(hip_bone, context, source_translation_offset)
     blocker_codes = _root_blocker_codes(original_payload, candidate, hip_bone, context)
+    advisory_codes = _root_advisory_codes(candidate, context)
     diagnostics = _build_root_compliance_diagnostics(candidate_bone, context, blocker_codes)
     can_create_new_root = target_head is not None and target_tail is not None
     source_bone = candidate.source_bone if candidate_bone is not None and "root" in candidate_bone.family_tags else None
@@ -784,6 +785,7 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "source_bone": candidate.source_bone,
             "rename_source_to_target": candidate.source_bone != "Root",
             "failure_codes": [],
+            "advisories": advisory_codes,
             "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
             "source_translation_offset": list(source_translation_offset),
             "diagnostic_notes": diagnostics,
@@ -802,6 +804,7 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "source_bone": source_bone,
             "rename_source_to_target": False,
             "failure_codes": blocker_codes,
+            "advisories": advisory_codes,
             "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
             "source_translation_offset": list(source_translation_offset),
             "diagnostic_notes": diagnostics,
@@ -819,6 +822,7 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
         "source_bone": source_bone,
         "rename_source_to_target": False,
         "failure_codes": sorted(set(blocker_codes + ["insufficient_root_builder_inputs"])),
+        "advisories": advisory_codes,
         "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
         "source_translation_offset": list(source_translation_offset),
         "diagnostic_notes": diagnostics,
@@ -896,8 +900,43 @@ def _root_advisory_codes(
     candidate: Optional[CandidateScore],
     context: dict,
 ) -> List[str]:
-    """Advisory diagnostic codes for the source root (Task 2 fills this in)."""
-    return []
+    """Advisory diagnostic codes for the source root.
+
+    Each advisory is `<code>:<magnitude>` where magnitude is meters, rounded to 6
+    decimals. These no longer block `reuse_existing_root`; they surface offsets that
+    are intrinsic to the source asset (source-root vs mesh-bbox center mismatch).
+    """
+    if candidate is None:
+        return []
+    candidate_bone = context["bones"].get(candidate.source_bone)
+    if candidate_bone is None:
+        return []
+
+    placement = context.get("placement_metadata") or {}
+    ground_center = placement.get("bbox_ground_center")
+    if ground_center is None:
+        return []
+    forward_axis = int(placement["forward_axis"]["index"])
+    side_axis = int(placement["side_axis"]["index"])
+    up_axis = int(placement["up_axis"]["index"])
+
+    forward_delta = candidate_bone.head[forward_axis] - float(ground_center[forward_axis])
+    side_delta = candidate_bone.head[side_axis] - float(ground_center[side_axis])
+    up_delta = candidate_bone.head[up_axis] - float(ground_center[up_axis])
+
+    planar_magnitude = math.sqrt((forward_delta * forward_delta) + (side_delta * side_delta))
+    ground_magnitude = abs(up_delta)
+
+    advisories: List[str] = []
+    if planar_magnitude > 1e-6:
+        advisories.append(
+            "root_head_off_ground_center_advisory:{0:.6f}".format(planar_magnitude)
+        )
+    if ground_magnitude > 1e-6:
+        advisories.append(
+            "root_head_off_ground_advisory:{0:.6f}".format(ground_magnitude)
+        )
+    return advisories
 
 
 def _root_blocker_codes(
@@ -940,25 +979,8 @@ def _root_blocker_codes(
 
     placement = context["placement_metadata"]
     bbox_height = max(float(placement.get("bbox_height", 0.0)), 1e-6)
-    ground_center = placement["bbox_ground_center"]
-    forward_axis = int(placement["forward_axis"]["index"])
-    side_axis = int(placement["side_axis"]["index"])
     up_axis = int(placement["up_axis"]["index"])
     up_sign = int(placement["up_axis"]["sign"])
-
-    # ASAM 7.3.3.1 + 7.3.3.3.2 + 7.3.3.3.4 place the Root at asset origin
-    # (center of bbox projected to ground), so reuse requires matching this
-    # origin within tolerance.
-    center_tolerance = bbox_height * ROOT_CENTER_TOLERANCE_RATIO
-    if (
-        abs(candidate_bone.head[forward_axis] - float(ground_center[forward_axis])) > center_tolerance
-        or abs(candidate_bone.head[side_axis] - float(ground_center[side_axis])) > center_tolerance
-    ):
-        failure_codes.append("root_head_off_ground_center")
-
-    ground_tolerance = bbox_height * ROOT_GROUND_TOLERANCE_RATIO
-    if abs(candidate_bone.head[up_axis] - float(ground_center[up_axis])) > ground_tolerance:
-        failure_codes.append("root_head_off_ground")
 
     direction_alignment = _aligned_axis_cosine(candidate_bone, up_axis, up_sign)
     if direction_alignment < ROOT_UP_ALIGNMENT_COSINE:

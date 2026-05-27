@@ -1,7 +1,7 @@
 {
   "asset_summary": {
     "asset_name": "openmatexamplehuman",
-    "asset_dir": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\src\\armature_inspector\\output\\openmatexamplehuman",
+    "asset_dir": "C:\\Users\\uygar\\OneDrive\\Belgeler\\GitHub\\open-jaywalker\\tests\\fixtures\\openmatexamplehuman",
     "armature_count": 1,
     "discovered_armatures": [
       "Armature"
@@ -9,9 +9,9 @@
     "ranking": [
       {
         "armature_name": "Armature",
-        "ranking_score": 109.68,
-        "mapped_core_targets": 20,
-        "average_confidence": 0.993,
+        "ranking_score": 149.86,
+        "mapped_core_targets": 28,
+        "average_confidence": 0.986,
         "primary_input": "Armature_all.json"
       }
     ]
@@ -26,20 +26,20 @@
         "source_file": "C:\\Users\\uygar\\OneDrive\\Belgeler\\blender\\openjaywalkerstuff\\openmatexamplehuman.blend"
       },
       "summary": {
-        "mapped_core_targets": 20,
-        "direct_map_targets": 19,
+        "mapped_core_targets": 28,
+        "direct_map_targets": 28,
         "alias_map_targets": 0,
-        "repair_targets": 1,
+        "repair_targets": 0,
         "review_targets": 0,
         "missing_core_targets": 0,
-        "average_confidence": 0.993,
-        "ranking_score": 109.68
+        "average_confidence": 0.986,
+        "ranking_score": 149.86
       },
       "asam_targets": {
         "Root": {
           "source_bone": "Root",
           "confidence": 0.991,
-          "action": "repair_in_builder",
+          "action": "direct_map",
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
@@ -47,9 +47,7 @@
             "source_origin": "primary",
             "role": "unknown"
           },
-          "notes": [
-            "root_head_off_ground_center"
-          ]
+          "notes": []
         },
         "Hip": {
           "source_bone": "Hip",
@@ -116,6 +114,32 @@
           },
           "notes": []
         },
+        "Eye_Left": {
+          "source_bone": "Eye_Left",
+          "confidence": 0.944,
+          "action": "direct_map",
+          "evidence": {
+            "name": 1.0,
+            "hierarchy": 0.9,
+            "geometry": 0.872,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
+        "Eye_Right": {
+          "source_bone": "Eye_Right",
+          "confidence": 0.97,
+          "action": "direct_map",
+          "evidence": {
+            "name": 1.0,
+            "hierarchy": 0.9,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
         "Shoulder_Left": {
           "source_bone": "Shoulder_Left",
           "confidence": 0.97,
@@ -162,6 +186,32 @@
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
+        "Full_Thumb_Left": {
+          "source_bone": "Full_Thumb_Left",
+          "confidence": 0.97,
+          "action": "direct_map",
+          "evidence": {
+            "name": 1.0,
+            "hierarchy": 0.9,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
+        "Full_Fingers_Left": {
+          "source_bone": "Full_Fingers_Left",
+          "confidence": 0.97,
+          "action": "direct_map",
+          "evidence": {
+            "name": 1.0,
+            "hierarchy": 0.9,
             "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
@@ -220,6 +270,32 @@
           },
           "notes": []
         },
+        "Full_Thumb_Right": {
+          "source_bone": "Full_Thumb_Right",
+          "confidence": 0.97,
+          "action": "direct_map",
+          "evidence": {
+            "name": 1.0,
+            "hierarchy": 0.9,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
+        "Full_Fingers_Right": {
+          "source_bone": "Full_Fingers_Right",
+          "confidence": 0.97,
+          "action": "direct_map",
+          "evidence": {
+            "name": 1.0,
+            "hierarchy": 0.9,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
         "Upper_Leg_Left": {
           "source_bone": "Upper_Leg_Left",
           "confidence": 1.0,
@@ -253,6 +329,19 @@
           "evidence": {
             "name": 1.0,
             "hierarchy": 1.0,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
+        },
+        "Full_Toes_Left": {
+          "source_bone": "Full_Toes_Left",
+          "confidence": 0.97,
+          "action": "direct_map",
+          "evidence": {
+            "name": 1.0,
+            "hierarchy": 0.9,
             "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
@@ -297,15 +386,30 @@
             "role": "unknown"
           },
           "notes": []
+        },
+        "Full_Toes_Right": {
+          "source_bone": "Full_Toes_Right",
+          "confidence": 0.97,
+          "action": "direct_map",
+          "evidence": {
+            "name": 1.0,
+            "hierarchy": 0.9,
+            "geometry": 1.0,
+            "source_origin": "primary",
+            "role": "unknown"
+          },
+          "notes": []
         }
       },
       "root_resolution": {
-        "mode": "create_new_root",
+        "mode": "reuse_existing_root",
         "target_bone": "Root",
         "source_bone": "Root",
         "rename_source_to_target": false,
-        "failure_codes": [
-          "root_head_off_ground_center"
+        "failure_codes": [],
+        "advisories": [
+          "root_head_off_ground_center_advisory:0.086865",
+          "root_head_off_ground_advisory:0.003222"
         ],
         "spec_references": [
           "ASAM OpenMATERIAL 3D 7.3.3.1 General",
@@ -321,7 +425,6 @@
           "root_head_delta_forward=-0.086318",
           "root_head_delta_side=-0.009727",
           "root_head_delta_up=0.003222",
-          "root_origin_violation_against_asam_7_3_3_1",
           "mesh_bounds_offset_detected_root_at_local_origin"
         ],
         "target_head": [
@@ -1112,88 +1215,36 @@
           "Upper_Spine": "Lower_Spine",
           "Neck": "Upper_Spine",
           "Head": "Neck",
+          "Eye_Left": "Head",
+          "Eye_Right": "Head",
           "Shoulder_Left": "Upper_Spine",
           "Upper_Arm_Left": "Shoulder_Left",
           "Lower_Arm_Left": "Upper_Arm_Left",
           "Hand_Left": "Lower_Arm_Left",
+          "Full_Thumb_Left": "Hand_Left",
+          "Full_Fingers_Left": "Hand_Left",
           "Shoulder_Right": "Upper_Spine",
           "Upper_Arm_Right": "Shoulder_Right",
           "Lower_Arm_Right": "Upper_Arm_Right",
           "Hand_Right": "Lower_Arm_Right",
+          "Full_Thumb_Right": "Hand_Right",
+          "Full_Fingers_Right": "Hand_Right",
           "Upper_Leg_Left": "Hip",
           "Lower_Leg_Left": "Upper_Leg_Left",
           "Foot_Left": "Lower_Leg_Left",
+          "Full_Toes_Left": "Foot_Left",
           "Upper_Leg_Right": "Hip",
           "Lower_Leg_Right": "Upper_Leg_Right",
-          "Foot_Right": "Lower_Leg_Right"
+          "Foot_Right": "Lower_Leg_Right",
+          "Full_Toes_Right": "Foot_Right"
         }
       },
-      "extras_preserved": [
-        {
-          "bone_name": "Eye_Left",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "Eye_Right",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "Full_Fingers_Left",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "Full_Fingers_Right",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "Full_Thumb_Left",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "Full_Thumb_Right",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "Full_Toes_Left",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "Full_Toes_Right",
-          "reason": "deferred_semantic_detail",
-          "origin": "primary",
-          "role": "unknown"
-        }
-      ],
+      "extras_preserved": [],
       "unclassified_bones": [],
       "missing_core_targets": [],
       "ambiguous_targets": [],
-      "review_flags": [
-        "root_noncompliant"
-      ],
-      "deferred_targets": [
-        "Eye_Left",
-        "Eye_Right",
-        "Full_Thumb_Left",
-        "Full_Thumb_Right",
-        "Full_Fingers_Left",
-        "Full_Fingers_Right",
-        "Full_Toes_Left",
-        "Full_Toes_Right"
-      ]
+      "review_flags": [],
+      "deferred_targets": []
     }
   ],
   "recommended_primary_armature": "Armature",
@@ -1201,7 +1252,7 @@
     "Root": {
       "source_bone": "Root",
       "confidence": 0.991,
-      "action": "repair_in_builder",
+      "action": "direct_map",
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
@@ -1209,9 +1260,7 @@
         "source_origin": "primary",
         "role": "unknown"
       },
-      "notes": [
-        "root_head_off_ground_center"
-      ]
+      "notes": []
     },
     "Hip": {
       "source_bone": "Hip",
@@ -1278,6 +1327,32 @@
       },
       "notes": []
     },
+    "Eye_Left": {
+      "source_bone": "Eye_Left",
+      "confidence": 0.944,
+      "action": "direct_map",
+      "evidence": {
+        "name": 1.0,
+        "hierarchy": 0.9,
+        "geometry": 0.872,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
+    },
+    "Eye_Right": {
+      "source_bone": "Eye_Right",
+      "confidence": 0.97,
+      "action": "direct_map",
+      "evidence": {
+        "name": 1.0,
+        "hierarchy": 0.9,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
+    },
     "Shoulder_Left": {
       "source_bone": "Shoulder_Left",
       "confidence": 0.97,
@@ -1324,6 +1399,32 @@
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
+    },
+    "Full_Thumb_Left": {
+      "source_bone": "Full_Thumb_Left",
+      "confidence": 0.97,
+      "action": "direct_map",
+      "evidence": {
+        "name": 1.0,
+        "hierarchy": 0.9,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
+    },
+    "Full_Fingers_Left": {
+      "source_bone": "Full_Fingers_Left",
+      "confidence": 0.97,
+      "action": "direct_map",
+      "evidence": {
+        "name": 1.0,
+        "hierarchy": 0.9,
         "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
@@ -1382,6 +1483,32 @@
       },
       "notes": []
     },
+    "Full_Thumb_Right": {
+      "source_bone": "Full_Thumb_Right",
+      "confidence": 0.97,
+      "action": "direct_map",
+      "evidence": {
+        "name": 1.0,
+        "hierarchy": 0.9,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
+    },
+    "Full_Fingers_Right": {
+      "source_bone": "Full_Fingers_Right",
+      "confidence": 0.97,
+      "action": "direct_map",
+      "evidence": {
+        "name": 1.0,
+        "hierarchy": 0.9,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
+    },
     "Upper_Leg_Left": {
       "source_bone": "Upper_Leg_Left",
       "confidence": 1.0,
@@ -1415,6 +1542,19 @@
       "evidence": {
         "name": 1.0,
         "hierarchy": 1.0,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
+    },
+    "Full_Toes_Left": {
+      "source_bone": "Full_Toes_Left",
+      "confidence": 0.97,
+      "action": "direct_map",
+      "evidence": {
+        "name": 1.0,
+        "hierarchy": 0.9,
         "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
@@ -1459,15 +1599,30 @@
         "role": "unknown"
       },
       "notes": []
+    },
+    "Full_Toes_Right": {
+      "source_bone": "Full_Toes_Right",
+      "confidence": 0.97,
+      "action": "direct_map",
+      "evidence": {
+        "name": 1.0,
+        "hierarchy": 0.9,
+        "geometry": 1.0,
+        "source_origin": "primary",
+        "role": "unknown"
+      },
+      "notes": []
     }
   },
   "root_resolution": {
-    "mode": "create_new_root",
+    "mode": "reuse_existing_root",
     "target_bone": "Root",
     "source_bone": "Root",
     "rename_source_to_target": false,
-    "failure_codes": [
-      "root_head_off_ground_center"
+    "failure_codes": [],
+    "advisories": [
+      "root_head_off_ground_center_advisory:0.086865",
+      "root_head_off_ground_advisory:0.003222"
     ],
     "spec_references": [
       "ASAM OpenMATERIAL 3D 7.3.3.1 General",
@@ -1483,7 +1638,6 @@
       "root_head_delta_forward=-0.086318",
       "root_head_delta_side=-0.009727",
       "root_head_delta_up=0.003222",
-      "root_origin_violation_against_asam_7_3_3_1",
       "mesh_bounds_offset_detected_root_at_local_origin"
     ],
     "target_head": [
@@ -2259,17 +2413,6 @@
   "missing_targets": [],
   "ambiguous_targets": [],
   "unclassified_bones": [],
-  "review_flags": [
-    "root_noncompliant"
-  ],
-  "deferred_targets": [
-    "Eye_Left",
-    "Eye_Right",
-    "Full_Thumb_Left",
-    "Full_Thumb_Right",
-    "Full_Fingers_Left",
-    "Full_Fingers_Right",
-    "Full_Toes_Left",
-    "Full_Toes_Right"
-  ]
+  "review_flags": [],
+  "deferred_targets": []
 }

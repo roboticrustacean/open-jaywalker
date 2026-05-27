@@ -94,9 +94,12 @@
     "failure_codes": [
       "multiple_source_roots",
       "root_children_not_hip_only",
-      "root_head_off_ground_center",
       "root_not_vertical",
       "root_tail_mismatch_hip"
+    ],
+    "advisories": [
+      "root_head_off_ground_center_advisory:0.050998",
+      "root_head_off_ground_advisory:0.003348"
     ],
     "spec_references": [
       "ASAM OpenMATERIAL 3D 7.3.3.1 General",
@@ -112,7 +115,6 @@
       "root_head_delta_forward=-0.050998",
       "root_head_delta_side=-0.000000",
       "root_head_delta_up=-0.003348",
-      "root_origin_violation_against_asam_7_3_3_1",
       "mesh_bounds_offset_detected_root_at_local_origin"
     ],
     "target_head": [

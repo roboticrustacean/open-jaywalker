@@ -24,6 +24,14 @@
         "target": "Head"
       },
       {
+        "source": "Eye_Left",
+        "target": "Eye_Left"
+      },
+      {
+        "source": "Eye_Right",
+        "target": "Eye_Right"
+      },
+      {
         "source": "Shoulder_Left",
         "target": "Shoulder_Left"
       },
@@ -38,6 +46,14 @@
       {
         "source": "Hand_Left",
         "target": "Hand_Left"
+      },
+      {
+        "source": "Full_Thumb_Left",
+        "target": "Full_Thumb_Left"
+      },
+      {
+        "source": "Full_Fingers_Left",
+        "target": "Full_Fingers_Left"
       },
       {
         "source": "Shoulder_Right",
@@ -56,6 +72,14 @@
         "target": "Hand_Right"
       },
       {
+        "source": "Full_Thumb_Right",
+        "target": "Full_Thumb_Right"
+      },
+      {
+        "source": "Full_Fingers_Right",
+        "target": "Full_Fingers_Right"
+      },
+      {
         "source": "Upper_Leg_Left",
         "target": "Upper_Leg_Left"
       },
@@ -68,6 +92,10 @@
         "target": "Foot_Left"
       },
       {
+        "source": "Full_Toes_Left",
+        "target": "Full_Toes_Left"
+      },
+      {
         "source": "Upper_Leg_Right",
         "target": "Upper_Leg_Right"
       },
@@ -78,17 +106,23 @@
       {
         "source": "Foot_Right",
         "target": "Foot_Right"
+      },
+      {
+        "source": "Full_Toes_Right",
+        "target": "Full_Toes_Right"
       }
     ],
     "create": []
   },
   "root_resolution": {
-    "mode": "create_new_root",
+    "mode": "reuse_existing_root",
     "target_bone": "Root",
     "source_bone": "Root",
     "rename_source_to_target": false,
-    "failure_codes": [
-      "root_head_off_ground_center"
+    "failure_codes": [],
+    "advisories": [
+      "root_head_off_ground_center_advisory:0.086865",
+      "root_head_off_ground_advisory:0.003222"
     ],
     "spec_references": [
       "ASAM OpenMATERIAL 3D 7.3.3.1 General",
@@ -104,7 +138,6 @@
       "root_head_delta_forward=-0.086318",
       "root_head_delta_side=-0.009727",
       "root_head_delta_up=0.003222",
-      "root_origin_violation_against_asam_7_3_3_1",
       "mesh_bounds_offset_detected_root_at_local_origin"
     ],
     "target_head": [
@@ -895,70 +928,29 @@
       "Upper_Spine": "Lower_Spine",
       "Neck": "Upper_Spine",
       "Head": "Neck",
+      "Eye_Left": "Head",
+      "Eye_Right": "Head",
       "Shoulder_Left": "Upper_Spine",
       "Upper_Arm_Left": "Shoulder_Left",
       "Lower_Arm_Left": "Upper_Arm_Left",
       "Hand_Left": "Lower_Arm_Left",
+      "Full_Thumb_Left": "Hand_Left",
+      "Full_Fingers_Left": "Hand_Left",
       "Shoulder_Right": "Upper_Spine",
       "Upper_Arm_Right": "Shoulder_Right",
       "Lower_Arm_Right": "Upper_Arm_Right",
       "Hand_Right": "Lower_Arm_Right",
+      "Full_Thumb_Right": "Hand_Right",
+      "Full_Fingers_Right": "Hand_Right",
       "Upper_Leg_Left": "Hip",
       "Lower_Leg_Left": "Upper_Leg_Left",
       "Foot_Left": "Lower_Leg_Left",
+      "Full_Toes_Left": "Foot_Left",
       "Upper_Leg_Right": "Hip",
       "Lower_Leg_Right": "Upper_Leg_Right",
-      "Foot_Right": "Lower_Leg_Right"
+      "Foot_Right": "Lower_Leg_Right",
+      "Full_Toes_Right": "Foot_Right"
     }
   },
-  "extras_preserved": [
-    {
-      "bone_name": "Eye_Left",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "Eye_Right",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "Full_Fingers_Left",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "Full_Fingers_Right",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "Full_Thumb_Left",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "Full_Thumb_Right",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "Full_Toes_Left",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "Full_Toes_Right",
-      "reason": "deferred_semantic_detail",
-      "origin": "primary",
-      "role": "unknown"
-    }
-  ]
+  "extras_preserved": []
 }

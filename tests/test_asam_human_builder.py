@@ -485,18 +485,18 @@ class _FakeBpy:
 
 
 class AsamHumanBuilderTests(unittest.TestCase):
-    def test_openmaterial_fixture_repairs_root_geometry(self):
+    def test_openmaterial_fixture_reuses_source_root(self):
         asset_dir = _copy_asset_folder("openmatexamplehuman")
         write_asset_report(asset_dir)
 
         _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
 
-        self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
+        self.assertEqual(build_plan["root_resolution"]["mode"], "reuse_existing_root")
         self.assertEqual(build_spec["source_armature_name"], "Armature")
         self.assertEqual(len(build_spec["bones"]), len(CORE_TARGETS))
 
         root_bone = _spec_bone(build_spec, "Root")
-        self.assertEqual(root_bone["geometry_source"], "root_resolution")
+        self.assertEqual(root_bone["geometry_source"], "source_root")
         self.assertEqual(root_bone["source_bone"], "Root")
         self.assertFalse(root_bone["use_connect"])
 

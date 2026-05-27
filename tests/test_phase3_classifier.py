@@ -157,7 +157,7 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(build_plan["mesh_binding"], binding)
         self.assertEqual(build_plan["mesh_binding"]["armature_object_name"], build_plan["recommended_primary_armature"])
 
-    def test_openmaterial_sample_maps_full_core_and_repairs_root(self):
+    def test_openmaterial_sample_maps_full_core_and_reuses_root(self):
         asset_dir = _copy_asset_folder("openmatexamplehuman")
         report, build_plan, report_path, plan_path = write_asset_report(asset_dir)
 
@@ -171,14 +171,15 @@ class Phase3ClassifierTests(unittest.TestCase):
         )
         self.assertEqual(report["semantic_mapping"]["Root"]["source_bone"], "Root")
         self.assertEqual(report["semantic_mapping"]["Head"]["source_bone"], "Head")
-        self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
-        self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
-        self.assertIn("root_noncompliant", report["review_flags"])
+        self.assertEqual(report["semantic_mapping"]["Root"]["action"], "direct_map")
+        self.assertEqual(build_plan["root_resolution"]["mode"], "reuse_existing_root")
+        self.assertNotIn("root_noncompliant", report["review_flags"])
         self.assertIn(
             "ASAM OpenMATERIAL 3D 7.3.3.1 General",
             build_plan["root_resolution"]["spec_references"],
         )
-        self.assertIn(
+        # Planar offset is now an advisory, not a violation note.
+        self.assertNotIn(
             "root_origin_violation_against_asam_7_3_3_1",
             build_plan["root_resolution"]["diagnostic_notes"],
         )
@@ -186,6 +187,11 @@ class Phase3ClassifierTests(unittest.TestCase):
             "mesh_bounds_offset_detected_root_at_local_origin",
             build_plan["root_resolution"]["diagnostic_notes"],
         )
+        planar_advisories = [
+            a for a in build_plan["root_resolution"].get("advisories", [])
+            if a.startswith("root_head_off_ground_center_advisory:")
+        ]
+        self.assertEqual(len(planar_advisories), 1)
         self.assertFalse(any(action["target"] == "Root" for action in build_plan["actions"]["rename"]))
         expected_offset = build_plan["placement_metadata"]["bbox_ground_center"]
         self.assertEqual(
@@ -480,12 +486,31 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertTrue((asset_dir / "classifier_report.json").exists())
         self.assertTrue((asset_dir / "build_plan.json").exists())
         self.assertIn("Recommended primary armature: Armature", result.stdout)
-        self.assertIn("Root resolution: create_new_root", result.stdout)
+        self.assertIn("Root resolution: reuse_existing_root", result.stdout)
 
     def test_root_blocker_codes_helper_exists(self):
         from phase3_classifier.classifier import _root_blocker_codes, _root_advisory_codes  # noqa: F401
         self.assertTrue(callable(_root_blocker_codes))
         self.assertTrue(callable(_root_advisory_codes))
+
+    def test_openmatexample_reuses_source_root_under_new_compliance_model(self):
+        """openmatexamplehuman's source root has an ~8.6 cm planar offset from bbox center.
+        Under the new model this is advisory, not a blocker; mode should be reuse."""
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        report, build_plan, _, _ = write_asset_report(asset_dir)
+        self.assertEqual(report["root_resolution"]["mode"], "reuse_existing_root")
+        self.assertEqual(report["root_resolution"]["failure_codes"], [])
+
+    def test_planar_offset_emitted_as_advisory_with_magnitude(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        report, _, _, _ = write_asset_report(asset_dir)
+        advisories = report["root_resolution"].get("advisories", [])
+        planar = [a for a in advisories if a.startswith("root_head_off_ground_center_advisory:")]
+        self.assertEqual(len(planar), 1, "expected one planar advisory, got {0}".format(advisories))
+        magnitude = float(planar[0].split(":", 1)[1])
+        # bbox_ground_center = (0.086318, 0.009727, ...); source root at (0, 0, 0).
+        # planar = sqrt(0.086318**2 + 0.009727**2) ~= 0.086865
+        self.assertAlmostEqual(magnitude, 0.086865, places=4)
 
 
 if __name__ == "__main__":
