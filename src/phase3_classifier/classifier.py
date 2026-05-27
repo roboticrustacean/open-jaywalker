@@ -450,7 +450,15 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
             "primary_filter": armature_input.primary_data.get("filter"),
             "source_file": armature_input.primary_data.get("source_file"),
         },
-        "summary": _build_armature_summary(resolved_targets, review_flags, armature_input.primary_data),
+        "summary": _build_armature_summary(
+            resolved_targets,
+            review_flags,
+            armature_input.primary_data,
+            armature_input.primary_data.get("mesh_binding"),
+            extras_preserved,
+            bones,
+            armature_input.armature_name,
+        ),
         "asam_targets": resolved_targets,
         "root_resolution": root_resolution,
         "placement_metadata": copy.deepcopy(context["placement_metadata"]),
@@ -1180,7 +1188,15 @@ def _compute_extras_term(extras_preserved: List[dict]) -> float:
     return round(min(math.log1p(len(extras_preserved)) * 0.5, 2.0), 3)
 
 
-def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: List[str], primary_data: dict) -> dict:
+def _build_armature_summary(
+    resolved_targets: Dict[str, dict],
+    review_flags: List[str],
+    primary_data: dict,
+    mesh_binding: Optional[dict],
+    extras_preserved: List[dict],
+    armature_bones: Dict[str, "BoneInfo"],
+    armature_name: str,
+) -> dict:
     mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
     average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)
     direct_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "direct_map")
@@ -1188,10 +1204,34 @@ def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: Lis
     repair_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "repair_in_builder")
     review_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "review")
     missing_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "create_in_builder")
+
+    mesh_bound_term = _compute_mesh_bound_term(mesh_binding, armature_name)
+
+    armature_bone_names_lower = {name.lower() for name in armature_bones.keys()}
+    deform_evidence_term = _compute_deform_evidence_term(mesh_binding, armature_bone_names_lower)
+    extras_term = _compute_extras_term(extras_preserved)
+
+    meshes_count = 0
+    has_armature_modifier_link = False
+    vertex_group_bone_hits = 0
+    if mesh_binding:
+        meshes_list = mesh_binding.get("meshes") or []
+        meshes_count = len(meshes_list)
+        vertex_group_names_lower: Set[str] = set()
+        for mesh in meshes_list:
+            for modifier in mesh.get("modifiers") or []:
+                if modifier.get("type") == "ARMATURE" and modifier.get("object") == armature_name:
+                    has_armature_modifier_link = True
+            for group_name in mesh.get("vertex_groups") or []:
+                vertex_group_names_lower.add(_strip_vertex_group_prefix(group_name).lower())
+        vertex_group_bone_hits = len(armature_bone_names_lower & vertex_group_names_lower)
+
     ranking_score = round(
         (len(mapped) * 5.0)
         + (average_confidence * 10.0)
-        + (2.0 if primary_data.get("filter") == "DEF-" else 0.0)
+        + mesh_bound_term
+        + deform_evidence_term
+        + extras_term
         - (review_targets * 0.75)
         - (missing_targets * 1.2)
         - (len(review_flags) * 0.25),
@@ -1206,6 +1246,14 @@ def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: Lis
         "review_targets": review_targets,
         "missing_core_targets": missing_targets,
         "average_confidence": average_confidence,
+        "mesh_bound_term": mesh_bound_term,
+        "deform_evidence_term": deform_evidence_term,
+        "extras_term": extras_term,
+        "deform_evidence": {
+            "meshes_count": meshes_count,
+            "has_armature_modifier_link": has_armature_modifier_link,
+            "vertex_group_bone_hits": vertex_group_bone_hits,
+        },
         "ranking_score": ranking_score,
     }
 
