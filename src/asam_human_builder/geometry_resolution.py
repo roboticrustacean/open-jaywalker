@@ -23,6 +23,11 @@ from typing import Dict, List, Optional, Sequence, Tuple
 RECOVERABLE_ACTIONS = {"direct_map", "alias_map", "repair_in_builder"}
 
 
+# Synthesized Root bone tail length, as a fraction of the asset's bbox height,
+# when the classifier forces `create_new_root` mode.
+ROOT_TAIL_HEIGHT_RATIO = 0.18
+
+
 # Per-target default bone length expressed as a fraction of the asset's bbox
 # height. Used by `_default_length_for_target` when no source geometry is
 # available and the resolver must synthesize a new bone.
@@ -231,21 +236,39 @@ def _resolve_root_geometry(
     warnings: List[str],
 ) -> Tuple[dict, str, Optional[str]]:
     source_bone_name = root_resolution.get("source_bone")
+    mode = root_resolution.get("mode")
 
-    if root_resolution.get("mode") == "reuse_existing_root" and source_bone_name in source_bones:
-        return copy.deepcopy(source_bones[source_bone_name]), "source_root", source_bone_name
+    if mode == "reuse_existing_root":
+        if source_bone_name in source_bones:
+            return (
+                copy.deepcopy(source_bones[source_bone_name]),
+                "source_root",
+                source_bone_name,
+            )
+        if source_bone_name:
+            warnings.append("missing_source_root_geometry:{0}".format(source_bone_name))
 
-    if root_resolution.get("mode") == "reuse_existing_root" and source_bone_name:
-        warnings.append("missing_source_root_geometry:{0}".format(source_bone_name))
+    # Synthesize a fresh Root at bbox_ground_center (in source-world coords); the
+    # builder's _to_grp_root_local rebase later moves this to (0, 0, 0) in
+    # Grp_Root-local space. Tail extends along the up axis by a bbox-derived ratio.
+    grp_root_local_origin = root_resolution.get("grp_root_local_origin") or placement_metadata.get(
+        "bbox_ground_center"
+    ) or [0.0, 0.0, 0.0]
+    up_axis = root_resolution.get("up_axis") or placement_metadata.get("up_axis") or {
+        "index": 2,
+        "sign": 1,
+    }
+    up_index = int(up_axis["index"])
+    up_sign = int(up_axis["sign"])
+    bbox_height = max(float(placement_metadata.get("bbox_height", 0.0)), 1e-4)
+    tail_length = bbox_height * ROOT_TAIL_HEIGHT_RATIO
 
-    target_head = root_resolution.get("target_head") or placement_metadata.get("bbox_ground_center") or [0.0, 0.0, 0.0]
-    target_tail = root_resolution.get("target_tail")
-    if target_tail is None:
-        bbox_height = max(float(placement_metadata.get("bbox_height", 0.0)), 1e-4)
-        direction = _default_direction_for_target("Root", placement_metadata, None)
-        target_tail = _offset_point(target_head, direction, bbox_height * 0.18)
+    head = [float(v) for v in grp_root_local_origin]
+    tail = list(head)
+    tail[up_index] = head[up_index] + up_sign * tail_length
 
-    return _ensure_non_zero_geometry(target_head, target_tail, placement_metadata), "root_resolution", source_bone_name
+    geometry = _ensure_non_zero_geometry(head, tail, placement_metadata)
+    return geometry, "root_resolution", source_bone_name
 
 
 def _resolve_created_target_geometry(

@@ -487,6 +487,31 @@ class _FakeBpy:
 
 
 class AsamHumanBuilderTests(unittest.TestCase):
+    def test_synthesized_root_is_at_grp_root_local_origin(self):
+        """When mode == create_new_root, the synthesized Root sits at (0,0,0)
+        in spec coords (Grp_Root-local) with the tail offset along the up axis."""
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        bbox_height = plan["placement_metadata"]["bbox_height"]
+        plan["root_resolutions"][0].update({
+            "mode": "create_new_root",
+            "source_bone": "Root",
+            "grp_root_local_origin": [0.1, 0.2, 0.3],
+            "up_axis": {"index": 2, "name": "z", "sign": 1},
+        })
+        source_bones = {
+            "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
+        }
+
+        spec = build_armature_spec(report, plan, source_bones)
+        root_bone = _spec_bone(spec, "Root")
+        for value in root_bone["head"]:
+            self.assertAlmostEqual(value, 0.0, places=6)
+        # tail = (0, 0, +bbox_height * 0.18) in local coords
+        self.assertAlmostEqual(root_bone["tail"][0], 0.0, places=6)
+        self.assertAlmostEqual(root_bone["tail"][1], 0.0, places=6)
+        self.assertAlmostEqual(root_bone["tail"][2], bbox_height * 0.18, places=6)
+
     def test_built_root_bone_is_in_grp_root_local_space(self):
         """build_armature_spec stores bone head/tail in Grp_Root-local frame
         (= source-world coords minus grp_root_local_origin)."""
