@@ -1175,6 +1175,11 @@ def _compute_deform_evidence_term(mesh_binding: Optional[dict], armature_bone_na
     return round(min(math.log1p(hits) * 2.0, 6.0), 3)
 
 
+def _compute_extras_term(extras_preserved: List[dict]) -> float:
+    """Score the count of preserved anatomical extras. Dampened by log1p, capped at 2.0."""
+    return round(min(math.log1p(len(extras_preserved)) * 0.5, 2.0), 3)
+
+
 def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: List[str], primary_data: dict) -> dict:
     mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
     average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)

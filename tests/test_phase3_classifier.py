@@ -18,6 +18,7 @@ from phase3_classifier.classifier import (  # noqa: E402
     write_asset_report,
     _compute_mesh_bound_term,
     _compute_deform_evidence_term,
+    _compute_extras_term,
 )
 
 
@@ -650,6 +651,18 @@ class ArmatureScoringHelperTests(unittest.TestCase):
             ],
         }
         self.assertEqual(_compute_deform_evidence_term(binding, bone_names), 6.0)
+
+    def test_extras_term_zero_when_empty(self):
+        self.assertEqual(_compute_extras_term([]), 0.0)
+
+    def test_extras_term_log_dampened_for_small_counts(self):
+        extras = [{"bone_name": "spine.001"}, {"bone_name": "spine.002"}, {"bone_name": "spine.003"}]
+        expected = round(min(math.log1p(3) * 0.5, 2.0), 3)
+        self.assertEqual(_compute_extras_term(extras), expected)
+
+    def test_extras_term_caps_at_two(self):
+        extras = [{"bone_name": "bone_{}".format(i)} for i in range(200)]
+        self.assertEqual(_compute_extras_term(extras), 2.0)
 
 
 if __name__ == "__main__":
