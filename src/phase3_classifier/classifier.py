@@ -776,6 +776,9 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
     can_create_new_root = target_head is not None and target_tail is not None
     source_bone = candidate.source_bone if candidate_bone is not None and "root" in candidate_bone.family_tags else None
 
+    placement_metadata = context["placement_metadata"]
+    grp_root_local_origin = [float(value) for value in placement_metadata["bbox_ground_center"]]
+
     if candidate is not None and not blocker_codes:
         action = "direct_map" if candidate.source_bone == "Root" and candidate.name_evidence >= 0.95 else "alias_map"
         resolved_targets["Root"] = _target_payload_from_candidate(candidate, action, notes=[])
@@ -785,15 +788,12 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "source_bone": candidate.source_bone,
             "rename_source_to_target": candidate.source_bone != "Root",
             "subtree_name": "Grp_Root",
+            "grp_root_local_origin": grp_root_local_origin,
             "blocker_codes": [],
             "advisories": advisory_codes,
             "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
-            "source_translation_offset": list(source_translation_offset),
             "diagnostic_notes": diagnostics,
-            "target_head": target_head,
-            "target_tail": target_tail,
-            "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
-            "use_connect": False,
+            "up_axis": copy.deepcopy(placement_metadata["up_axis"]),
         }
 
     if can_create_new_root:
@@ -805,15 +805,12 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "source_bone": source_bone,
             "rename_source_to_target": False,
             "subtree_name": "Grp_Root",
+            "grp_root_local_origin": grp_root_local_origin,
             "blocker_codes": blocker_codes,
             "advisories": advisory_codes,
             "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
-            "source_translation_offset": list(source_translation_offset),
             "diagnostic_notes": diagnostics,
-            "target_head": target_head,
-            "target_tail": target_tail,
-            "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
-            "use_connect": False,
+            "up_axis": copy.deepcopy(placement_metadata["up_axis"]),
         }
 
     notes = sorted(set(list(original_payload.get("notes", [])) + blocker_codes + ["insufficient_root_builder_inputs"]))
@@ -824,15 +821,12 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
         "source_bone": source_bone,
         "rename_source_to_target": False,
         "subtree_name": "Grp_Root",
+        "grp_root_local_origin": grp_root_local_origin,
         "blocker_codes": sorted(set(blocker_codes + ["insufficient_root_builder_inputs"])),
         "advisories": advisory_codes,
         "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
-        "source_translation_offset": list(source_translation_offset),
         "diagnostic_notes": diagnostics,
-        "target_head": target_head,
-        "target_tail": target_tail,
-        "up_axis": copy.deepcopy(context["placement_metadata"]["up_axis"]),
-        "use_connect": False,
+        "up_axis": copy.deepcopy(placement_metadata["up_axis"]),
     }
 
 

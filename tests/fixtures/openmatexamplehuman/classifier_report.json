@@ -407,6 +407,11 @@
         "source_bone": "Root",
         "rename_source_to_target": false,
         "subtree_name": "Grp_Root",
+        "grp_root_local_origin": [
+          0.08631828427314758,
+          0.009727418422698975,
+          -0.003222084604203701
+        ],
         "blocker_codes": [],
         "advisories": [
           "root_head_off_ground_center_advisory:0.086865",
@@ -417,33 +422,17 @@
           "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
           "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
         ],
-        "source_translation_offset": [
-          0.08631828427314758,
-          0.009727418422698975,
-          -0.003222084604203701
-        ],
         "diagnostic_notes": [
           "root_head_delta_forward=-0.086318",
           "root_head_delta_side=-0.009727",
           "root_head_delta_up=0.003222",
           "mesh_bounds_offset_detected_root_at_local_origin"
         ],
-        "target_head": [
-          0.08631828427314758,
-          0.009727418422698975,
-          -0.003222084604203701
-        ],
-        "target_tail": [
-          0.08631828427314758,
-          0.009727418422698975,
-          0.8391980165615678
-        ],
         "up_axis": {
           "index": 2,
           "name": "z",
           "sign": 1
-        },
-        "use_connect": false
+        }
       },
       "placement_metadata": {
         "bounds_source": "meshes",
@@ -1622,6 +1611,11 @@
       "source_bone": "Root",
       "rename_source_to_target": false,
       "subtree_name": "Grp_Root",
+      "grp_root_local_origin": [
+        0.08631828427314758,
+        0.009727418422698975,
+        -0.003222084604203701
+      ],
       "blocker_codes": [],
       "advisories": [
         "root_head_off_ground_center_advisory:0.086865",
@@ -1632,33 +1626,17 @@
         "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
         "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
       ],
-      "source_translation_offset": [
-        0.08631828427314758,
-        0.009727418422698975,
-        -0.003222084604203701
-      ],
       "diagnostic_notes": [
         "root_head_delta_forward=-0.086318",
         "root_head_delta_side=-0.009727",
         "root_head_delta_up=0.003222",
         "mesh_bounds_offset_detected_root_at_local_origin"
       ],
-      "target_head": [
-        0.08631828427314758,
-        0.009727418422698975,
-        -0.003222084604203701
-      ],
-      "target_tail": [
-        0.08631828427314758,
-        0.009727418422698975,
-        0.8391980165615678
-      ],
       "up_axis": {
         "index": 2,
         "name": "z",
         "sign": 1
-      },
-      "use_connect": false
+      }
     }
   ],
   "placement_metadata": {

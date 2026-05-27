@@ -119,12 +119,10 @@ def _base_build_plan(asset_name: str = "SyntheticAsset", armature_name: str = "R
                 "target_bone": "Root",
                 "source_bone": None,
                 "rename_source_to_target": False,
+                "grp_root_local_origin": [0.0, 0.0, 0.0],
                 "blocker_codes": [],
                 "advisories": [],
-                "target_head": [0.0, 0.0, 0.0],
-                "target_tail": [0.0, 0.0, 1.0],
                 "up_axis": {"index": 2, "name": "z", "sign": 1},
-                "use_connect": False,
             }
         ],
         "placement_metadata": _placement_metadata(),
@@ -517,8 +515,12 @@ class AsamHumanBuilderTests(unittest.TestCase):
         root_bone = _spec_bone(build_spec, "Root")
         self.assertEqual(root_bone["geometry_source"], "root_resolution")
         self.assertEqual(root_bone["source_bone"], "root")
-        self.assertEqual(root_bone["head"], build_plan["root_resolutions"][0]["target_head"])
-        self.assertEqual(root_bone["tail"], build_plan["root_resolutions"][0]["target_tail"])
+        # Synthesized Root sits at bbox_ground_center in source-world coords (the rebase
+        # to Grp_Root-local frame is done in Task 5).
+        self.assertEqual(
+            root_bone["head"],
+            build_plan["placement_metadata"]["bbox_ground_center"],
+        )
 
         hip_bone = _spec_bone(build_spec, "Hip")
         side_axis = build_plan["placement_metadata"]["side_axis"]["index"]
@@ -919,16 +921,16 @@ class AsamHumanBuilderTests(unittest.TestCase):
         translated["Root"]["custom_metadata"]["source"] = "mutated"
         self.assertEqual(source_bones["Root"]["custom_metadata"]["source"], "blender")
 
-    def test_validate_builder_inputs_rejects_malformed_offset(self):
+    def test_validate_builder_inputs_rejects_malformed_grp_root_local_origin(self):
         report = _base_classifier_report()
         plan = _base_build_plan()
-        plan["root_resolutions"][0]["source_translation_offset"] = [0.0, 0.0]
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0]
 
         with self.assertRaises(ValueError) as ctx:
             validate_builder_inputs(report, plan)
         self.assertIn("length-3", str(ctx.exception))
 
-        plan["root_resolutions"][0]["source_translation_offset"] = [0.0, "oops", 0.0]
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, "oops", 0.0]
         with self.assertRaises(ValueError) as ctx:
             validate_builder_inputs(report, plan)
         self.assertIn("numeric", str(ctx.exception))

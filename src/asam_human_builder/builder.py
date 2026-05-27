@@ -117,18 +117,20 @@ def validate_builder_inputs(classifier_report: dict, build_plan: dict) -> None:
             )
         )
 
-    if "source_translation_offset" in root_resolutions[0]:
-        offset = root_resolutions[0]["source_translation_offset"]
-        if not isinstance(offset, (list, tuple)) or len(offset) != 3:
-            raise ValueError(
-                "build_plan.root_resolutions[0].source_translation_offset must be a length-3 sequence"
-            )
-        try:
-            [float(value) for value in offset]
-        except (TypeError, ValueError) as exc:
-            raise ValueError(
-                "build_plan.root_resolutions[0].source_translation_offset entries must be numeric"
-            ) from exc
+    grp_root_local_origin = root_resolutions[0].get("grp_root_local_origin")
+    if (
+        not isinstance(grp_root_local_origin, (list, tuple))
+        or len(grp_root_local_origin) != 3
+    ):
+        raise ValueError(
+            "build_plan.root_resolutions[0].grp_root_local_origin must be a length-3 numeric list"
+        )
+    try:
+        [float(value) for value in grp_root_local_origin]
+    except (TypeError, ValueError) as exc:
+        raise ValueError(
+            "build_plan.root_resolutions[0].grp_root_local_origin entries must be numeric"
+        ) from exc
 
 
 def compute_vertex_group_remap_plan(

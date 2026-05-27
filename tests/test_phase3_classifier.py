@@ -193,21 +193,10 @@ class Phase3ClassifierTests(unittest.TestCase):
         ]
         self.assertEqual(len(planar_advisories), 1)
         self.assertFalse(any(action["target"] == "Root" for action in build_plan["actions"]["rename"]))
-        expected_offset = build_plan["placement_metadata"]["bbox_ground_center"]
+        # grp_root_local_origin equals bbox_ground_center (Grp_Root's world anchor).
         self.assertEqual(
-            build_plan["root_resolutions"][0]["source_translation_offset"],
-            expected_offset,
-        )
-        up_index = build_plan["placement_metadata"]["up_axis"]["index"]
-        offset_up = build_plan["root_resolutions"][0]["source_translation_offset"][up_index]
-        source_bones_payload = json.loads((asset_dir / "Armature_all.json").read_text(encoding="utf-8"))
-        source_hip_head_z = next(
-            bone["head"][up_index] for bone in source_bones_payload["bones"] if bone["name"] == "Hip"
-        )
-        self.assertAlmostEqual(
-            build_plan["root_resolutions"][0]["target_tail"][up_index],
-            source_hip_head_z + offset_up,
-            places=6,
+            build_plan["root_resolutions"][0]["grp_root_local_origin"],
+            build_plan["placement_metadata"]["bbox_ground_center"],
         )
 
     def test_compliant_root_has_near_zero_translation_offset(self):
@@ -238,8 +227,10 @@ class Phase3ClassifierTests(unittest.TestCase):
 
         _, build_plan, _, _ = write_asset_report(asset_dir)
 
-        offset = build_plan["root_resolutions"][0]["source_translation_offset"]
-        for component in offset:
+        # For a compliant rig the bbox-ground-center coincides with the source root,
+        # which sits at the source origin, so grp_root_local_origin is also near zero.
+        origin = build_plan["root_resolutions"][0]["grp_root_local_origin"]
+        for component in origin:
             self.assertLess(abs(component), 1e-6)
 
     def test_lowpoly_classifies_both_armatures_and_requires_new_root(self):
@@ -514,6 +505,16 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(report["root_resolutions"], build_plan["root_resolutions"])
         self.assertNotIn("root_resolution", report)
         self.assertNotIn("root_resolution", build_plan)
+
+    def test_grp_root_local_origin_equals_bbox_ground_center(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        _, build_plan, _, _ = write_asset_report(asset_dir)
+        entry = build_plan["root_resolutions"][0]
+        self.assertIn("grp_root_local_origin", entry)
+        expected = build_plan["placement_metadata"]["bbox_ground_center"]
+        self.assertEqual(entry["grp_root_local_origin"], expected)
+        for obsolete in ("source_translation_offset", "target_head", "target_tail", "use_connect"):
+            self.assertNotIn(obsolete, entry, "expected {0} to be removed".format(obsolete))
 
     def test_planar_offset_emitted_as_advisory_with_magnitude(self):
         asset_dir = _copy_asset_folder("openmatexamplehuman")
