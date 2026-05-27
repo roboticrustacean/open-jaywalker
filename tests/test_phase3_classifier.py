@@ -17,6 +17,7 @@ if str(SRC_ROOT) not in sys.path:
 from phase3_classifier.classifier import (  # noqa: E402
     write_asset_report,
     _compute_mesh_bound_term,
+    _compute_deform_evidence_term,
 )
 
 
@@ -584,6 +585,71 @@ class ArmatureScoringHelperTests(unittest.TestCase):
             ],
         }
         self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 6.0)
+
+    def test_deform_evidence_term_zero_when_no_meshes(self):
+        binding = {"armature_object_name": "rig", "meshes": []}
+        bone_names = {"spine", "head", "hand.l"}
+        self.assertEqual(_compute_deform_evidence_term(binding, bone_names), 0.0)
+
+    def test_deform_evidence_term_zero_when_binding_is_none(self):
+        bone_names = {"spine", "head"}
+        self.assertEqual(_compute_deform_evidence_term(None, bone_names), 0.0)
+
+    def test_deform_evidence_term_counts_direct_vertex_group_matches(self):
+        binding = {
+            "armature_object_name": "rig",
+            "meshes": [
+                {
+                    "mesh_name": "Body",
+                    "vertex_groups": ["spine", "head", "Hand.L", "unrelated_group"],
+                    "modifiers": [],
+                }
+            ],
+        }
+        bone_names = {"spine", "head", "hand.l", "ignored_bone"}
+        expected = round(min(math.log1p(3) * 2.0, 6.0), 3)
+        self.assertAlmostEqual(_compute_deform_evidence_term(binding, bone_names), expected, places=3)
+
+    def test_deform_evidence_term_strips_def_prefix_on_vertex_group_side(self):
+        binding = {
+            "armature_object_name": "rig",
+            "meshes": [
+                {
+                    "mesh_name": "Body",
+                    "vertex_groups": ["DEF-spine", "DEF-hand.L", "Hair_Front"],
+                    "modifiers": [],
+                }
+            ],
+        }
+        bone_names = {"spine", "hand.l"}
+        expected = round(min(math.log1p(2) * 2.0, 6.0), 3)
+        self.assertAlmostEqual(_compute_deform_evidence_term(binding, bone_names), expected, places=3)
+
+    def test_deform_evidence_term_counts_unique_bones_across_multiple_meshes(self):
+        binding = {
+            "armature_object_name": "rig",
+            "meshes": [
+                {"mesh_name": "A", "vertex_groups": ["spine"], "modifiers": []},
+                {"mesh_name": "B", "vertex_groups": ["spine", "head"], "modifiers": []},
+            ],
+        }
+        bone_names = {"spine", "head", "extra"}
+        expected = round(min(math.log1p(2) * 2.0, 6.0), 3)
+        self.assertAlmostEqual(_compute_deform_evidence_term(binding, bone_names), expected, places=3)
+
+    def test_deform_evidence_term_caps_at_six(self):
+        bone_names = {"bone_{}".format(i) for i in range(1000)}
+        binding = {
+            "armature_object_name": "rig",
+            "meshes": [
+                {
+                    "mesh_name": "Body",
+                    "vertex_groups": ["bone_{}".format(i) for i in range(1000)],
+                    "modifiers": [],
+                }
+            ],
+        }
+        self.assertEqual(_compute_deform_evidence_term(binding, bone_names), 6.0)
 
 
 if __name__ == "__main__":

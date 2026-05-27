@@ -1146,6 +1146,35 @@ def _compute_mesh_bound_term(mesh_binding: Optional[dict], armature_name: str) -
     return term
 
 
+def _strip_vertex_group_prefix(name: str) -> str:
+    """Strip a leading 'DEF-' prefix (case-insensitive) for matching against bone names."""
+    if name[:4].lower() == "def-":
+        return name[4:]
+    return name
+
+
+def _compute_deform_evidence_term(mesh_binding: Optional[dict], armature_bone_names_lower: Set[str]) -> float:
+    """Score how many of this armature's bones appear as vertex groups on driven meshes.
+
+    Generic across rig conventions: a 'DEF-' prefix on the vertex group side is
+    stripped before comparison, so Rigify groups like 'DEF-spine' match a bone
+    named 'spine'. Result is dampened by log1p and capped at 6.0.
+    """
+    if not mesh_binding:
+        return 0.0
+    meshes = mesh_binding.get("meshes") or []
+    if not meshes:
+        return 0.0
+
+    vertex_group_names_lower: Set[str] = set()
+    for mesh in meshes:
+        for group_name in mesh.get("vertex_groups") or []:
+            vertex_group_names_lower.add(_strip_vertex_group_prefix(group_name).lower())
+
+    hits = len(armature_bone_names_lower & vertex_group_names_lower)
+    return round(min(math.log1p(hits) * 2.0, 6.0), 3)
+
+
 def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: List[str], primary_data: dict) -> dict:
     mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
     average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)
