@@ -10,16 +10,23 @@
     "ranking": [
       {
         "armature_name": "rig",
-        "ranking_score": 116.43,
+        "ranking_score": 129.203,
         "mapped_core_targets": 22,
         "average_confidence": 0.943,
-        "primary_input": "rig_filtered.json"
+        "mesh_bound_term": 10.0,
+        "deform_evidence_term": 2.773,
+        "extras_term": 2.0,
+        "primary_input": "rig_filtered.json",
+        "selection_tiebreaker": "score"
       },
       {
         "armature_name": "metarig",
-        "ranking_score": 102.82,
+        "ranking_score": 103.716,
         "mapped_core_targets": 20,
         "average_confidence": 0.932,
+        "mesh_bound_term": 0.0,
+        "deform_evidence_term": 0.0,
+        "extras_term": 0.896,
         "primary_input": "metarig_all.json"
       }
     ]
@@ -41,7 +48,15 @@
         "review_targets": 8,
         "missing_core_targets": 0,
         "average_confidence": 0.932,
-        "ranking_score": 102.82
+        "mesh_bound_term": 0.0,
+        "deform_evidence_term": 0.0,
+        "extras_term": 0.896,
+        "deform_evidence": {
+          "meshes_count": 0,
+          "has_armature_modifier_link": false,
+          "vertex_group_bone_hits": 0
+        },
+        "ranking_score": 103.716
       },
       "asam_targets": {
         "Root": {
@@ -682,7 +697,15 @@
         "review_targets": 6,
         "missing_core_targets": 0,
         "average_confidence": 0.943,
-        "ranking_score": 116.43
+        "mesh_bound_term": 10.0,
+        "deform_evidence_term": 2.773,
+        "extras_term": 2.0,
+        "deform_evidence": {
+          "meshes_count": 1,
+          "has_armature_modifier_link": true,
+          "vertex_group_bone_hits": 3
+        },
+        "ranking_score": 129.203
       },
       "asam_targets": {
         "Root": {

@@ -249,6 +249,19 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(report["recommended_primary_armature"], "rig")
 
         armatures = {item["armature_name"]: item for item in report["armatures"]}
+
+        rig_summary = armatures["rig"]["summary"]
+        metarig_summary = armatures["metarig"]["summary"]
+
+        self.assertEqual(rig_summary["mesh_bound_term"], 10.0)
+        self.assertEqual(metarig_summary["mesh_bound_term"], 0.0)
+        self.assertGreater(rig_summary["deform_evidence_term"], 0.0)
+        self.assertEqual(metarig_summary["deform_evidence_term"], 0.0)
+        self.assertGreater(rig_summary["ranking_score"], metarig_summary["ranking_score"])
+        self.assertIn("deform_evidence", rig_summary)
+        self.assertTrue(rig_summary["deform_evidence"]["has_armature_modifier_link"])
+        self.assertFalse(metarig_summary["deform_evidence"]["has_armature_modifier_link"])
+
         self.assertEqual(armatures["rig"]["selected_inputs"]["primary"], "rig_filtered.json")
         self.assertEqual(armatures["rig"]["selected_inputs"]["support"], "rig_all.json")
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")

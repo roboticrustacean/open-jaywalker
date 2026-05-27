@@ -9,10 +9,14 @@
     "ranking": [
       {
         "armature_name": "Armature",
-        "ranking_score": 149.86,
+        "ranking_score": 165.86,
         "mapped_core_targets": 28,
         "average_confidence": 0.986,
-        "primary_input": "Armature_all.json"
+        "mesh_bound_term": 10.0,
+        "deform_evidence_term": 6.0,
+        "extras_term": 0.0,
+        "primary_input": "Armature_all.json",
+        "selection_tiebreaker": "sole_candidate"
       }
     ]
   },
@@ -33,7 +37,15 @@
         "review_targets": 0,
         "missing_core_targets": 0,
         "average_confidence": 0.986,
-        "ranking_score": 149.86
+        "mesh_bound_term": 10.0,
+        "deform_evidence_term": 6.0,
+        "extras_term": 0.0,
+        "deform_evidence": {
+          "meshes_count": 4,
+          "has_armature_modifier_link": true,
+          "vertex_group_bone_hits": 28
+        },
+        "ranking_score": 165.86
       },
       "asam_targets": {
         "Root": {
