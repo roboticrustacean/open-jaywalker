@@ -14,7 +14,10 @@ SRC_ROOT = REPO_ROOT / "src"
 if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
-from phase3_classifier.classifier import write_asset_report  # noqa: E402
+from phase3_classifier.classifier import (  # noqa: E402
+    write_asset_report,
+    _compute_mesh_bound_term,
+)
 
 
 FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
@@ -526,6 +529,61 @@ class Phase3ClassifierTests(unittest.TestCase):
         # bbox_ground_center = (0.086318, 0.009727, ...); source root at (0, 0, 0).
         # planar = sqrt(0.086318**2 + 0.009727**2) ~= 0.086865
         self.assertAlmostEqual(magnitude, 0.086865, places=4)
+
+
+class ArmatureScoringHelperTests(unittest.TestCase):
+    def test_mesh_bound_term_zero_when_meshes_empty(self):
+        binding = {"armature_object_name": "rig", "meshes": []}
+        self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 0.0)
+
+    def test_mesh_bound_term_zero_when_binding_is_none(self):
+        self.assertEqual(_compute_mesh_bound_term(None, "rig"), 0.0)
+
+    def test_mesh_bound_term_partial_when_meshes_present_but_no_modifier_link(self):
+        binding = {
+            "armature_object_name": "rig",
+            "meshes": [
+                {
+                    "mesh_name": "Cube",
+                    "armature_link": "parent",
+                    "modifiers": [],
+                    "vertex_groups": [],
+                }
+            ],
+        }
+        self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 6.0)
+
+    def test_mesh_bound_term_full_credit_when_modifier_links_to_armature(self):
+        binding = {
+            "armature_object_name": "rig",
+            "meshes": [
+                {
+                    "mesh_name": "Cube",
+                    "armature_link": "parent_and_modifier",
+                    "modifiers": [
+                        {"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": "rig"}
+                    ],
+                    "vertex_groups": [],
+                }
+            ],
+        }
+        self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 10.0)
+
+    def test_mesh_bound_term_partial_when_modifier_links_to_other_armature(self):
+        binding = {
+            "armature_object_name": "rig",
+            "meshes": [
+                {
+                    "mesh_name": "Cube",
+                    "armature_link": "parent_and_modifier",
+                    "modifiers": [
+                        {"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": "other_rig"}
+                    ],
+                    "vertex_groups": [],
+                }
+            ],
+        }
+        self.assertEqual(_compute_mesh_bound_term(binding, "rig"), 6.0)
 
 
 if __name__ == "__main__":

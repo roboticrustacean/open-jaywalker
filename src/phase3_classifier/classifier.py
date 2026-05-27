@@ -1122,6 +1122,30 @@ def _build_review_flags(resolved_targets: Dict[str, dict], root_resolution: dict
     return sorted(flags)
 
 
+def _compute_mesh_bound_term(mesh_binding: Optional[dict], armature_name: str) -> float:
+    """Score how strongly an armature is bound to a driven mesh.
+
+    Returns 0.0 (no meshes), 6.0 (meshes present, no ARMATURE modifier link),
+    or 10.0 (meshes present AND at least one mesh has an ARMATURE modifier
+    pointing at this armature).
+    """
+    if not mesh_binding:
+        return 0.0
+    meshes = mesh_binding.get("meshes") or []
+    if not meshes:
+        return 0.0
+
+    term = 6.0
+    for mesh in meshes:
+        for modifier in mesh.get("modifiers") or []:
+            if modifier.get("type") == "ARMATURE" and modifier.get("object") == armature_name:
+                term = 10.0
+                break
+        if term == 10.0:
+            break
+    return term
+
+
 def _build_armature_summary(resolved_targets: Dict[str, dict], review_flags: List[str], primary_data: dict) -> dict:
     mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
     average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)
