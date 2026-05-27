@@ -488,6 +488,27 @@ class _FakeBpy:
 
 
 class AsamHumanBuilderTests(unittest.TestCase):
+    def test_builder_report_carries_root_anchor_metadata(self):
+        """builder_report records grp_root_local_origin, root_mode, and preserved_source_root."""
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(
+                mesh_record["mesh_name"],
+                bpy_module.data.objects.get("Armature"),
+            )
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+        report = build_builder_report(build_spec, execution_result)
+        self.assertEqual(
+            report["grp_root_local_origin"],
+            build_plan["root_resolutions"][0]["grp_root_local_origin"],
+        )
+        self.assertEqual(report["root_mode"], "reuse_existing_root")
+        self.assertIsNone(report["preserved_source_root"])
+
     def test_grp_root_location_set_to_bbox_ground_center(self):
         """Grp_Root empty's location must equal the source-frame bbox_ground_center."""
         asset_dir = _copy_asset_folder("openmatexamplehuman")

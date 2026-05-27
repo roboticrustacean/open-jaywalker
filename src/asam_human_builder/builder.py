@@ -410,6 +410,15 @@ def build_builder_report(build_spec: dict, execution_result: dict) -> dict:
         else:
             created_targets.append(bone["name"])
 
+    preserved_source_root = next(
+        (
+            bone["name"]
+            for bone in build_spec["bones"]
+            if bone.get("geometry_source") == "preserved_source_root"
+        ),
+        None,
+    )
+
     return {
         "asset_name": build_spec["asset_name"],
         "source_armature_name": build_spec["source_armature_name"],
@@ -417,6 +426,9 @@ def build_builder_report(build_spec: dict, execution_result: dict) -> dict:
         "group_root_name": execution_result["group_root_name"],
         "generated_armature_name": execution_result["generated_armature_name"],
         "collection_action": execution_result.get("collection_action"),
+        "grp_root_local_origin": list(build_spec.get("grp_root_local_origin", [])),
+        "root_mode": build_spec.get("root_resolution", {}).get("mode"),
+        "preserved_source_root": preserved_source_root,
         "duplicated_meshes": copy.deepcopy(execution_result.get("duplicated_meshes", [])),
         "skipped_meshes": copy.deepcopy(execution_result.get("skipped_meshes", [])),
         "mesh_warnings": list(execution_result.get("mesh_warnings", [])),
