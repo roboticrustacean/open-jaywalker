@@ -20,6 +20,7 @@ from phase3_classifier.classifier import (  # noqa: E402
     _compute_mesh_bound_term,
     _compute_deform_evidence_term,
     _compute_extras_term,
+    _compute_selection_tiebreaker,
 )
 
 
@@ -617,6 +618,92 @@ class ArmatureScoringHelperTests(unittest.TestCase):
     def test_extras_term_caps_at_two(self):
         extras = [{"bone_name": "bone_{}".format(i)} for i in range(200)]
         self.assertEqual(_compute_extras_term(extras), 2.0)
+
+
+class ArmatureSelectionCascadeTests(unittest.TestCase):
+    def test_lowpoly_selection_tiebreaker_audit_field(self):
+        asset_dir = _copy_asset_folder("LowPolyCharacter4")
+        report, _, _, _ = write_asset_report(asset_dir)
+
+        ranking = report["asset_summary"]["ranking"]
+        self.assertEqual(ranking[0]["armature_name"], "rig")
+        self.assertEqual(ranking[0]["selection_tiebreaker"], "score")
+        self.assertNotIn("selection_tiebreaker", ranking[1])
+
+    def test_lowpoly_ranking_entries_include_new_terms(self):
+        asset_dir = _copy_asset_folder("LowPolyCharacter4")
+        report, _, _, _ = write_asset_report(asset_dir)
+
+        for entry in report["asset_summary"]["ranking"]:
+            self.assertIn("mesh_bound_term", entry)
+            self.assertIn("deform_evidence_term", entry)
+            self.assertIn("extras_term", entry)
+
+    def test_sole_armature_reports_sole_candidate_tiebreaker(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        report, _, _, _ = write_asset_report(asset_dir)
+
+        ranking = report["asset_summary"]["ranking"]
+        self.assertEqual(len(ranking), 1)
+        self.assertEqual(ranking[0]["selection_tiebreaker"], "sole_candidate")
+
+    def _make_report(self, name, score, mesh_bound, deform_evidence, mapped, avg_conf):
+        return {
+            "armature_name": name,
+            "summary": {
+                "ranking_score": score,
+                "mesh_bound_term": mesh_bound,
+                "deform_evidence_term": deform_evidence,
+                "mapped_core_targets": mapped,
+                "average_confidence": avg_conf,
+            },
+        }
+
+    def test_tiebreaker_sole_candidate(self):
+        reports = [self._make_report("only", 100.0, 10.0, 6.0, 22, 0.9)]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "sole_candidate")
+
+    def test_tiebreaker_score_when_scores_differ(self):
+        reports = [
+            self._make_report("a", 100.0, 0.0, 0.0, 20, 0.9),
+            self._make_report("b", 90.0, 10.0, 6.0, 22, 0.9),
+        ]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "score")
+
+    def test_tiebreaker_mesh_bound_when_scores_tie(self):
+        reports = [
+            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("b", 100.0, 0.0, 6.0, 22, 0.9),
+        ]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "mesh_bound_term")
+
+    def test_tiebreaker_deform_evidence_when_score_and_mesh_bound_tie(self):
+        reports = [
+            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("b", 100.0, 10.0, 4.0, 22, 0.9),
+        ]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "deform_evidence_term")
+
+    def test_tiebreaker_mapped_targets_when_upstream_tie(self):
+        reports = [
+            self._make_report("a", 100.0, 10.0, 6.0, 24, 0.9),
+            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+        ]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "mapped_core_targets")
+
+    def test_tiebreaker_confidence_when_mapped_ties(self):
+        reports = [
+            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.95),
+            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+        ]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "average_confidence")
+
+    def test_tiebreaker_armature_name_when_all_numeric_signals_tie(self):
+        reports = [
+            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+        ]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "armature_name")
 
 
 if __name__ == "__main__":

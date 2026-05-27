@@ -289,11 +289,21 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         raise ValueError("No armature inspector JSON files were found in {0}".format(asset_dir))
 
     armature_reports = [classify_armature(asset_dir.name, armature_input) for armature_input in armature_inputs]
-    ranked_reports = sorted(
-        armature_reports,
-        key=lambda report: (-report["summary"]["ranking_score"], report["armature_name"]),
-    )
+
+    def _ranking_key(report: dict) -> tuple:
+        summary = report["summary"]
+        return (
+            -summary["ranking_score"],
+            -summary["mesh_bound_term"],
+            -summary["deform_evidence_term"],
+            -summary["mapped_core_targets"],
+            -summary["average_confidence"],
+            report["armature_name"],
+        )
+
+    ranked_reports = sorted(armature_reports, key=_ranking_key)
     recommended_report = ranked_reports[0]
+    selection_tiebreaker = _compute_selection_tiebreaker(ranked_reports)
     mesh_binding = copy.deepcopy(recommended_report.get("mesh_binding"))
 
     actions: Dict[str, list] = {"rename": [], "create": []}
@@ -312,14 +322,8 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
             "armature_count": len(armature_reports),
             "discovered_armatures": [report["armature_name"] for report in armature_reports],
             "ranking": [
-                {
-                    "armature_name": report["armature_name"],
-                    "ranking_score": report["summary"]["ranking_score"],
-                    "mapped_core_targets": report["summary"]["mapped_core_targets"],
-                    "average_confidence": report["summary"]["average_confidence"],
-                    "primary_input": report["selected_inputs"]["primary"],
-                }
-                for report in ranked_reports
+                _build_ranking_entry(report, selection_tiebreaker if index == 0 else None)
+                for index, report in enumerate(ranked_reports)
             ],
         },
         "armatures": armature_reports,
@@ -347,6 +351,50 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
     }
 
     return classifier_report, build_plan
+
+
+def _build_ranking_entry(report: dict, selection_tiebreaker: Optional[str]) -> dict:
+    summary = report["summary"]
+    entry = {
+        "armature_name": report["armature_name"],
+        "ranking_score": summary["ranking_score"],
+        "mapped_core_targets": summary["mapped_core_targets"],
+        "average_confidence": summary["average_confidence"],
+        "mesh_bound_term": summary["mesh_bound_term"],
+        "deform_evidence_term": summary["deform_evidence_term"],
+        "extras_term": summary["extras_term"],
+        "primary_input": report["selected_inputs"]["primary"],
+    }
+    if selection_tiebreaker is not None:
+        entry["selection_tiebreaker"] = selection_tiebreaker
+    return entry
+
+
+def _compute_selection_tiebreaker(ranked_reports: List[dict]) -> str:
+    """Identify which step of the ranking cascade decided the top pick.
+
+    Returns 'sole_candidate' when there is only one armature, 'score' when
+    the primary ranking_score already separated the top two, or the name of
+    the first cascade step on which the top candidate strictly beats the
+    second-place candidate.
+    """
+    if len(ranked_reports) <= 1:
+        return "sole_candidate"
+
+    top_summary = ranked_reports[0]["summary"]
+    runner_summary = ranked_reports[1]["summary"]
+
+    if top_summary["ranking_score"] != runner_summary["ranking_score"]:
+        return "score"
+    if top_summary["mesh_bound_term"] != runner_summary["mesh_bound_term"]:
+        return "mesh_bound_term"
+    if top_summary["deform_evidence_term"] != runner_summary["deform_evidence_term"]:
+        return "deform_evidence_term"
+    if top_summary["mapped_core_targets"] != runner_summary["mapped_core_targets"]:
+        return "mapped_core_targets"
+    if top_summary["average_confidence"] != runner_summary["average_confidence"]:
+        return "average_confidence"
+    return "armature_name"
 
 
 def write_asset_report(asset_dir: Path) -> Tuple[dict, dict, Path, Path]:
