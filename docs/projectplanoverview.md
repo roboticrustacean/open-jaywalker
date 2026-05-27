@@ -47,6 +47,8 @@ Using a rule-based system, bones will be automatically classified based on names
 
 Following classification, the ASAM OpenMATERIAL Human node hierarchy will be programmatically constructed within Blender, and classified bones will be automatically mapped to this structure. This will significantly reduce or eliminate the need for manual node and hierarchy construction.
 
+**Root placement and Grp_Root anchor:** The generated ASAM asset's `Grp_Root` is anchored to the source's `bbox_ground_center`; all generated bones are stored in `Grp_Root`-local coordinates. Source-root reuse is permitted whenever the source root passes structural compliance; planar and ground-Z offsets between the source root and `bbox_ground_center` are recorded as advisories with measured magnitudes rather than blocking reuse. Per ASAM §7.3.3.3.2–§7.3.3.3.4 the project wiki carries a clause-by-clause walkthrough of this interpretation.
+
 ---
 
 ## Phase 4 – Behavior-Aware Normalization (Locomotion, Joint DOF, Gait)

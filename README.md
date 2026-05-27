@@ -109,10 +109,12 @@ The Blender-side builder lives under `src/asam_human_builder` and consumes the s
 
 For the current v1 scope, it will:
 
-- Read `recommended_primary_armature`, `semantic_mapping`, `root_resolution`, `placement_metadata`, and `proposed_asam_hierarchy`
+- Read `recommended_primary_armature`, `semantic_mapping`, `root_resolutions`, `placement_metadata`, and `proposed_asam_hierarchy`
 - Create a new generated collection `ASAM_<AssetName>`
-- Create `Grp_Root` and `Armature_<AssetName>`
-- Build the supported ASAM core skeleton scope as new bones in that generated armature
+- Anchor `Grp_Root` to the source frame's `bbox_ground_center` (per ASAM §7.3.3.3.2) and create `Armature_<AssetName>` underneath it with identity local transform
+- Build the supported ASAM core skeleton scope as new bones in that generated armature, expressed in `Grp_Root`-local coordinates
+- Reuse the source root bone (renamed to `Root`) when it passes structural compliance checks; planar and ground-Z offsets between the source root and `bbox_ground_center` are surfaced as advisories in `root_resolutions[0].advisories` and no longer block reuse
+- When structural blockers fire, synthesize a fresh `Root` at `Grp_Root` local origin and preserve the source root as a sibling extra in the generated armature so its skin weights survive
 - Reuse source-bone geometry where the classifier marked a recoverable mapping
 - Create missing targets deterministically by mirroring, interpolating, or extrapolating from nearby mapped targets when needed
 - Preserve non-ASAM extra bones by leaving them on the original source rig instead of copying them into the generated armature

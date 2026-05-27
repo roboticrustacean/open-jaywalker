@@ -318,14 +318,24 @@ def write_mesh_deformation_report(asset_name: str, results: list, builder_report
     return report_path
 
 
-def run_mesh_deformation_suite(bpy_module, pose_cases: list, epsilon: float = 1e-4) -> Path:
+def run_mesh_deformation_suite(
+    bpy_module,
+    pose_cases: list,
+    epsilon: float = 1e-4,
+    pipeline_result: dict | None = None,
+) -> Path:
     """
-    Run the pipeline, then exercise each pose case on the generated armature.
+    Run the pipeline (unless ``pipeline_result`` is supplied), then exercise
+    each pose case on the generated armature.
+
+    Passing ``pipeline_result`` lets the runbook script run the pipeline once
+    for its own assertions and reuse the result here.
 
     `pose_cases` is a list of {"bone": str, "axis": "X"|"Y"|"Z", "degrees": float}.
     Returns the path of the markdown report.
     """
-    pipeline_result = run_full_pipeline(bpy_module)
+    if pipeline_result is None:
+        pipeline_result = run_full_pipeline(bpy_module)
     asset_name = pipeline_result["asset_name"]
     generated_armature = bpy_module.data.objects.get(pipeline_result["generated_armature_name"])
     if generated_armature is None:
