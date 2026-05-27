@@ -487,6 +487,20 @@ class _FakeBpy:
 
 
 class AsamHumanBuilderTests(unittest.TestCase):
+    def test_built_root_bone_is_in_grp_root_local_space(self):
+        """build_armature_spec stores bone head/tail in Grp_Root-local frame
+        (= source-world coords minus grp_root_local_origin)."""
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        grp_root_local_origin = build_plan["root_resolutions"][0]["grp_root_local_origin"]
+        # openmatexamplehuman source root sits at source-world (0,0,0).
+        source_root_head = (0.0, 0.0, 0.0)
+        root_bone = _spec_bone(build_spec, "Root")
+        expected_head = [source_root_head[i] - grp_root_local_origin[i] for i in range(3)]
+        for actual, expected in zip(root_bone["head"], expected_head):
+            self.assertAlmostEqual(actual, expected, places=6)
+
     def test_openmaterial_fixture_reuses_source_root(self):
         asset_dir = _copy_asset_folder("openmatexamplehuman")
         write_asset_report(asset_dir)
@@ -515,23 +529,22 @@ class AsamHumanBuilderTests(unittest.TestCase):
         root_bone = _spec_bone(build_spec, "Root")
         self.assertEqual(root_bone["geometry_source"], "root_resolution")
         self.assertEqual(root_bone["source_bone"], "root")
-        # Synthesized Root sits at bbox_ground_center in source-world coords (the rebase
-        # to Grp_Root-local frame is done in Task 5).
-        self.assertEqual(
-            root_bone["head"],
-            build_plan["placement_metadata"]["bbox_ground_center"],
-        )
+        # Synthesized Root sits at Grp_Root local origin after the _to_grp_root_local rebase.
+        for value in root_bone["head"]:
+            self.assertAlmostEqual(value, 0.0, places=6)
 
         hip_bone = _spec_bone(build_spec, "Hip")
         side_axis = build_plan["placement_metadata"]["side_axis"]["index"]
-        centerline = build_plan["placement_metadata"]["bbox_ground_center"][side_axis]
+        # In Grp_Root-local coords, the centerline is at 0 (bbox_ground_center
+        # coincides with grp_root_local_origin on the side axis).
+        local_centerline = 0.0
         lower_spine_bone = _spec_bone(build_spec, "Lower_Spine")
 
         self.assertEqual(hip_bone["geometry_source"], "centered_pelvis_pair")
         self.assertEqual(hip_bone["source_bone"], "DEF-pelvis.L")
         self.assertEqual(hip_bone["head"], root_bone["tail"])
-        self.assertAlmostEqual(hip_bone["head"][side_axis], centerline)
-        self.assertAlmostEqual(hip_bone["tail"][side_axis], centerline)
+        self.assertAlmostEqual(hip_bone["head"][side_axis], local_centerline, places=6)
+        self.assertAlmostEqual(hip_bone["tail"][side_axis], local_centerline, places=6)
         for hip_value, spine_value in zip(hip_bone["tail"], lower_spine_bone["head"]):
             self.assertAlmostEqual(hip_value, spine_value, places=6)
 
@@ -883,43 +896,10 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(head["head"], [0.0, 0.0, 1.72])
         self.assertGreater(head["tail"][2], head["head"][2])
 
-    def test_translate_source_bones_applies_offset_and_preserves_length(self):
-        from asam_human_builder.builder import _translate_source_bones
-
-        source_bones = {
-            "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
-            "Hip": _bone("Hip", "Root", (0.0, 0.0, 0.9), (0.0, 0.0, 1.05)),
-        }
-        offset = [0.1, -0.2, 0.05]
-
-        translated = _translate_source_bones(source_bones, offset)
-
-        _assert_vec_almost_equal(self, translated["Root"]["head"], [0.1, -0.2, 0.05])
-        _assert_vec_almost_equal(self, translated["Root"]["tail"], [0.1, -0.2, 0.55])
-        _assert_vec_almost_equal(self, translated["Hip"]["head"], [0.1, -0.2, 0.95])
-        _assert_vec_almost_equal(self, translated["Hip"]["tail"], [0.1, -0.2, 1.1])
-        self.assertAlmostEqual(translated["Root"]["length"], source_bones["Root"]["length"], places=9)
-        self.assertAlmostEqual(translated["Hip"]["length"], source_bones["Hip"]["length"], places=9)
-        self.assertEqual(source_bones["Root"]["head"], [0.0, 0.0, 0.0])
-
-    def test_translate_source_bones_preserves_unknown_keys(self):
-        from asam_human_builder.builder import _translate_source_bones
-
-        source_bones = {
-            "Root": {
-                **_bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
-                "roll": 1.25,
-                "custom_metadata": {"source": "blender"},
-            },
-        }
-        offset = [0.1, 0.0, 0.0]
-
-        translated = _translate_source_bones(source_bones, offset)
-
-        self.assertEqual(translated["Root"]["roll"], 1.25)
-        self.assertEqual(translated["Root"]["custom_metadata"], {"source": "blender"})
-        translated["Root"]["custom_metadata"]["source"] = "mutated"
-        self.assertEqual(source_bones["Root"]["custom_metadata"]["source"], "blender")
+    def test_to_grp_root_local_subtracts_origin_componentwise(self):
+        from asam_human_builder.builder import _to_grp_root_local
+        local = _to_grp_root_local((0.5, -0.2, 1.0), (0.1, -0.2, 0.05))
+        _assert_vec_almost_equal(self, local, [0.4, 0.0, 0.95])
 
     def test_validate_builder_inputs_rejects_malformed_grp_root_local_origin(self):
         report = _base_classifier_report()
@@ -996,15 +976,15 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(report["skipped_meshes"], [])
         self.assertEqual(report["mesh_warnings"], [])
 
-    def test_build_armature_spec_translates_source_bones_in_create_new_root_mode(self):
+    def test_build_armature_spec_rebases_bones_to_grp_root_local(self):
+        """In create_new_root mode, bones are stored in Grp_Root-local coords
+        (= source-world coords minus grp_root_local_origin)."""
         report = _base_classifier_report()
         plan = _base_build_plan()
         plan["root_resolutions"][0].update({
             "mode": "create_new_root",
             "source_bone": "Root",
-            "target_head": [0.1, 0.0, 0.0],
-            "target_tail": [0.1, 0.0, 0.9],
-            "source_translation_offset": [0.1, 0.0, 0.0],
+            "grp_root_local_origin": [0.1, 0.0, 0.0],
         })
         report["semantic_mapping"]["Hip"].update({
             "source_bone": "Hip",
@@ -1018,22 +998,20 @@ class AsamHumanBuilderTests(unittest.TestCase):
 
         spec = build_armature_spec(report, plan, source_bones)
 
+        # Hip is direct-mapped from source; its source head was (0, 0, 0.9),
+        # so the Grp_Root-local head is (-0.1, 0, 0.9).
         hip_bone = _spec_bone(spec, "Hip")
-        self.assertAlmostEqual(hip_bone["head"][0], 0.1, places=9)
+        self.assertAlmostEqual(hip_bone["head"][0], -0.1, places=9)
         self.assertAlmostEqual(hip_bone["head"][2], 0.9, places=9)
-        root_bone = _spec_bone(spec, "Root")
-        self.assertAlmostEqual(root_bone["tail"][2], hip_bone["head"][2], places=9)
-        self.assertEqual(spec["source_translation_offset"], [0.1, 0.0, 0.0])
+        self.assertEqual(spec["grp_root_local_origin"], [0.1, 0.0, 0.0])
 
-    def test_build_armature_spec_identity_when_offset_zero(self):
+    def test_build_armature_spec_identity_when_grp_root_local_origin_zero(self):
         report = _base_classifier_report()
         plan = _base_build_plan()
         plan["root_resolutions"][0].update({
             "mode": "create_new_root",
             "source_bone": "Root",
-            "target_head": [0.0, 0.0, 0.0],
-            "target_tail": [0.0, 0.0, 0.9],
-            "source_translation_offset": [0.0, 0.0, 0.0],
+            "grp_root_local_origin": [0.0, 0.0, 0.0],
         })
         report["semantic_mapping"]["Hip"].update({
             "source_bone": "Hip",
@@ -1051,15 +1029,16 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(hip_bone["head"], [0.0, 0.0, 0.9])
         self.assertEqual(hip_bone["tail"], [0.0, 0.0, 1.0])
 
-    def test_reuse_existing_root_snaps_to_bbox_ground_center_via_translation(self):
+    def test_reuse_existing_root_keeps_source_position_in_grp_root_local(self):
+        """Under the new model, a reused source root keeps its source position;
+        the offset between source root.head and bbox_ground_center is preserved
+        as a (negative) translation in Grp_Root-local space."""
         report = _base_classifier_report()
         plan = _base_build_plan()
         plan["root_resolutions"][0].update({
             "mode": "reuse_existing_root",
             "source_bone": "Root",
-            "target_head": [0.01, 0.0, 0.0],
-            "target_tail": [0.01, 0.0, 0.9],
-            "source_translation_offset": [0.01, 0.0, 0.0],
+            "grp_root_local_origin": [0.01, 0.0, 0.0],
         })
         report["semantic_mapping"]["Root"].update({
             "source_bone": "Root",
@@ -1073,7 +1052,8 @@ class AsamHumanBuilderTests(unittest.TestCase):
         spec = build_armature_spec(report, plan, source_bones)
 
         root_bone = _spec_bone(spec, "Root")
-        self.assertAlmostEqual(root_bone["head"][0], 0.01, places=9)
+        # source (0, 0, 0) - grp_root_local_origin (0.01, 0, 0) = (-0.01, 0, 0).
+        self.assertAlmostEqual(root_bone["head"][0], -0.01, places=9)
         self.assertAlmostEqual(root_bone["head"][1], 0.0, places=9)
         self.assertAlmostEqual(root_bone["head"][2], 0.0, places=9)
 

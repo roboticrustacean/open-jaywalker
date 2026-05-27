@@ -306,11 +306,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
     if classifier_report["recommended_primary_armature"] != build_plan["recommended_primary_armature"]:
         raise ValueError("Classifier and build plan disagree on the recommended primary armature")
 
-    source_translation_offset = [
-        float(value)
-        for value in root_resolution.get("source_translation_offset", [0.0, 0.0, 0.0])
-    ]
-    translated_source_bones = _translate_source_bones(source_bones, source_translation_offset)
+    grp_root_local_origin = [float(v) for v in root_resolution["grp_root_local_origin"]]
 
     spec = {
         "asset_name": asset_name,
@@ -322,7 +318,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         "placement_metadata": copy.deepcopy(placement_metadata),
         "mesh_binding": copy.deepcopy(build_plan["mesh_binding"]),
         "extras_preserved": copy.deepcopy(build_plan.get("extras_preserved", [])),
-        "source_translation_offset": list(source_translation_offset),
+        "grp_root_local_origin": list(grp_root_local_origin),
         "bones": [],
         "preserved_pelvis_pair": [],
         "warnings": [],
@@ -335,7 +331,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
             target_name,
             semantic_mapping,
             root_resolution,
-            translated_source_bones,
+            source_bones,
             placement_metadata,
             bone_parents,
             children_map,
@@ -348,8 +344,8 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
             {
                 "name": target_name,
                 "parent_bone": parent_name if parent_name in bone_parents else None,
-                "head": geometry["head"],
-                "tail": geometry["tail"],
+                "head": _to_grp_root_local(geometry["head"], grp_root_local_origin),
+                "tail": _to_grp_root_local(geometry["tail"], grp_root_local_origin),
                 "use_connect": False,
                 "geometry_source": geometry_source,
                 "source_bone": source_bone_name,
@@ -359,15 +355,15 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
 
     for entry in _resolve_preserved_pelvis_pair(
         semantic_mapping,
-        translated_source_bones,
+        source_bones,
         build_plan["mesh_binding"],
     ):
         spec["bones"].append(
             {
                 "name": entry["generated_bone_name"],
                 "parent_bone": "Hip",
-                "head": entry["geometry"]["head"],
-                "tail": entry["geometry"]["tail"],
+                "head": _to_grp_root_local(entry["geometry"]["head"], grp_root_local_origin),
+                "tail": _to_grp_root_local(entry["geometry"]["tail"], grp_root_local_origin),
                 "use_connect": False,
                 "geometry_source": "source_bone",
                 "source_bone": entry["source_bone_name"],
@@ -535,13 +531,9 @@ def _resolve_preserved_pelvis_pair(
     return entries
 
 
-def _translate_source_bones(source_bones: Dict[str, dict], offset: Sequence[float]) -> Dict[str, dict]:
-    offset_values = [float(offset[index]) for index in range(3)]
-    translated = copy.deepcopy(source_bones)
-    for bone in translated.values():
-        bone["head"] = [float(bone["head"][index]) + offset_values[index] for index in range(3)]
-        bone["tail"] = [float(bone["tail"][index]) + offset_values[index] for index in range(3)]
-    return translated
+def _to_grp_root_local(point: Sequence[float], origin: Sequence[float]) -> List[float]:
+    """Translate a point from source-world coordinates into Grp_Root-local coordinates."""
+    return [float(point[i]) - float(origin[i]) for i in range(3)]
 
 
 def _build_children_map(bone_parents: dict) -> Dict[str, List[str]]:
