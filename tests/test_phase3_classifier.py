@@ -172,40 +172,40 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(report["semantic_mapping"]["Root"]["source_bone"], "Root")
         self.assertEqual(report["semantic_mapping"]["Head"]["source_bone"], "Head")
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "direct_map")
-        self.assertEqual(build_plan["root_resolution"]["mode"], "reuse_existing_root")
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "reuse_existing_root")
         self.assertNotIn("root_noncompliant", report["review_flags"])
         self.assertIn(
             "ASAM OpenMATERIAL 3D 7.3.3.1 General",
-            build_plan["root_resolution"]["spec_references"],
+            build_plan["root_resolutions"][0]["spec_references"],
         )
         # Planar offset is now an advisory, not a violation note.
         self.assertNotIn(
             "root_origin_violation_against_asam_7_3_3_1",
-            build_plan["root_resolution"]["diagnostic_notes"],
+            build_plan["root_resolutions"][0]["diagnostic_notes"],
         )
         self.assertIn(
             "mesh_bounds_offset_detected_root_at_local_origin",
-            build_plan["root_resolution"]["diagnostic_notes"],
+            build_plan["root_resolutions"][0]["diagnostic_notes"],
         )
         planar_advisories = [
-            a for a in build_plan["root_resolution"].get("advisories", [])
+            a for a in build_plan["root_resolutions"][0].get("advisories", [])
             if a.startswith("root_head_off_ground_center_advisory:")
         ]
         self.assertEqual(len(planar_advisories), 1)
         self.assertFalse(any(action["target"] == "Root" for action in build_plan["actions"]["rename"]))
         expected_offset = build_plan["placement_metadata"]["bbox_ground_center"]
         self.assertEqual(
-            build_plan["root_resolution"]["source_translation_offset"],
+            build_plan["root_resolutions"][0]["source_translation_offset"],
             expected_offset,
         )
         up_index = build_plan["placement_metadata"]["up_axis"]["index"]
-        offset_up = build_plan["root_resolution"]["source_translation_offset"][up_index]
+        offset_up = build_plan["root_resolutions"][0]["source_translation_offset"][up_index]
         source_bones_payload = json.loads((asset_dir / "Armature_all.json").read_text(encoding="utf-8"))
         source_hip_head_z = next(
             bone["head"][up_index] for bone in source_bones_payload["bones"] if bone["name"] == "Hip"
         )
         self.assertAlmostEqual(
-            build_plan["root_resolution"]["target_tail"][up_index],
+            build_plan["root_resolutions"][0]["target_tail"][up_index],
             source_hip_head_z + offset_up,
             places=6,
         )
@@ -238,7 +238,7 @@ class Phase3ClassifierTests(unittest.TestCase):
 
         _, build_plan, _, _ = write_asset_report(asset_dir)
 
-        offset = build_plan["root_resolution"]["source_translation_offset"]
+        offset = build_plan["root_resolutions"][0]["source_translation_offset"]
         for component in offset:
             self.assertLess(abs(component), 1e-6)
 
@@ -256,11 +256,11 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
         self.assertEqual(report["semantic_mapping"]["Hip"]["action"], "repair_in_builder")
         self.assertIn("paired_sided_pelvis_requires_centering", report["semantic_mapping"]["Hip"]["notes"])
-        self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
-        self.assertEqual(build_plan["root_resolution"]["source_bone"], "root")
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "create_new_root")
+        self.assertEqual(build_plan["root_resolutions"][0]["source_bone"], "root")
         self.assertIn("root_noncompliant", report["review_flags"])
-        self.assertIn("multiple_source_roots", build_plan["root_resolution"]["failure_codes"])
-        self.assertIn("root_not_vertical", build_plan["root_resolution"]["failure_codes"])
+        self.assertIn("multiple_source_roots", build_plan["root_resolutions"][0]["blocker_codes"])
+        self.assertIn("root_not_vertical", build_plan["root_resolutions"][0]["blocker_codes"])
         self.assertFalse(any(action["target"] == "Root" for action in build_plan["actions"]["rename"]))
         self.assertFalse(any(action["target"] == "Hip" for action in build_plan["actions"]["rename"]))
 
@@ -331,7 +331,7 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertIn("missing_spine_chain", report["review_flags"])
         self.assertIn(report["semantic_mapping"]["Hip"]["action"], {"review", "create_in_builder"})
         self.assertEqual(report["semantic_mapping"]["Upper_Leg_Left"]["source_bone"], "thigh.L")
-        self.assertEqual(build_plan["root_resolution"]["mode"], "review")
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "review")
 
     def test_compliant_wrong_named_root_reuses_existing_root_with_alias(self):
         bones = [
@@ -366,21 +366,21 @@ class Phase3ClassifierTests(unittest.TestCase):
         report, build_plan, _, _ = write_asset_report(asset_dir)
 
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "alias_map")
-        self.assertEqual(build_plan["root_resolution"]["mode"], "reuse_existing_root")
-        self.assertTrue(build_plan["root_resolution"]["rename_source_to_target"])
-        self.assertEqual(build_plan["root_resolution"]["source_bone"], "master")
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "reuse_existing_root")
+        self.assertTrue(build_plan["root_resolutions"][0]["rename_source_to_target"])
+        self.assertEqual(build_plan["root_resolutions"][0]["source_bone"], "master")
         self.assertIn(
             "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root",
-            build_plan["root_resolution"]["spec_references"],
+            build_plan["root_resolutions"][0]["spec_references"],
         )
         self.assertNotIn(
             "root_origin_violation_against_asam_7_3_3_1",
-            build_plan["root_resolution"]["diagnostic_notes"],
+            build_plan["root_resolutions"][0]["diagnostic_notes"],
         )
         self.assertFalse(
             any(
                 note.startswith("mesh_bounds_offset_detected")
-                for note in build_plan["root_resolution"]["diagnostic_notes"]
+                for note in build_plan["root_resolutions"][0]["diagnostic_notes"]
             )
         )
 
@@ -412,8 +412,8 @@ class Phase3ClassifierTests(unittest.TestCase):
         report, build_plan, _, _ = write_asset_report(asset_dir)
 
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
-        self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
-        self.assertIn("root_not_vertical", build_plan["root_resolution"]["failure_codes"])
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "create_new_root")
+        self.assertIn("root_not_vertical", build_plan["root_resolutions"][0]["blocker_codes"])
 
     def test_missing_root_with_valid_hip_repairs_in_builder(self):
         bones = [
@@ -442,9 +442,9 @@ class Phase3ClassifierTests(unittest.TestCase):
         report, build_plan, _, _ = write_asset_report(asset_dir)
 
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
-        self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
-        self.assertIsNone(build_plan["root_resolution"]["source_bone"])
-        self.assertIn("no_root_candidate", build_plan["root_resolution"]["failure_codes"])
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "create_new_root")
+        self.assertIsNone(build_plan["root_resolutions"][0]["source_bone"])
+        self.assertIn("no_root_candidate", build_plan["root_resolutions"][0]["blocker_codes"])
 
     def test_multi_root_control_rig_repairs_root(self):
         bones = [
@@ -469,9 +469,9 @@ class Phase3ClassifierTests(unittest.TestCase):
         report, build_plan, _, _ = write_asset_report(asset_dir)
 
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
-        self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
-        self.assertIn("multiple_source_roots", build_plan["root_resolution"]["failure_codes"])
-        self.assertIn("root_candidate_disallowed_role", build_plan["root_resolution"]["failure_codes"])
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "create_new_root")
+        self.assertIn("multiple_source_roots", build_plan["root_resolutions"][0]["blocker_codes"])
+        self.assertIn("root_candidate_disallowed_role", build_plan["root_resolutions"][0]["blocker_codes"])
 
     def test_cli_entrypoint_writes_report(self):
         asset_dir = _copy_asset_folder("openmatexamplehuman")
@@ -498,13 +498,27 @@ class Phase3ClassifierTests(unittest.TestCase):
         Under the new model this is advisory, not a blocker; mode should be reuse."""
         asset_dir = _copy_asset_folder("openmatexamplehuman")
         report, build_plan, _, _ = write_asset_report(asset_dir)
-        self.assertEqual(report["root_resolution"]["mode"], "reuse_existing_root")
-        self.assertEqual(report["root_resolution"]["failure_codes"], [])
+        self.assertEqual(report["root_resolutions"][0]["mode"], "reuse_existing_root")
+        self.assertEqual(report["root_resolutions"][0]["blocker_codes"], [])
+
+    def test_classifier_emits_root_resolutions_list(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        report, build_plan, _, _ = write_asset_report(asset_dir)
+        self.assertIn("root_resolutions", report)
+        self.assertIsInstance(report["root_resolutions"], list)
+        self.assertEqual(len(report["root_resolutions"]), 1)
+        entry = report["root_resolutions"][0]
+        self.assertEqual(entry["subtree_name"], "Grp_Root")
+        self.assertEqual(entry["blocker_codes"], [])
+        self.assertIn("advisories", entry)
+        self.assertEqual(report["root_resolutions"], build_plan["root_resolutions"])
+        self.assertNotIn("root_resolution", report)
+        self.assertNotIn("root_resolution", build_plan)
 
     def test_planar_offset_emitted_as_advisory_with_magnitude(self):
         asset_dir = _copy_asset_folder("openmatexamplehuman")
         report, _, _, _ = write_asset_report(asset_dir)
-        advisories = report["root_resolution"].get("advisories", [])
+        advisories = report["root_resolutions"][0].get("advisories", [])
         planar = [a for a in advisories if a.startswith("root_head_off_ground_center_advisory:")]
         self.assertEqual(len(planar), 1, "expected one planar advisory, got {0}".format(advisories))
         magnitude = float(planar[0].split(":", 1)[1])

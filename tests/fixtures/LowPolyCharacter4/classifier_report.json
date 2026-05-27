@@ -436,7 +436,8 @@
         "target_bone": "Root",
         "source_bone": null,
         "rename_source_to_target": false,
-        "failure_codes": [
+        "subtree_name": "Grp_Root",
+        "blocker_codes": [
           "candidate_conflict",
           "no_root_candidate",
           "root_candidate_missing_root_family",
@@ -1094,7 +1095,8 @@
         "target_bone": "Root",
         "source_bone": "root",
         "rename_source_to_target": false,
-        "failure_codes": [
+        "subtree_name": "Grp_Root",
+        "blocker_codes": [
           "multiple_source_roots",
           "root_children_not_hip_only",
           "root_not_vertical",
@@ -3042,54 +3044,57 @@
       "notes": []
     }
   },
-  "root_resolution": {
-    "mode": "create_new_root",
-    "target_bone": "Root",
-    "source_bone": "root",
-    "rename_source_to_target": false,
-    "failure_codes": [
-      "multiple_source_roots",
-      "root_children_not_hip_only",
-      "root_not_vertical",
-      "root_tail_mismatch_hip"
-    ],
-    "advisories": [
-      "root_head_off_ground_center_advisory:0.050998",
-      "root_head_off_ground_advisory:0.003348"
-    ],
-    "spec_references": [
-      "ASAM OpenMATERIAL 3D 7.3.3.1 General",
-      "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
-      "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
-    ],
-    "source_translation_offset": [
-      5.960464477539063e-08,
-      0.05099785327911377,
-      0.0033478213008493185
-    ],
-    "diagnostic_notes": [
-      "root_head_delta_forward=-0.050998",
-      "root_head_delta_side=-0.000000",
-      "root_head_delta_up=-0.003348",
-      "mesh_bounds_offset_detected_root_at_local_origin"
-    ],
-    "target_head": [
-      5.960464477539063e-08,
-      0.05099785327911377,
-      0.0033478213008493185
-    ],
-    "target_tail": [
-      5.960464477539063e-08,
-      0.05099785327911377,
-      0.9565739703830332
-    ],
-    "up_axis": {
-      "index": 2,
-      "name": "z",
-      "sign": 1
-    },
-    "use_connect": false
-  },
+  "root_resolutions": [
+    {
+      "mode": "create_new_root",
+      "target_bone": "Root",
+      "source_bone": "root",
+      "rename_source_to_target": false,
+      "subtree_name": "Grp_Root",
+      "blocker_codes": [
+        "multiple_source_roots",
+        "root_children_not_hip_only",
+        "root_not_vertical",
+        "root_tail_mismatch_hip"
+      ],
+      "advisories": [
+        "root_head_off_ground_center_advisory:0.050998",
+        "root_head_off_ground_advisory:0.003348"
+      ],
+      "spec_references": [
+        "ASAM OpenMATERIAL 3D 7.3.3.1 General",
+        "ASAM OpenMATERIAL 3D 7.3.3.3.2 Grp_Root",
+        "ASAM OpenMATERIAL 3D 7.3.3.3.4 Root"
+      ],
+      "source_translation_offset": [
+        5.960464477539063e-08,
+        0.05099785327911377,
+        0.0033478213008493185
+      ],
+      "diagnostic_notes": [
+        "root_head_delta_forward=-0.050998",
+        "root_head_delta_side=-0.000000",
+        "root_head_delta_up=-0.003348",
+        "mesh_bounds_offset_detected_root_at_local_origin"
+      ],
+      "target_head": [
+        5.960464477539063e-08,
+        0.05099785327911377,
+        0.0033478213008493185
+      ],
+      "target_tail": [
+        5.960464477539063e-08,
+        0.05099785327911377,
+        0.9565739703830332
+      ],
+      "up_axis": {
+        "index": 2,
+        "name": "z",
+        "sign": 1
+      },
+      "use_connect": false
+    }
+  ],
   "placement_metadata": {
     "bounds_source": "meshes",
     "driven_meshes": [

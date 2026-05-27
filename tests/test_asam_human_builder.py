@@ -112,17 +112,21 @@ def _base_build_plan(asset_name: str = "SyntheticAsset", armature_name: str = "R
     return {
         "asset_name": asset_name,
         "recommended_primary_armature": armature_name,
-        "root_resolution": {
-            "mode": "create_new_root",
-            "target_bone": "Root",
-            "source_bone": None,
-            "rename_source_to_target": False,
-            "failure_codes": [],
-            "target_head": [0.0, 0.0, 0.0],
-            "target_tail": [0.0, 0.0, 1.0],
-            "up_axis": {"index": 2, "name": "z", "sign": 1},
-            "use_connect": False,
-        },
+        "root_resolutions": [
+            {
+                "subtree_name": "Grp_Root",
+                "mode": "create_new_root",
+                "target_bone": "Root",
+                "source_bone": None,
+                "rename_source_to_target": False,
+                "blocker_codes": [],
+                "advisories": [],
+                "target_head": [0.0, 0.0, 0.0],
+                "target_tail": [0.0, 0.0, 1.0],
+                "up_axis": {"index": 2, "name": "z", "sign": 1},
+                "use_connect": False,
+            }
+        ],
         "placement_metadata": _placement_metadata(),
         "mesh_binding": _mesh_binding(armature_name),
         "proposed_asam_hierarchy": {
@@ -491,7 +495,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
 
         _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
 
-        self.assertEqual(build_plan["root_resolution"]["mode"], "reuse_existing_root")
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "reuse_existing_root")
         self.assertEqual(build_spec["source_armature_name"], "Armature")
         self.assertEqual(len(build_spec["bones"]), len(CORE_TARGETS))
 
@@ -506,15 +510,15 @@ class AsamHumanBuilderTests(unittest.TestCase):
 
         _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
 
-        self.assertEqual(build_plan["root_resolution"]["mode"], "create_new_root")
+        self.assertEqual(build_plan["root_resolutions"][0]["mode"], "create_new_root")
         self.assertEqual(build_spec["source_armature_name"], "rig")
         self.assertGreater(len(build_spec["extras_preserved"]), 0)
 
         root_bone = _spec_bone(build_spec, "Root")
         self.assertEqual(root_bone["geometry_source"], "root_resolution")
         self.assertEqual(root_bone["source_bone"], "root")
-        self.assertEqual(root_bone["head"], build_plan["root_resolution"]["target_head"])
-        self.assertEqual(root_bone["tail"], build_plan["root_resolution"]["target_tail"])
+        self.assertEqual(root_bone["head"], build_plan["root_resolutions"][0]["target_head"])
+        self.assertEqual(root_bone["tail"], build_plan["root_resolutions"][0]["target_tail"])
 
         hip_bone = _spec_bone(build_spec, "Hip")
         side_axis = build_plan["placement_metadata"]["side_axis"]["index"]
@@ -918,13 +922,13 @@ class AsamHumanBuilderTests(unittest.TestCase):
     def test_validate_builder_inputs_rejects_malformed_offset(self):
         report = _base_classifier_report()
         plan = _base_build_plan()
-        plan["root_resolution"]["source_translation_offset"] = [0.0, 0.0]
+        plan["root_resolutions"][0]["source_translation_offset"] = [0.0, 0.0]
 
         with self.assertRaises(ValueError) as ctx:
             validate_builder_inputs(report, plan)
         self.assertIn("length-3", str(ctx.exception))
 
-        plan["root_resolution"]["source_translation_offset"] = [0.0, "oops", 0.0]
+        plan["root_resolutions"][0]["source_translation_offset"] = [0.0, "oops", 0.0]
         with self.assertRaises(ValueError) as ctx:
             validate_builder_inputs(report, plan)
         self.assertIn("numeric", str(ctx.exception))
@@ -993,7 +997,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
     def test_build_armature_spec_translates_source_bones_in_create_new_root_mode(self):
         report = _base_classifier_report()
         plan = _base_build_plan()
-        plan["root_resolution"].update({
+        plan["root_resolutions"][0].update({
             "mode": "create_new_root",
             "source_bone": "Root",
             "target_head": [0.1, 0.0, 0.0],
@@ -1022,7 +1026,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
     def test_build_armature_spec_identity_when_offset_zero(self):
         report = _base_classifier_report()
         plan = _base_build_plan()
-        plan["root_resolution"].update({
+        plan["root_resolutions"][0].update({
             "mode": "create_new_root",
             "source_bone": "Root",
             "target_head": [0.0, 0.0, 0.0],
@@ -1048,7 +1052,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
     def test_reuse_existing_root_snaps_to_bbox_ground_center_via_translation(self):
         report = _base_classifier_report()
         plan = _base_build_plan()
-        plan["root_resolution"].update({
+        plan["root_resolutions"][0].update({
             "mode": "reuse_existing_root",
             "source_bone": "Root",
             "target_head": [0.01, 0.0, 0.0],

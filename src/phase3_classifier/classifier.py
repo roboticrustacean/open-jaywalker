@@ -325,7 +325,7 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         "armatures": armature_reports,
         "recommended_primary_armature": recommended_report["armature_name"],
         "semantic_mapping": copy.deepcopy(recommended_report["asam_targets"]),
-        "root_resolution": copy.deepcopy(recommended_report["root_resolution"]),
+        "root_resolutions": [copy.deepcopy(recommended_report["root_resolution"])],
         "placement_metadata": copy.deepcopy(recommended_report["placement_metadata"]),
         "mesh_binding": mesh_binding,
         "missing_targets": list(recommended_report["missing_core_targets"]),
@@ -339,7 +339,7 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         "asset_name": asset_dir.name,
         "recommended_primary_armature": recommended_report["armature_name"],
         "actions": actions,
-        "root_resolution": copy.deepcopy(recommended_report["root_resolution"]),
+        "root_resolutions": [copy.deepcopy(recommended_report["root_resolution"])],
         "placement_metadata": copy.deepcopy(recommended_report["placement_metadata"]),
         "mesh_binding": copy.deepcopy(mesh_binding),
         "proposed_asam_hierarchy": copy.deepcopy(recommended_report["proposed_asam_hierarchy"]),
@@ -399,7 +399,7 @@ def print_console_summary(report: dict, plan: dict, report_path: Path, plan_path
 
     print("")
     print("Recommended primary armature: {0}".format(report["recommended_primary_armature"]))
-    print("Root resolution: {0}".format(plan["root_resolution"]["mode"]))
+    print("Root resolution: {0}".format(plan["root_resolutions"][0]["mode"]))
     print("Missing targets: {0}".format(", ".join(report["missing_targets"]) or "(none)"))
     print("Ambiguous targets: {0}".format(", ".join(item["target"] for item in report["ambiguous_targets"]) or "(none)"))
     print("Preserved extras count: {0}".format(len(plan["extras_preserved"])))
@@ -784,7 +784,8 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "target_bone": "Root",
             "source_bone": candidate.source_bone,
             "rename_source_to_target": candidate.source_bone != "Root",
-            "failure_codes": [],
+            "subtree_name": "Grp_Root",
+            "blocker_codes": [],
             "advisories": advisory_codes,
             "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
             "source_translation_offset": list(source_translation_offset),
@@ -803,7 +804,8 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "target_bone": "Root",
             "source_bone": source_bone,
             "rename_source_to_target": False,
-            "failure_codes": blocker_codes,
+            "subtree_name": "Grp_Root",
+            "blocker_codes": blocker_codes,
             "advisories": advisory_codes,
             "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
             "source_translation_offset": list(source_translation_offset),
@@ -821,7 +823,8 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
         "target_bone": "Root",
         "source_bone": source_bone,
         "rename_source_to_target": False,
-        "failure_codes": sorted(set(blocker_codes + ["insufficient_root_builder_inputs"])),
+        "subtree_name": "Grp_Root",
+        "blocker_codes": sorted(set(blocker_codes + ["insufficient_root_builder_inputs"])),
         "advisories": advisory_codes,
         "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
         "source_translation_offset": list(source_translation_offset),

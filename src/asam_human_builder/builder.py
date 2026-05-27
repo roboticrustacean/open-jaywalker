@@ -42,7 +42,7 @@ REQUIRED_REPORT_FIELDS = {
 REQUIRED_PLAN_FIELDS = {
     "asset_name",
     "recommended_primary_armature",
-    "root_resolution",
+    "root_resolutions",
     "placement_metadata",
     "mesh_binding",
     "proposed_asam_hierarchy",
@@ -80,8 +80,17 @@ def validate_builder_inputs(classifier_report: dict, build_plan: dict) -> None:
 
     if not isinstance(classifier_report.get("semantic_mapping"), dict):
         raise ValueError("classifier_report.semantic_mapping must be a dictionary")
-    if not isinstance(build_plan.get("root_resolution"), dict):
-        raise ValueError("build_plan.root_resolution must be a dictionary")
+    root_resolutions = build_plan.get("root_resolutions")
+    if not isinstance(root_resolutions, list) or not root_resolutions:
+        raise ValueError("build_plan.root_resolutions must be a non-empty list")
+    if not isinstance(root_resolutions[0], dict):
+        raise ValueError("build_plan.root_resolutions[0] must be a dictionary")
+    if len(root_resolutions) > 1:
+        import warnings as _warnings
+        _warnings.warn(
+            "build_plan.root_resolutions length > 1 not yet supported; using index 0",
+            stacklevel=2,
+        )
     if not isinstance(build_plan.get("placement_metadata"), dict):
         raise ValueError("build_plan.placement_metadata must be a dictionary")
     if not isinstance(build_plan.get("mesh_binding"), dict):
@@ -108,17 +117,17 @@ def validate_builder_inputs(classifier_report: dict, build_plan: dict) -> None:
             )
         )
 
-    if "source_translation_offset" in build_plan["root_resolution"]:
-        offset = build_plan["root_resolution"]["source_translation_offset"]
+    if "source_translation_offset" in root_resolutions[0]:
+        offset = root_resolutions[0]["source_translation_offset"]
         if not isinstance(offset, (list, tuple)) or len(offset) != 3:
             raise ValueError(
-                "build_plan.root_resolution.source_translation_offset must be a length-3 sequence"
+                "build_plan.root_resolutions[0].source_translation_offset must be a length-3 sequence"
             )
         try:
             [float(value) for value in offset]
         except (TypeError, ValueError) as exc:
             raise ValueError(
-                "build_plan.root_resolution.source_translation_offset entries must be numeric"
+                "build_plan.root_resolutions[0].source_translation_offset entries must be numeric"
             ) from exc
 
 
@@ -287,7 +296,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
 
     asset_name = build_plan["asset_name"]
     semantic_mapping = classifier_report["semantic_mapping"]
-    root_resolution = build_plan["root_resolution"]
+    root_resolution = build_plan["root_resolutions"][0]
     placement_metadata = build_plan["placement_metadata"]
     bone_parents = build_plan["proposed_asam_hierarchy"]["bone_parents"]
     children_map = _build_children_map(bone_parents)

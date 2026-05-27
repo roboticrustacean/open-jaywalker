@@ -36,7 +36,7 @@ class PipelineWorkflowTests(unittest.TestCase):
             classifier_calls.append(path)
             return (
                 {"recommended_primary_armature": "Rig"},
-                {"root_resolution": {"mode": "reuse_existing_root"}},
+                {"root_resolutions": [{"mode": "reuse_existing_root"}]},
                 path / "phase3_classification.json",
                 path / "build_plan.json",
             )
@@ -96,7 +96,7 @@ class PipelineWorkflowTests(unittest.TestCase):
         def classify_fn(path):
             return (
                 {"recommended_primary_armature": "Rig"},
-                {"root_resolution": {"mode": "reuse_existing_root"}},
+                {"root_resolutions": [{"mode": "reuse_existing_root"}]},
                 path / "phase3_classification.json",
                 path / "build_plan.json",
             )
