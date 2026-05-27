@@ -442,6 +442,7 @@
           -0.06670395284891129,
           0.025279806926846504
         ],
+        "preserve_source_root_as_extra": false,
         "blocker_codes": [
           "candidate_conflict",
           "no_root_candidate",
@@ -1090,6 +1091,7 @@
           0.05099785327911377,
           0.0033478213008493185
         ],
+        "preserve_source_root_as_extra": true,
         "blocker_codes": [
           "multiple_source_roots",
           "root_children_not_hip_only",
@@ -3034,6 +3036,7 @@
         0.05099785327911377,
         0.0033478213008493185
       ],
+      "preserve_source_root_as_extra": true,
       "blocker_codes": [
         "multiple_source_roots",
         "root_children_not_hip_only",

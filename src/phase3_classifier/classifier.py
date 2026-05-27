@@ -779,6 +779,12 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
     placement_metadata = context["placement_metadata"]
     grp_root_local_origin = [float(value) for value in placement_metadata["bbox_ground_center"]]
 
+    preserve_source_root_as_extra = (
+        candidate is not None
+        and candidate_bone is not None
+        and candidate.role not in {"control", "mechanism"}
+    )
+
     if candidate is not None and not blocker_codes:
         action = "direct_map" if candidate.source_bone == "Root" and candidate.name_evidence >= 0.95 else "alias_map"
         resolved_targets["Root"] = _target_payload_from_candidate(candidate, action, notes=[])
@@ -806,6 +812,9 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "rename_source_to_target": False,
             "subtree_name": "Grp_Root",
             "grp_root_local_origin": grp_root_local_origin,
+            "preserve_source_root_as_extra": (
+                preserve_source_root_as_extra and source_bone is not None
+            ),
             "blocker_codes": blocker_codes,
             "advisories": advisory_codes,
             "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),

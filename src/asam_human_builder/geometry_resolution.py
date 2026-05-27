@@ -518,3 +518,31 @@ def _ensure_non_zero_geometry(head: Sequence[float], tail: Sequence[float], plac
 
 def _distance(point_a: Sequence[float], point_b: Sequence[float]) -> float:
     return math.sqrt(sum((point_b[index] - point_a[index]) ** 2 for index in range(3)))
+
+
+def _resolve_preserved_source_root_extra(
+    root_resolution: dict,
+    source_bones: Dict[str, dict],
+) -> Optional[dict]:
+    """When mode == create_new_root and the source root is preservable, return
+    its geometry as a sibling-extra bone payload (in source-world coords). The
+    caller is responsible for the Grp_Root-local rebase. Returns None when the
+    conditions are not met.
+    """
+    if root_resolution.get("mode") != "create_new_root":
+        return None
+    if not root_resolution.get("preserve_source_root_as_extra"):
+        return None
+    source_name = root_resolution.get("source_bone")
+    if not source_name or source_name not in source_bones:
+        return None
+    source = source_bones[source_name]
+    generated_name = source_name if source_name != "Root" else "Root_Source"
+    return {
+        "name": generated_name,
+        "head": [float(v) for v in source["head"]],
+        "tail": [float(v) for v in source["tail"]],
+        "geometry_source": "preserved_source_root",
+        "source_bone": source_name,
+        "semantic_action": "preserve_extra",
+    }

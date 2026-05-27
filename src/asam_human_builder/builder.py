@@ -14,6 +14,7 @@ from phase3_classifier.classifier import CORE_TARGETS
 from asam_human_builder.geometry_resolution import (
     _hip_requires_centered_pelvis_pair,
     _opposite_name_candidates,
+    _resolve_preserved_source_root_extra,
     _resolve_target_geometry,
     _spec_style_side_suffix,
 )
@@ -350,6 +351,21 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
                 "geometry_source": geometry_source,
                 "source_bone": source_bone_name,
                 "semantic_action": semantic_mapping[target_name]["action"],
+            }
+        )
+
+    preserved_root = _resolve_preserved_source_root_extra(root_resolution, source_bones)
+    if preserved_root is not None:
+        spec["bones"].append(
+            {
+                "name": preserved_root["name"],
+                "parent_bone": None,
+                "head": _to_grp_root_local(preserved_root["head"], grp_root_local_origin),
+                "tail": _to_grp_root_local(preserved_root["tail"], grp_root_local_origin),
+                "use_connect": False,
+                "geometry_source": preserved_root["geometry_source"],
+                "source_bone": preserved_root["source_bone"],
+                "semantic_action": preserved_root["semantic_action"],
             }
         )
 

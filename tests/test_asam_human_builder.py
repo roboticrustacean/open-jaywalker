@@ -487,6 +487,55 @@ class _FakeBpy:
 
 
 class AsamHumanBuilderTests(unittest.TestCase):
+    def test_synthesized_path_preserves_source_root_as_sibling_extra(self):
+        """When mode == create_new_root and preserve_source_root_as_extra is true,
+        the source root bone is appended as a non-ASAM sibling extra parented to
+        Armature (parent_bone=None), keeping its source-bone identity for skin
+        weight retention."""
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        plan["root_resolutions"][0].update({
+            "mode": "create_new_root",
+            "source_bone": "Root",
+            "preserve_source_root_as_extra": True,
+            "grp_root_local_origin": [0.05, 0.0, 0.0],
+        })
+        source_bones = {
+            "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.6)),
+        }
+        spec = build_armature_spec(report, plan, source_bones)
+        extra = next(
+            (b for b in spec["bones"] if b.get("geometry_source") == "preserved_source_root"),
+            None,
+        )
+        self.assertIsNotNone(extra)
+        self.assertEqual(extra["source_bone"], "Root")
+        # Source name collides with "Root" of the synthesized core target so the
+        # generated extra is renamed.
+        self.assertEqual(extra["name"], "Root_Source")
+        # Source root.head was (0, 0, 0); local = source - grp_root_local_origin.
+        self.assertAlmostEqual(extra["head"][0], -0.05, places=6)
+        self.assertAlmostEqual(extra["head"][1], 0.0, places=6)
+        self.assertAlmostEqual(extra["head"][2], 0.0, places=6)
+        # Extra is parented to the Armature (not to Root)
+        self.assertIsNone(extra["parent_bone"])
+
+    def test_synthesized_path_skips_extra_when_flag_false(self):
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        plan["root_resolutions"][0].update({
+            "mode": "create_new_root",
+            "source_bone": "Root",
+            "preserve_source_root_as_extra": False,
+            "grp_root_local_origin": [0.0, 0.0, 0.0],
+        })
+        source_bones = {
+            "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.6)),
+        }
+        spec = build_armature_spec(report, plan, source_bones)
+        extras = [b for b in spec["bones"] if b.get("geometry_source") == "preserved_source_root"]
+        self.assertEqual(extras, [])
+
     def test_synthesized_root_is_at_grp_root_local_origin(self):
         """When mode == create_new_root, the synthesized Root sits at (0,0,0)
         in spec coords (Grp_Root-local) with the tail offset along the up axis."""
