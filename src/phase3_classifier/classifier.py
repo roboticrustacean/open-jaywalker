@@ -770,12 +770,12 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
     hip_bone = context["bones"].get(hip_payload.get("source_bone")) if hip_payload.get("source_bone") else None
     source_translation_offset = _compute_source_translation_offset(candidate_bone, context)
     target_head, target_tail = _build_root_target_geometry(hip_bone, context, source_translation_offset)
-    failure_codes = _root_failure_codes(original_payload, candidate, hip_bone, context)
-    diagnostics = _build_root_compliance_diagnostics(candidate_bone, context, failure_codes)
+    blocker_codes = _root_blocker_codes(original_payload, candidate, hip_bone, context)
+    diagnostics = _build_root_compliance_diagnostics(candidate_bone, context, blocker_codes)
     can_create_new_root = target_head is not None and target_tail is not None
     source_bone = candidate.source_bone if candidate_bone is not None and "root" in candidate_bone.family_tags else None
 
-    if candidate is not None and not failure_codes:
+    if candidate is not None and not blocker_codes:
         action = "direct_map" if candidate.source_bone == "Root" and candidate.name_evidence >= 0.95 else "alias_map"
         resolved_targets["Root"] = _target_payload_from_candidate(candidate, action, notes=[])
         return {
@@ -794,14 +794,14 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
         }
 
     if can_create_new_root:
-        notes = sorted(set(list(original_payload.get("notes", [])) + failure_codes))
+        notes = sorted(set(list(original_payload.get("notes", [])) + blocker_codes))
         resolved_targets["Root"] = _target_payload_from_candidate(candidate, "repair_in_builder", notes=notes)
         return {
             "mode": "create_new_root",
             "target_bone": "Root",
             "source_bone": source_bone,
             "rename_source_to_target": False,
-            "failure_codes": failure_codes,
+            "failure_codes": blocker_codes,
             "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
             "source_translation_offset": list(source_translation_offset),
             "diagnostic_notes": diagnostics,
@@ -811,14 +811,14 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
             "use_connect": False,
         }
 
-    notes = sorted(set(list(original_payload.get("notes", [])) + failure_codes + ["insufficient_root_builder_inputs"]))
+    notes = sorted(set(list(original_payload.get("notes", [])) + blocker_codes + ["insufficient_root_builder_inputs"]))
     resolved_targets["Root"] = _target_payload_from_candidate(candidate, "review", notes=notes)
     return {
         "mode": "review",
         "target_bone": "Root",
         "source_bone": source_bone,
         "rename_source_to_target": False,
-        "failure_codes": sorted(set(failure_codes + ["insufficient_root_builder_inputs"])),
+        "failure_codes": sorted(set(blocker_codes + ["insufficient_root_builder_inputs"])),
         "spec_references": list(ROOT_ORIGIN_SPEC_REFERENCES),
         "source_translation_offset": list(source_translation_offset),
         "diagnostic_notes": diagnostics,
@@ -892,7 +892,15 @@ def _build_root_target_geometry(
     return target_head, target_tail
 
 
-def _root_failure_codes(
+def _root_advisory_codes(
+    candidate: Optional[CandidateScore],
+    context: dict,
+) -> List[str]:
+    """Advisory diagnostic codes for the source root (Task 2 fills this in)."""
+    return []
+
+
+def _root_blocker_codes(
     original_payload: dict,
     candidate: Optional[CandidateScore],
     hip_bone: Optional[BoneInfo],

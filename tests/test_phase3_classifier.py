@@ -482,6 +482,11 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertIn("Recommended primary armature: Armature", result.stdout)
         self.assertIn("Root resolution: create_new_root", result.stdout)
 
+    def test_root_blocker_codes_helper_exists(self):
+        from phase3_classifier.classifier import _root_blocker_codes, _root_advisory_codes  # noqa: F401
+        self.assertTrue(callable(_root_blocker_codes))
+        self.assertTrue(callable(_root_advisory_codes))
+
 
 if __name__ == "__main__":
     unittest.main()
