@@ -527,8 +527,9 @@ def print_console_summary(report: dict, plan: dict, report_path: Path, plan_path
 
 
 def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
-    bones = _build_bone_index(armature_input.primary_data, armature_input.support_data)
-    context = _build_context(bones, armature_input.primary_data, armature_input.support_data)
+    convention = _detect_convention(armature_input.primary_data, armature_input.support_data)
+    bones = _build_bone_index(armature_input.primary_data, armature_input.support_data, convention)
+    context = _build_context(bones, armature_input.primary_data, armature_input.support_data, convention)
 
     target_candidates: Dict[str, List[CandidateScore]] = {}
     for target_name in CORE_TARGETS:
@@ -564,6 +565,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
 
     return {
         "armature_name": armature_input.armature_name,
+        "detected_convention": convention,
         "selected_inputs": {
             "primary": armature_input.primary_path.name,
             "support": armature_input.support_path.name if armature_input.support_path else None,
@@ -592,7 +594,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
     }
 
 
-def _build_context(bones: Dict[str, BoneInfo], primary_data: dict, support_data: Optional[dict]) -> dict:
+def _build_context(bones: Dict[str, BoneInfo], primary_data: dict, support_data: Optional[dict], convention: str = "none") -> dict:
     children_map = {name: list(bone.child_names) for name, bone in bones.items()}
     derived_height_axis, derived_lateral_axis = _infer_axes(bones.values())
     derived_centerline = _median([bone.midpoint[derived_lateral_axis] for bone in bones.values()])
@@ -639,6 +641,7 @@ def _build_context(bones: Dict[str, BoneInfo], primary_data: dict, support_data:
         "spine_chain": _choose_spine_chain(primary_data, support_data),
         "arm_chains": _choose_limb_chains(bones, primary_data, support_data, "arm", lateral_axis, centerline, side_signs),
         "leg_chains": _choose_limb_chains(bones, primary_data, support_data, "leg", lateral_axis, centerline, side_signs),
+        "convention": convention,
     }
 
 
@@ -724,7 +727,7 @@ def _derive_placement_metadata_from_bones(
     }
 
 
-def _build_bone_index(primary_data: dict, support_data: Optional[dict]) -> Dict[str, BoneInfo]:
+def _build_bone_index(primary_data: dict, support_data: Optional[dict], convention: str = "none") -> Dict[str, BoneInfo]:
     raw_bones: Dict[str, dict] = {}
     origins: Dict[str, str] = {}
 
@@ -745,8 +748,8 @@ def _build_bone_index(primary_data: dict, support_data: Optional[dict]) -> Dict[
     bone_index: Dict[str, BoneInfo] = {}
     for name in sorted(raw_bones):
         payload = raw_bones[name]
-        normalized_name, compact_name, tokens, side = _normalize_bone_name(name)
-        family_tags = _detect_family_tags(normalized_name, compact_name, tokens)
+        normalized_name, compact_name, tokens, side = _normalize_bone_name(name, convention)
+        family_tags = _detect_family_tags(normalized_name, compact_name, tokens, convention)
         role, role_modifier = _classify_bone_role(name, tokens)
         head = _to_float_triplet(payload.get("head"))
         tail = _to_float_triplet(payload.get("tail"))
@@ -780,7 +783,7 @@ def _build_bone_index(primary_data: dict, support_data: Optional[dict]) -> Dict[
 def _score_target_candidate(target_name: str, bone: BoneInfo, context: dict) -> Optional[CandidateScore]:
     family = CORE_FAMILY_BY_TARGET[target_name]
     side = _target_side(target_name)
-    name_score = _name_evidence(target_name, bone)
+    name_score = _name_evidence(target_name, bone, context.get("convention", "none"))
     hierarchy_score = _hierarchy_evidence(target_name, bone, context)
     geometry_score = _geometry_evidence(target_name, bone, context)
     confidence = round(_clamp(0.5 * name_score + 0.3 * hierarchy_score + 0.2 * geometry_score), 3)

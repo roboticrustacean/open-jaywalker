@@ -819,5 +819,29 @@ class ConventionDetectionTests(unittest.TestCase):
         self.assertEqual(_family_name_score("hand", bone, "mixamo"), 0.82)
 
 
+class ConventionReportTests(unittest.TestCase):
+    def test_detected_convention_in_report(self):
+        bones = [
+            _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 1.0)),
+            _bone("Hip", "Root", (0.0, 0.0, 1.0), (0.0, 0.0, 1.1)),
+            _bone("Lower_Spine", "Hip", (0.0, 0.0, 1.1), (0.0, 0.0, 1.25)),
+            _bone("Upper_Spine", "Lower_Spine", (0.0, 0.0, 1.25), (0.0, 0.0, 1.45)),
+            _bone("Upper_Leg_Left", "Hip", (0.0, 0.15, 1.0), (0.0, 0.15, 0.45)),
+            _bone("Upper_Leg_Right", "Hip", (0.0, -0.15, 1.0), (0.0, -0.15, 0.45)),
+        ]
+        chains = {
+            "spine": [["Lower_Spine", "Upper_Spine"]],
+            "leg": {"left": [["Upper_Leg_Left"]], "right": [["Upper_Leg_Right"]], "unsided": []},
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        asset_dir = _write_single_armature_asset(
+            "convention_none_report", "Rig", bones, chains,
+            _placement_metadata((-0.2, -0.25, 0.0), (0.2, 0.25, 1.8)),
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+        armatures = {item["armature_name"]: item for item in report["armatures"]}
+        self.assertEqual(armatures["Rig"]["detected_convention"], "none")
+
+
 if __name__ == "__main__":
     unittest.main()
