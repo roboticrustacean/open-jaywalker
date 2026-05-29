@@ -182,6 +182,77 @@ CORE_FAMILY_BY_TARGET: Dict[str, str] = {
     "Full_Toes_Right": "full_toes",
 }
 
+# Translation from a scoring-family name (CORE_FAMILY_BY_TARGET values) to the
+# family-tag vocabulary used by _detect_family_tags / _score_target_candidate.
+SCORING_FAMILY_TO_TAGS: Dict[str, Set[str]] = {
+    "root": {"root"},
+    "hip": {"hip"},
+    "lower_spine": {"spine", "lower_spine"},
+    "upper_spine": {"spine", "upper_spine"},
+    "neck": {"neck"},
+    "head": {"head"},
+    "eye": {"eye"},
+    "shoulder": {"shoulder"},
+    "upper_arm": {"upper_arm"},
+    "lower_arm": {"lower_arm"},
+    "hand": {"hand"},
+    "full_thumb": {"thumb"},
+    "full_fingers": {"finger"},
+    "upper_leg": {"upper_leg"},
+    "lower_leg": {"lower_leg"},
+    "foot": {"foot"},
+    "full_toes": {"toe"},
+}
+
+
+@dataclass(frozen=True)
+class BoneConvention:
+    name: str
+    # Keys are digit-stripped *compact* names; values are scoring-family names.
+    alias_families: Dict[str, frozenset]
+
+
+BONE_CONVENTIONS: Dict[str, BoneConvention] = {
+    "biped": BoneConvention(
+        name="biped",
+        alias_families={
+            "com": frozenset({"root"}),
+            "pelvis": frozenset({"hip"}),
+            "spine": frozenset({"lower_spine", "upper_spine"}),
+            "clavicle": frozenset({"shoulder"}),
+            "upperarm": frozenset({"upper_arm"}),
+            "forearm": frozenset({"lower_arm"}),
+            "hand": frozenset({"hand"}),
+            "thigh": frozenset({"upper_leg"}),
+            "calf": frozenset({"lower_leg"}),
+            "foot": frozenset({"foot"}),
+            "toe": frozenset({"full_toes"}),
+        },
+    ),
+    "mixamo": BoneConvention(
+        name="mixamo",
+        alias_families={
+            "hips": frozenset({"hip"}),
+            "spine": frozenset({"lower_spine", "upper_spine"}),
+            "neck": frozenset({"neck"}),
+            "head": frozenset({"head"}),
+            "shoulder": frozenset({"shoulder"}),
+            "arm": frozenset({"upper_arm"}),
+            "forearm": frozenset({"lower_arm"}),
+            "hand": frozenset({"hand"}),
+            "upleg": frozenset({"upper_leg"}),
+            "leg": frozenset({"lower_leg"}),
+            "foot": frozenset({"foot"}),
+            "toebase": frozenset({"full_toes"}),
+        },
+    ),
+}
+
+
+def _compact_stem(compact_name: str) -> str:
+    """Compact name with any trailing digits removed (spine0 -> spine, com1 -> com)."""
+    return re.sub(r"\d+$", "", compact_name)
+
 
 @dataclass
 class ArmatureInput:
@@ -1920,6 +1991,36 @@ def _infer_chain_side(
             return "right"
 
     return "left" if offset > 0 else "right"
+
+
+def _detect_convention(primary_data: dict, support_data: Optional[dict]) -> str:
+    """Identify a non-Rigify naming convention from the raw bone set.
+
+    Conservative signatures avoid false positives on Rigify/ASAM rigs:
+    - 'mixamo' when any raw name carries the 'mixamorig' namespace.
+    - 'biped' when any token matches bip<digits>, or a 'com' compact stem
+      co-occurs with a 'pelvis' compact stem.
+    - 'none' otherwise.
+    """
+    raw_names: List[str] = []
+    for payload in (primary_data, support_data or {}):
+        for bone in payload.get("bones", []):
+            raw_names.append(bone["name"])
+
+    if any("mixamorig" in name.lower() for name in raw_names):
+        return "mixamo"
+
+    stems: Set[str] = set()
+    has_bip_token = False
+    for name in raw_names:
+        _, compact, tokens, _ = _normalize_bone_name(name)
+        if any(re.fullmatch(r"bip\d+", token) for token in tokens):
+            has_bip_token = True
+        stems.add(_compact_stem(compact))
+
+    if has_bip_token or ("com" in stems and "pelvis" in stems):
+        return "biped"
+    return "none"
 
 
 def _normalize_bone_name(name: str) -> Tuple[str, str, List[str], Optional[str]]:

@@ -21,6 +21,11 @@ from phase3_classifier.classifier import (  # noqa: E402
     _compute_deform_evidence_term,
     _compute_extras_term,
     _compute_selection_tiebreaker,
+    _detect_convention,
+    _normalize_bone_name,
+    _detect_family_tags,
+    _family_name_score,
+    BoneInfo,
 )
 
 
@@ -732,6 +737,30 @@ class ArmatureSelectionCascadeTests(unittest.TestCase):
             self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
         ]
         self.assertEqual(_compute_selection_tiebreaker(reports), "armature_name")
+
+
+class ConventionDetectionTests(unittest.TestCase):
+    @staticmethod
+    def _data(names):
+        return {"bones": [{"name": n, "parent": None, "head": [0, 0, 0], "tail": [0, 0, 1]} for n in names]}
+
+    def test_detects_mixamo_from_namespace(self):
+        data = self._data(["mixamorig:Hips", "mixamorig:LeftUpLeg"])
+        self.assertEqual(_detect_convention(data, None), "mixamo")
+
+    def test_detects_biped_from_bip_token(self):
+        data = self._data(["Bip01 COM", "Bip01 Pelvis", "Bip01 LThigh"])
+        self.assertEqual(_detect_convention(data, None), "biped")
+
+    def test_detects_biped_from_com_and_pelvis(self):
+        data = self._data(["COM", "Pelvis", "Spine0"])
+        self.assertEqual(_detect_convention(data, None), "biped")
+
+    def test_rigify_and_asam_detect_none(self):
+        rigify = self._data(["DEF-spine", "DEF-pelvis.L", "DEF-pelvis.R", "DEF-upper_arm.L"])
+        asam = self._data(["Root", "Hip", "Lower_Spine", "Head"])
+        self.assertEqual(_detect_convention(rigify, None), "none")
+        self.assertEqual(_detect_convention(asam, None), "none")
 
 
 if __name__ == "__main__":
