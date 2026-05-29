@@ -762,6 +762,21 @@ class ConventionDetectionTests(unittest.TestCase):
         self.assertEqual(_detect_convention(rigify, None), "none")
         self.assertEqual(_detect_convention(asam, None), "none")
 
+    def test_biped_prefix_dropped_keeps_compact_clean(self):
+        # Without the drop, compact would be "bip01pelvis" and miss the alias.
+        _, compact, tokens, _ = _normalize_bone_name("Bip01 Pelvis", "biped")
+        self.assertEqual(compact, "pelvis")
+        self.assertNotIn("bip01", tokens)
+
+    def test_biped_prefix_kept_when_convention_none(self):
+        _, compact, _, _ = _normalize_bone_name("Bip01 Pelvis", "none")
+        self.assertEqual(compact, "bip01pelvis")
+
+    def test_leading_side_still_detected_with_biped_prefix(self):
+        _, compact, _, side = _normalize_bone_name("Bip01 LThigh", "biped")
+        self.assertEqual(compact, "thigh")
+        self.assertEqual(side, "left")
+
 
 if __name__ == "__main__":
     unittest.main()

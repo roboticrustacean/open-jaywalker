@@ -2023,7 +2023,7 @@ def _detect_convention(primary_data: dict, support_data: Optional[dict]) -> str:
     return "none"
 
 
-def _normalize_bone_name(name: str) -> Tuple[str, str, List[str], Optional[str]]:
+def _normalize_bone_name(name: str, convention: str = "none") -> Tuple[str, str, List[str], Optional[str]]:
     transformed = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
     transformed = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", transformed)
     transformed = transformed.split(":")[-1].lower()
@@ -2034,6 +2034,8 @@ def _normalize_bone_name(name: str) -> Tuple[str, str, List[str], Optional[str]]
     side: Optional[str] = None
 
     for token in raw_tokens:
+        if convention == "biped" and re.fullmatch(r"bip\d+", token):
+            continue
         if token in SIDE_WORDS:
             side = SIDE_WORDS[token]
             continue
