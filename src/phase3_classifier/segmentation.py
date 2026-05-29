@@ -38,7 +38,11 @@ def strip_character_prefix(bone_name: str, prefix: str) -> str:
     stripped = _strip_namespace(bone_name)
     if stripped.startswith(prefix):
         stripped = stripped[len(prefix):]
-    return _ID_SUFFIX_RE.sub("", stripped)
+    result = _ID_SUFFIX_RE.sub("", stripped)
+    # A bone named exactly the prefix (e.g. a sub-root 'Female000' / 'Female000_5')
+    # would strip to empty; keep the namespace-stripped name so it stays a usable,
+    # unique bone identifier rather than an empty string.
+    return result or _strip_namespace(bone_name)
 
 
 MIN_CHARACTER_BONES = 5
@@ -94,7 +98,8 @@ def detect_characters(bones: List[dict]) -> Tuple[List[CharacterGroup], List[str
     for prefix, names in grouped.items():
         if prefix is None or len(names) < MIN_CHARACTER_BONES:
             continue
-        ordered = [bone["name"] for bone in bones if bone["name"] in set(names)]
+        name_set = set(names)
+        ordered = [bone["name"] for bone in bones if bone["name"] in name_set]
         characters.append(
             CharacterGroup(
                 character_id=prefix,
@@ -255,6 +260,10 @@ def segment_recommended(asset_name: str, recommended_input) -> Optional[Segmenta
     """Return per-character decomposition for a crowd armature, or None if single."""
     bones = recommended_input.primary_data.get("bones", [])
     groups, shared = detect_characters(bones)
+    # Load-bearing single-character guarantee: a normal single rig (even one whose
+    # bones all share a 'Bip01' prefix) yields exactly one group, so fan-out only
+    # triggers on >=2 distinct accepted character prefixes. Everything else falls
+    # through to the unchanged flat report path.
     if len(groups) < 2:
         return None
 

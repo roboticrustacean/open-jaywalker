@@ -43,6 +43,10 @@ class PrefixDerivationTests(unittest.TestCase):
         self.assertEqual(strip_character_prefix("Female000LCalf_010", "Female000"), "LCalf")
         self.assertEqual(strip_character_prefix("Female000COM_001", "Female000"), "COM")
 
+    def test_strip_prefix_of_prefix_only_name_stays_nonempty(self):
+        self.assertEqual(strip_character_prefix("Female000", "Female000"), "Female000")
+        self.assertEqual(strip_character_prefix("Female000_5", "Female000"), "Female000_5")
+
 
 def _crowd_bones():
     """Two 6-bone characters under a shared _rootJoint, plus one stray bone."""
