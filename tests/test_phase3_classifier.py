@@ -1045,5 +1045,16 @@ class ConventionReportTests(unittest.TestCase):
         self.assertEqual(mapping["Full_Toes_Left"]["source_bone"], "mixamorig:LeftToeBase")
 
 
+class FixtureStabilityTests(unittest.TestCase):
+    def test_known_fixtures_stay_single_character(self):
+        for asset_name in ("LowPolyCharacter4", "openmatexamplehuman"):
+            asset_dir = _copy_asset_folder(asset_name)
+            report, build_plan, _, _ = write_asset_report(asset_dir)
+            self.assertNotIn("characters", report, asset_name)
+            self.assertNotIn("character_decomposition", report["asset_summary"], asset_name)
+            self.assertNotIn("characters", build_plan, asset_name)
+            self.assertIn("semantic_mapping", report, asset_name)
+
+
 if __name__ == "__main__":
     unittest.main()
