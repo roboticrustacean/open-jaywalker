@@ -388,17 +388,25 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
 
     actions = _build_actions(recommended_report["asam_targets"])
 
+    recommended_input = next(
+        item for item in armature_inputs if item.armature_name == recommended_report["armature_name"]
+    )
+    from phase3_classifier.segmentation import segment_recommended  # local import avoids cycle
+    segmentation = segment_recommended(asset_dir.name, recommended_input)
+
+    asset_summary = {
+        "asset_name": asset_dir.name,
+        "asset_dir": str(asset_dir),
+        "armature_count": len(armature_reports),
+        "discovered_armatures": [report["armature_name"] for report in armature_reports],
+        "ranking": [
+            _build_ranking_entry(report, selection_tiebreaker if index == 0 else None)
+            for index, report in enumerate(ranked_reports)
+        ],
+    }
+
     classifier_report = {
-        "asset_summary": {
-            "asset_name": asset_dir.name,
-            "asset_dir": str(asset_dir),
-            "armature_count": len(armature_reports),
-            "discovered_armatures": [report["armature_name"] for report in armature_reports],
-            "ranking": [
-                _build_ranking_entry(report, selection_tiebreaker if index == 0 else None)
-                for index, report in enumerate(ranked_reports)
-            ],
-        },
+        "asset_summary": asset_summary,
         "armatures": armature_reports,
         "recommended_primary_armature": recommended_report["armature_name"],
         "semantic_mapping": copy.deepcopy(recommended_report["asam_targets"]),
@@ -422,6 +430,12 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         "proposed_asam_hierarchy": copy.deepcopy(recommended_report["proposed_asam_hierarchy"]),
         "extras_preserved": copy.deepcopy(recommended_report["extras_preserved"]),
     }
+
+    if segmentation is not None:
+        asset_summary["character_decomposition"] = segmentation.decomposition
+        classifier_report.pop("semantic_mapping")
+        classifier_report["characters"] = segmentation.report_characters
+        build_plan["characters"] = segmentation.plan_characters
 
     return classifier_report, build_plan
 

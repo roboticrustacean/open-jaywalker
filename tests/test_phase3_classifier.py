@@ -216,6 +216,75 @@ def _mixamo_character():
     return bones, chains
 
 
+def _prefixed_biped(prefix: str, sub_root_parent: str):
+    """A biped character renamed with a crowd prefix, parented under a shared root."""
+    bones, chains = _biped_character()
+    rename = {}
+    out_bones = []
+    for index, bone in enumerate(bones):
+        old = bone["name"]
+        new = prefix + old.replace("Bip01 ", "").replace(" ", "") + f"_{index}"
+        rename[old] = new
+    for bone in bones:
+        new_bone = dict(bone)
+        new_bone["name"] = rename[bone["name"]]
+        parent = bone["parent"]
+        new_bone["parent"] = rename[parent] if parent in rename else sub_root_parent
+        out_bones.append(new_bone)
+
+    def fix_chain_list(chain_list):
+        return [[rename[name] for name in chain] for chain in chain_list]
+
+    out_chains = {
+        "spine": fix_chain_list(chains["spine"]),
+        "leg": {side: fix_chain_list(chains["leg"][side]) for side in chains["leg"]},
+        "arm": {side: fix_chain_list(chains["arm"][side]) for side in chains["arm"]},
+    }
+    return out_bones, out_chains
+
+
+def _write_crowd_asset(asset_name: str):
+    root = _bone("_rootJoint", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.1))
+    bones = [root]
+    chains = {"spine": [], "leg": {"left": [], "right": [], "unsided": []}, "arm": {"left": [], "right": [], "unsided": []}}
+    for prefix in ("Hero000", "Hero001"):
+        char_bones, char_chains = _prefixed_biped(prefix, "_rootJoint")
+        bones += char_bones
+        chains["spine"] += char_chains["spine"]
+        for side in ("left", "right", "unsided"):
+            chains["leg"][side] += char_chains["leg"][side]
+            chains["arm"][side] += char_chains["arm"][side]
+    return _write_single_armature_asset(asset_name, "Object_4", bones, chains)
+
+
+class CrowdDecompositionTests(unittest.TestCase):
+    def test_multi_character_emits_characters_array(self):
+        asset_dir = _write_crowd_asset("crowd_demo")
+        report, build_plan, _, _ = write_asset_report(asset_dir)
+
+        decomposition = report["asset_summary"]["character_decomposition"]
+        self.assertTrue(decomposition["detected"])
+        self.assertEqual(decomposition["character_ids"], ["Hero000", "Hero001"])
+        self.assertEqual([c["character_id"] for c in report["characters"]], ["Hero000", "Hero001"])
+        self.assertEqual([c["character_id"] for c in build_plan["characters"]], ["Hero000", "Hero001"])
+        self.assertNotIn("semantic_mapping", report)
+
+    def test_each_character_maps_its_own_hip(self):
+        asset_dir = _write_crowd_asset("crowd_demo2")
+        report, _, _, _ = write_asset_report(asset_dir)
+        for character in report["characters"]:
+            hip = character["semantic_mapping"].get("Hip", {})
+            self.assertEqual(hip.get("source_bone"), "Pelvis")
+
+    def test_single_character_has_no_characters_key(self):
+        bones, chains = _biped_character()
+        asset_dir = _write_single_armature_asset("single_biped", "Bip01", bones, chains)
+        report, build_plan, _, _ = write_asset_report(asset_dir)
+        self.assertNotIn("characters", report)
+        self.assertNotIn("character_decomposition", report["asset_summary"])
+        self.assertIn("semantic_mapping", report)
+
+
 class Phase3ClassifierTests(unittest.TestCase):
     def test_build_plan_propagates_recommended_mesh_binding(self):
         bones = [
