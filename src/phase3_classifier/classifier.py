@@ -386,26 +386,27 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
     selection_tiebreaker = _compute_selection_tiebreaker(ranked_reports)
     mesh_binding = copy.deepcopy(recommended_report.get("mesh_binding"))
 
-    actions: Dict[str, list] = {"rename": [], "create": []}
-    for target, payload in recommended_report["asam_targets"].items():
-        if target == "Root":
-            continue
-        if payload["action"] in {"direct_map", "alias_map"} and payload["source_bone"]:
-            actions["rename"].append({"source": payload["source_bone"], "target": target})
-        elif payload["action"] == "create_in_builder":
-            actions["create"].append({"target": target, "parent": TARGET_PARENTS.get(target)})
+    actions = _build_actions(recommended_report["asam_targets"])
+
+    recommended_input = next(
+        item for item in armature_inputs if item.armature_name == recommended_report["armature_name"]
+    )
+    from phase3_classifier.segmentation import segment_recommended  # local import avoids cycle
+    segmentation = segment_recommended(asset_dir.name, recommended_input)
+
+    asset_summary = {
+        "asset_name": asset_dir.name,
+        "asset_dir": str(asset_dir),
+        "armature_count": len(armature_reports),
+        "discovered_armatures": [report["armature_name"] for report in armature_reports],
+        "ranking": [
+            _build_ranking_entry(report, selection_tiebreaker if index == 0 else None)
+            for index, report in enumerate(ranked_reports)
+        ],
+    }
 
     classifier_report = {
-        "asset_summary": {
-            "asset_name": asset_dir.name,
-            "asset_dir": str(asset_dir),
-            "armature_count": len(armature_reports),
-            "discovered_armatures": [report["armature_name"] for report in armature_reports],
-            "ranking": [
-                _build_ranking_entry(report, selection_tiebreaker if index == 0 else None)
-                for index, report in enumerate(ranked_reports)
-            ],
-        },
+        "asset_summary": asset_summary,
         "armatures": armature_reports,
         "recommended_primary_armature": recommended_report["armature_name"],
         "semantic_mapping": copy.deepcopy(recommended_report["asam_targets"]),
@@ -430,7 +431,25 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
         "extras_preserved": copy.deepcopy(recommended_report["extras_preserved"]),
     }
 
+    if segmentation is not None:
+        asset_summary["character_decomposition"] = segmentation.decomposition
+        classifier_report.pop("semantic_mapping")
+        classifier_report["characters"] = segmentation.report_characters
+        build_plan["characters"] = segmentation.plan_characters
+
     return classifier_report, build_plan
+
+
+def _build_actions(asam_targets: Dict[str, dict]) -> Dict[str, list]:
+    actions: Dict[str, list] = {"rename": [], "create": []}
+    for target, payload in asam_targets.items():
+        if target == "Root":
+            continue
+        if payload["action"] in {"direct_map", "alias_map"} and payload["source_bone"]:
+            actions["rename"].append({"source": payload["source_bone"], "target": target})
+        elif payload["action"] == "create_in_builder":
+            actions["create"].append({"target": target, "parent": TARGET_PARENTS.get(target)})
+    return actions
 
 
 def _build_ranking_entry(report: dict, selection_tiebreaker: Optional[str]) -> dict:

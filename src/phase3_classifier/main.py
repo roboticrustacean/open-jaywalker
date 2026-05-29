@@ -10,10 +10,11 @@ from pathlib import Path
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.append(str(SCRIPT_DIR))
+SRC_DIR = SCRIPT_DIR.parent
+if str(SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(SRC_DIR))
 
-from classifier import print_console_summary, write_asset_report  # noqa: E402
+from phase3_classifier.classifier import print_console_summary, write_asset_report  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
