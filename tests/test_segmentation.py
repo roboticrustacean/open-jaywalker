@@ -12,6 +12,8 @@ from phase3_classifier.segmentation import (  # noqa: E402
     strip_character_prefix,
 )
 
+from phase3_classifier.segmentation import segment_recommended  # noqa: E402
+
 from phase3_classifier.segmentation import (  # noqa: E402
     CharacterGroup,
     MIN_CHARACTER_BONES,
@@ -211,6 +213,52 @@ class AssignMeshesTests(unittest.TestCase):
     def test_character_with_no_meshes_gets_empty_binding(self):
         per_char, _ = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
         self.assertEqual(per_char["Hero001"]["meshes"], [])
+
+
+class SegmentRecommendedTests(unittest.TestCase):
+    def _recommended_input(self):
+        primary = _crowd_primary_data()
+        primary["mesh_binding"] = _crowd_mesh_binding()
+        return ArmatureInput(
+            armature_name="Object_4",
+            all_path=Path("Object_4_all.json"),
+            filtered_path=None,
+            primary_path=Path("Object_4_all.json"),
+            support_path=None,
+            primary_data=primary,
+            support_data=None,
+        )
+
+    def test_returns_none_for_single_character(self):
+        primary = _crowd_primary_data()
+        primary["bones"] = [b for b in primary["bones"] if not b["name"].startswith("Hero001")]
+        single = ArmatureInput(
+            armature_name="Object_4", all_path=None, filtered_path=None,
+            primary_path=Path("Object_4_all.json"), support_path=None,
+            primary_data=primary, support_data=None,
+        )
+        self.assertIsNone(segment_recommended("crowd", single))
+
+    def test_emits_one_entry_per_character(self):
+        result = segment_recommended("crowd", self._recommended_input())
+        self.assertIsNotNone(result)
+        self.assertEqual(result.decomposition["character_count"], 2)
+        self.assertEqual(result.decomposition["character_ids"], ["Hero000", "Hero001"])
+        report_ids = [c["character_id"] for c in result.report_characters]
+        plan_ids = [c["character_id"] for c in result.plan_characters]
+        self.assertEqual(report_ids, ["Hero000", "Hero001"])
+        self.assertEqual(plan_ids, ["Hero000", "Hero001"])
+
+    def test_per_character_mapping_uses_own_bones(self):
+        result = segment_recommended("crowd", self._recommended_input())
+        hero0 = next(c for c in result.report_characters if c["character_id"] == "Hero000")
+        hip = hero0["semantic_mapping"].get("Hip", {})
+        self.assertEqual(hip.get("source_bone"), "Pelvis")
+
+    def test_decomposition_records_shared_and_unassigned(self):
+        result = segment_recommended("crowd", self._recommended_input())
+        self.assertEqual(result.decomposition["shared_bones"], ["_rootJoint"])
+        self.assertEqual(result.decomposition["unassigned_meshes"], ["Prop"])
 
 
 if __name__ == "__main__":

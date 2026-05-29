@@ -386,14 +386,7 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
     selection_tiebreaker = _compute_selection_tiebreaker(ranked_reports)
     mesh_binding = copy.deepcopy(recommended_report.get("mesh_binding"))
 
-    actions: Dict[str, list] = {"rename": [], "create": []}
-    for target, payload in recommended_report["asam_targets"].items():
-        if target == "Root":
-            continue
-        if payload["action"] in {"direct_map", "alias_map"} and payload["source_bone"]:
-            actions["rename"].append({"source": payload["source_bone"], "target": target})
-        elif payload["action"] == "create_in_builder":
-            actions["create"].append({"target": target, "parent": TARGET_PARENTS.get(target)})
+    actions = _build_actions(recommended_report["asam_targets"])
 
     classifier_report = {
         "asset_summary": {
@@ -431,6 +424,18 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
     }
 
     return classifier_report, build_plan
+
+
+def _build_actions(asam_targets: Dict[str, dict]) -> Dict[str, list]:
+    actions: Dict[str, list] = {"rename": [], "create": []}
+    for target, payload in asam_targets.items():
+        if target == "Root":
+            continue
+        if payload["action"] in {"direct_map", "alias_map"} and payload["source_bone"]:
+            actions["rename"].append({"source": payload["source_bone"], "target": target})
+        elif payload["action"] == "create_in_builder":
+            actions["create"].append({"target": target, "parent": TARGET_PARENTS.get(target)})
+    return actions
 
 
 def _build_ranking_entry(report: dict, selection_tiebreaker: Optional[str]) -> dict:

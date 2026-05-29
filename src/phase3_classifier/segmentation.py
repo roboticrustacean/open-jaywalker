@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
-from phase3_classifier.classifier import ArmatureInput
+from phase3_classifier.classifier import ArmatureInput, classify_armature, _build_actions
 
 # Leading run of letters followed by digits, e.g. "Female000", "Male060".
 _PREFIX_RE = re.compile(r"^([A-Za-z]+\d+)")
@@ -214,3 +214,72 @@ def assign_meshes_to_characters(
             continue
         per_char[owner]["meshes"].append(_strip_mesh_binding(mesh, owner))
     return per_char, sorted(unassigned)
+
+
+@dataclass
+class SegmentationResult:
+    decomposition: dict
+    report_characters: List[dict]
+    plan_characters: List[dict]
+
+
+def _report_character(character_id: str, report: dict) -> dict:
+    return {
+        "character_id": character_id,
+        "detected_convention": report["detected_convention"],
+        "semantic_mapping": report["asam_targets"],
+        "missing_targets": report["missing_core_targets"],
+        "ambiguous_targets": report["ambiguous_targets"],
+        "unclassified_bones": report["unclassified_bones"],
+        "review_flags": report["review_flags"],
+        "root_resolutions": [report["root_resolution"]],
+        "placement_metadata": report["placement_metadata"],
+        "mesh_binding": report["mesh_binding"],
+        "summary": report["summary"],
+    }
+
+
+def _plan_character(character_id: str, report: dict) -> dict:
+    return {
+        "character_id": character_id,
+        "actions": _build_actions(report["asam_targets"]),
+        "root_resolutions": [report["root_resolution"]],
+        "placement_metadata": report["placement_metadata"],
+        "mesh_binding": report["mesh_binding"],
+        "proposed_asam_hierarchy": report["proposed_asam_hierarchy"],
+        "extras_preserved": report["extras_preserved"],
+    }
+
+
+def segment_recommended(asset_name: str, recommended_input) -> Optional[SegmentationResult]:
+    """Return per-character decomposition for a crowd armature, or None if single."""
+    bones = recommended_input.primary_data.get("bones", [])
+    groups, shared = detect_characters(bones)
+    if len(groups) < 2:
+        return None
+
+    per_char_binding, unassigned = assign_meshes_to_characters(
+        recommended_input.primary_data.get("mesh_binding"), groups
+    )
+
+    report_characters: List[dict] = []
+    plan_characters: List[dict] = []
+    for group in groups:
+        view = build_character_view(
+            recommended_input.primary_data, group, per_char_binding.get(group.character_id)
+        )
+        report = classify_armature(asset_name, view)
+        if not group.connected:
+            report["review_flags"] = list(report["review_flags"]) + ["character_disconnected"]
+        report_characters.append(_report_character(group.character_id, report))
+        plan_characters.append(_plan_character(group.character_id, report))
+
+    decomposition = {
+        "detected": True,
+        "source_armature": recommended_input.armature_name,
+        "character_count": len(groups),
+        "character_ids": [group.character_id for group in groups],
+        "shared_bones": shared,
+        "unassigned_meshes": unassigned,
+    }
+    return SegmentationResult(decomposition, report_characters, plan_characters)
