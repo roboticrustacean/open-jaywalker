@@ -217,6 +217,10 @@ class BoneConvention:
     alias_families: Mapping[str, FrozenSet[str]]
 
 
+# Note: the `spine` stem maps to BOTH lower_spine and upper_spine because a
+# bone named only "Spine<n>" cannot be split by name alone. Name scoring is
+# therefore deliberately ambiguous for spine bones; the spine chain ordering
+# (hierarchy/geometry evidence) disambiguates lower vs upper.
 BONE_CONVENTIONS: Dict[str, BoneConvention] = {
     "biped": BoneConvention(
         name="biped",
@@ -2032,6 +2036,11 @@ def _detect_convention(primary_data: dict, support_data: Optional[dict]) -> Conv
             has_bip_token = True
         stems.add(_compact_stem(compact))
 
+    # The com+pelvis co-occurrence is a heuristic: a non-Biped rig that happens
+    # to carry both a center-of-mass "COM" bone and a "Pelvis" bone would also
+    # be classified as biped. No current fixture hits this, and the bip<n> token
+    # is the primary signal; this is the conservative fallback for Biped rigs
+    # exported without the Bip01 prefix.
     if has_bip_token or ("com" in stems and "pelvis" in stems):
         return "biped"
     return "none"
@@ -2108,6 +2117,10 @@ def _detect_family_tags(
     if "spine" in family_tags:
         family_tags.update({"lower_spine", "upper_spine"})
 
+    # Alias tags are ADDITIVE here (union with whatever generic rules found), so a
+    # bone may carry both generic and alias-derived tags. This is intentional and
+    # differs from _family_name_score, where an alias hit is EXCLUSIVE (it returns
+    # a single authoritative score and suppresses generic leanings).
     if convention != "none":
         alias_map = BONE_CONVENTIONS[convention].alias_families
         for scoring_family in alias_map.get(_compact_stem(compact_name), frozenset()):

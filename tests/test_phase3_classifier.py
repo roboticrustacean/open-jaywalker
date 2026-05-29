@@ -948,6 +948,10 @@ class ConventionReportTests(unittest.TestCase):
         self.assertEqual(mapping["Upper_Leg_Right"]["source_bone"], "Bip01 RThigh")
         self.assertEqual(mapping["Lower_Leg_Left"]["source_bone"], "Bip01 LCalf")
         self.assertEqual(mapping["Root"]["source_bone"], "Bip01 COM")
+        # Neck/Head are absent from the biped alias map and must still resolve via
+        # the generic name scorer (the convention fall-through path).
+        self.assertEqual(mapping["Neck"]["source_bone"], "Bip01 Neck")
+        self.assertEqual(mapping["Head"]["source_bone"], "Bip01 Head")
 
     def test_mixamo_character_resolves_arm_leg_inversion(self):
         bones, chains = _mixamo_character()
