@@ -134,6 +134,47 @@ def _write_single_armature_asset(
     return asset_dir
 
 
+def _biped_character():
+    bones = [
+        _bone("Bip01 COM", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.95)),
+        _bone("Bip01 Pelvis", "Bip01 COM", (0.0, 0.0, 0.95), (0.0, 0.0, 1.05)),
+        _bone("Bip01 Spine0", "Bip01 Pelvis", (0.0, 0.0, 1.05), (0.0, 0.0, 1.25)),
+        _bone("Bip01 Spine1", "Bip01 Spine0", (0.0, 0.0, 1.25), (0.0, 0.0, 1.45)),
+        _bone("Bip01 Neck", "Bip01 Spine1", (0.0, 0.0, 1.45), (0.0, 0.0, 1.6)),
+        _bone("Bip01 Head", "Bip01 Neck", (0.0, 0.0, 1.6), (0.0, 0.0, 1.75)),
+        _bone("Bip01 LClavicle", "Bip01 Spine1", (0.0, 0.05, 1.45), (0.0, 0.18, 1.45)),
+        _bone("Bip01 LUpperArm", "Bip01 LClavicle", (0.0, 0.18, 1.45), (0.0, 0.45, 1.45)),
+        _bone("Bip01 LForeArm", "Bip01 LUpperArm", (0.0, 0.45, 1.45), (0.0, 0.7, 1.45)),
+        _bone("Bip01 LHand", "Bip01 LForeArm", (0.0, 0.7, 1.45), (0.0, 0.8, 1.45)),
+        _bone("Bip01 RClavicle", "Bip01 Spine1", (0.0, -0.05, 1.45), (0.0, -0.18, 1.45)),
+        _bone("Bip01 RUpperArm", "Bip01 RClavicle", (0.0, -0.18, 1.45), (0.0, -0.45, 1.45)),
+        _bone("Bip01 RForeArm", "Bip01 RUpperArm", (0.0, -0.45, 1.45), (0.0, -0.7, 1.45)),
+        _bone("Bip01 RHand", "Bip01 RForeArm", (0.0, -0.7, 1.45), (0.0, -0.8, 1.45)),
+        _bone("Bip01 LThigh", "Bip01 Pelvis", (0.0, 0.1, 0.95), (0.0, 0.1, 0.55)),
+        _bone("Bip01 LCalf", "Bip01 LThigh", (0.0, 0.1, 0.55), (0.0, 0.1, 0.1)),
+        _bone("Bip01 LFoot", "Bip01 LCalf", (0.0, 0.1, 0.1), (0.15, 0.1, 0.0)),
+        _bone("Bip01 LToe0", "Bip01 LFoot", (0.15, 0.1, 0.0), (0.25, 0.1, 0.0)),
+        _bone("Bip01 RThigh", "Bip01 Pelvis", (0.0, -0.1, 0.95), (0.0, -0.1, 0.55)),
+        _bone("Bip01 RCalf", "Bip01 RThigh", (0.0, -0.1, 0.55), (0.0, -0.1, 0.1)),
+        _bone("Bip01 RFoot", "Bip01 RCalf", (0.0, -0.1, 0.1), (0.15, -0.1, 0.0)),
+        _bone("Bip01 RToe0", "Bip01 RFoot", (0.15, -0.1, 0.0), (0.25, -0.1, 0.0)),
+    ]
+    chains = {
+        "spine": [["Bip01 Spine0", "Bip01 Spine1"]],
+        "leg": {
+            "left": [["Bip01 LThigh", "Bip01 LCalf", "Bip01 LFoot", "Bip01 LToe0"]],
+            "right": [["Bip01 RThigh", "Bip01 RCalf", "Bip01 RFoot", "Bip01 RToe0"]],
+            "unsided": [],
+        },
+        "arm": {
+            "left": [["Bip01 LUpperArm", "Bip01 LForeArm", "Bip01 LHand"]],
+            "right": [["Bip01 RUpperArm", "Bip01 RForeArm", "Bip01 RHand"]],
+            "unsided": [],
+        },
+    }
+    return bones, chains
+
+
 class Phase3ClassifierTests(unittest.TestCase):
     def test_build_plan_propagates_recommended_mesh_binding(self):
         bones = [
@@ -841,6 +882,27 @@ class ConventionReportTests(unittest.TestCase):
         report, _, _, _ = write_asset_report(asset_dir)
         armatures = {item["armature_name"]: item for item in report["armatures"]}
         self.assertEqual(armatures["Rig"]["detected_convention"], "none")
+
+    def test_biped_character_maps_to_asam_targets(self):
+        bones, chains = _biped_character()
+        asset_dir = _write_single_armature_asset(
+            "biped_single", "Bip01", bones, chains,
+            _placement_metadata((-0.3, -0.4, 0.0), (0.4, 0.4, 1.8)),
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+        armatures = {item["armature_name"]: item for item in report["armatures"]}
+        self.assertEqual(armatures["Bip01"]["detected_convention"], "biped")
+
+        mapping = report["semantic_mapping"]
+        self.assertEqual(mapping["Hip"]["source_bone"], "Bip01 Pelvis")
+        self.assertEqual(mapping["Lower_Spine"]["source_bone"], "Bip01 Spine0")
+        self.assertEqual(mapping["Upper_Spine"]["source_bone"], "Bip01 Spine1")
+        self.assertEqual(mapping["Shoulder_Left"]["source_bone"], "Bip01 LClavicle")
+        self.assertEqual(mapping["Upper_Arm_Left"]["source_bone"], "Bip01 LUpperArm")
+        self.assertEqual(mapping["Lower_Arm_Left"]["source_bone"], "Bip01 LForeArm")
+        self.assertEqual(mapping["Upper_Leg_Right"]["source_bone"], "Bip01 RThigh")
+        self.assertEqual(mapping["Lower_Leg_Left"]["source_bone"], "Bip01 LCalf")
+        self.assertEqual(mapping["Root"]["source_bone"], "Bip01 COM")
 
 
 if __name__ == "__main__":
