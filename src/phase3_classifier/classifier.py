@@ -2046,7 +2046,12 @@ def _normalize_bone_name(name: str, convention: str = "none") -> Tuple[str, str,
     return "_".join(cleaned_tokens), "".join(cleaned_tokens), cleaned_tokens, side
 
 
-def _detect_family_tags(normalized_name: str, compact_name: str, tokens: Sequence[str]) -> Set[str]:
+def _detect_family_tags(
+    normalized_name: str,
+    compact_name: str,
+    tokens: Sequence[str],
+    convention: str = "none",
+) -> Set[str]:
     family_tags: Set[str] = set()
     token_set = set(tokens)
 
@@ -2088,6 +2093,11 @@ def _detect_family_tags(normalized_name: str, compact_name: str, tokens: Sequenc
         family_tags.add("finger")
     if "spine" in family_tags:
         family_tags.update({"lower_spine", "upper_spine"})
+
+    if convention != "none":
+        alias_map = BONE_CONVENTIONS[convention].alias_families
+        for scoring_family in alias_map.get(_compact_stem(compact_name), frozenset()):
+            family_tags.update(SCORING_FAMILY_TO_TAGS[scoring_family])
 
     return family_tags
 

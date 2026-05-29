@@ -777,6 +777,19 @@ class ConventionDetectionTests(unittest.TestCase):
         self.assertEqual(compact, "thigh")
         self.assertEqual(side, "left")
 
+    def test_mixamo_upleg_gets_upper_leg_tag(self):
+        # "upleg" compact matches no generic rule; alias must add the tag.
+        tags = _detect_family_tags("upleg", "upleg", ["up", "leg"], "mixamo")
+        self.assertIn("upper_leg", tags)
+
+    def test_biped_com_gets_root_tag(self):
+        tags = _detect_family_tags("com", "com", ["com"], "biped")
+        self.assertIn("root", tags)
+
+    def test_alias_tags_skip_when_convention_none(self):
+        tags = _detect_family_tags("upleg", "upleg", ["up", "leg"], "none")
+        self.assertNotIn("upper_leg", tags)
+
 
 if __name__ == "__main__":
     unittest.main()
