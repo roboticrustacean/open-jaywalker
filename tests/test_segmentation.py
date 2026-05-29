@@ -16,7 +16,10 @@ from phase3_classifier.segmentation import (  # noqa: E402
     CharacterGroup,
     MIN_CHARACTER_BONES,
     detect_characters,
+    build_character_view,  # noqa: E402
 )
+
+from phase3_classifier.classifier import ArmatureInput  # noqa: E402
 
 
 class PrefixDerivationTests(unittest.TestCase):
@@ -53,6 +56,32 @@ def _crowd_bones():
     return bones
 
 
+def _crowd_primary_data():
+    bones = []
+    for prefix in ("Hero000", "Hero001"):
+        bones += [
+            {"name": f"{prefix}COM_0", "parent": "_rootJoint", "head": [0, 0, 0], "tail": [0, 0, 1], "length": 1.0},
+            {"name": f"{prefix}Pelvis_1", "parent": f"{prefix}COM_0", "head": [0, 0, 1], "tail": [0, 0, 1.1], "length": 0.1},
+            {"name": f"{prefix}Spine0_2", "parent": f"{prefix}Pelvis_1", "head": [0, 0, 1.1], "tail": [0, 0, 1.3], "length": 0.2},
+            {"name": f"{prefix}Spine1_3", "parent": f"{prefix}Spine0_2", "head": [0, 0, 1.3], "tail": [0, 0, 1.5], "length": 0.2},
+            {"name": f"{prefix}Head_4", "parent": f"{prefix}Spine1_3", "head": [0, 0, 1.5], "tail": [0, 0, 1.7], "length": 0.2},
+            {"name": f"{prefix}LThigh_5", "parent": f"{prefix}Pelvis_1", "head": [0, 0.1, 1], "tail": [0, 0.1, 0.5], "length": 0.5},
+        ]
+    bones.insert(0, {"name": "_rootJoint", "parent": None, "head": [0, 0, 0], "tail": [0, 0, 0.1], "length": 0.1})
+    return {
+        "armature_name": "Object_4",
+        "source_file": "crowd.blend",
+        "filter": None,
+        "bone_count": len(bones),
+        "bones": bones,
+        "chains": {
+            "spine": [[f"Hero000Spine0_2", f"Hero000Spine1_3"], [f"Hero001Spine0_2", f"Hero001Spine1_3"]],
+            "leg": {"left": [], "right": [], "unsided": []},
+            "arm": {"left": [], "right": [], "unsided": []},
+        },
+    }
+
+
 class DetectCharactersTests(unittest.TestCase):
     def test_detects_two_connected_characters(self):
         groups, shared = detect_characters(_crowd_bones())
@@ -86,6 +115,37 @@ class DetectCharactersTests(unittest.TestCase):
         groups, _ = detect_characters(bones)
         self.assertEqual(len(groups), 1)
         self.assertFalse(groups[0].connected)
+
+
+class BuildCharacterViewTests(unittest.TestCase):
+    def setUp(self):
+        self.primary = _crowd_primary_data()
+        self.groups, _ = detect_characters(self.primary["bones"])
+        self.hero0 = next(group for group in self.groups if group.character_id == "Hero000")
+
+    def test_view_is_armature_input_named_by_character(self):
+        view = build_character_view(self.primary, self.hero0, mesh_binding=None)
+        self.assertIsInstance(view, ArmatureInput)
+        self.assertEqual(view.armature_name, "Hero000")
+
+    def test_bone_names_are_stripped_and_scoped(self):
+        view = build_character_view(self.primary, self.hero0, mesh_binding=None)
+        names = {bone["name"] for bone in view.primary_data["bones"]}
+        self.assertEqual(names, {"COM", "Pelvis", "Spine0", "Spine1", "Head", "LThigh"})
+
+    def test_subroot_parent_repointed_to_none(self):
+        view = build_character_view(self.primary, self.hero0, mesh_binding=None)
+        by_name = {bone["name"]: bone for bone in view.primary_data["bones"]}
+        self.assertIsNone(by_name["COM"]["parent"])
+        self.assertEqual(by_name["Pelvis"]["parent"], "COM")
+
+    def test_chains_filtered_and_stripped(self):
+        view = build_character_view(self.primary, self.hero0, mesh_binding=None)
+        self.assertEqual(view.primary_data["chains"]["spine"], [["Spine0", "Spine1"]])
+
+    def test_placement_metadata_omitted_for_per_character_derivation(self):
+        view = build_character_view(self.primary, self.hero0, mesh_binding=None)
+        self.assertNotIn("placement_metadata", view.primary_data)
 
 
 if __name__ == "__main__":

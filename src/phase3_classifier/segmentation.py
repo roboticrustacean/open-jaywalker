@@ -6,9 +6,13 @@ Pure Python: operates on already-loaded inspector JSON dicts. No bpy.
 
 from __future__ import annotations
 
+import copy
 import re
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
+
+from phase3_classifier.classifier import ArmatureInput
 
 # Leading run of letters followed by digits, e.g. "Female000", "Male060".
 _PREFIX_RE = re.compile(r"^([A-Za-z]+\d+)")
@@ -101,3 +105,69 @@ def detect_characters(bones: List[dict]) -> Tuple[List[CharacterGroup], List[str
         )
     characters.sort(key=lambda group: group.character_id)
     return characters, shared
+
+
+def _strip_chains(chains: dict, members: set, prefix: str) -> dict:
+    """Filter chain bone lists to the group's members and strip the prefix."""
+
+    def fix_list(chain_list):
+        result = []
+        for chain in chain_list:
+            kept = [strip_character_prefix(name, prefix) for name in chain if name in members]
+            if kept:
+                result.append(kept)
+        return result
+
+    out = {}
+    for key, value in (chains or {}).items():
+        if isinstance(value, dict):
+            out[key] = {side: fix_list(chain_list) for side, chain_list in value.items()}
+        else:
+            out[key] = fix_list(value)
+    return out
+
+
+def build_character_view(primary_data: dict, group: CharacterGroup, mesh_binding: Optional[dict]):
+    """Synthesize an ArmatureInput scoped to one character, prefix stripped.
+
+    placement_metadata is intentionally omitted so _build_context derives it
+    per-character from the character's own bones.
+    """
+    members = set(group.bone_names)
+    new_bones = []
+    for bone in primary_data["bones"]:
+        if bone["name"] not in members:
+            continue
+        new_bone = copy.deepcopy(bone)
+        new_bone["name"] = strip_character_prefix(bone["name"], group.prefix)
+        parent = bone.get("parent")
+        new_bone["parent"] = strip_character_prefix(parent, group.prefix) if parent in members else None
+        new_bones.append(new_bone)
+
+    hierarchy = {bone["name"]: [] for bone in new_bones}
+    for bone in new_bones:
+        parent = bone["parent"]
+        if parent in hierarchy:
+            hierarchy[parent].append(bone["name"])
+
+    view_primary = {
+        "armature_name": group.character_id,
+        "source_file": primary_data.get("source_file"),
+        "filter": primary_data.get("filter"),
+        "bone_count": len(new_bones),
+        "hierarchy": hierarchy,
+        "bones": new_bones,
+        "chains": _strip_chains(primary_data.get("chains", {}), members, group.prefix),
+    }
+    if mesh_binding is not None:
+        view_primary["mesh_binding"] = mesh_binding
+
+    return ArmatureInput(
+        armature_name=group.character_id,
+        all_path=None,
+        filtered_path=None,
+        primary_path=Path(f"{group.character_id}_all.json"),
+        support_path=None,
+        primary_data=view_primary,
+        support_data=None,
+    )
