@@ -175,6 +175,47 @@ def _biped_character():
     return bones, chains
 
 
+def _mixamo_character():
+    bones = [
+        _bone("mixamorig:Hips", None, (0.0, 0.0, 0.95), (0.0, 0.0, 1.05)),
+        _bone("mixamorig:Spine", "mixamorig:Hips", (0.0, 0.0, 1.05), (0.0, 0.0, 1.2)),
+        _bone("mixamorig:Spine1", "mixamorig:Spine", (0.0, 0.0, 1.2), (0.0, 0.0, 1.35)),
+        _bone("mixamorig:Spine2", "mixamorig:Spine1", (0.0, 0.0, 1.35), (0.0, 0.0, 1.45)),
+        _bone("mixamorig:Neck", "mixamorig:Spine2", (0.0, 0.0, 1.45), (0.0, 0.0, 1.6)),
+        _bone("mixamorig:Head", "mixamorig:Neck", (0.0, 0.0, 1.6), (0.0, 0.0, 1.75)),
+        _bone("mixamorig:LeftShoulder", "mixamorig:Spine2", (0.0, 0.05, 1.45), (0.0, 0.18, 1.45)),
+        _bone("mixamorig:LeftArm", "mixamorig:LeftShoulder", (0.0, 0.18, 1.45), (0.0, 0.45, 1.45)),
+        _bone("mixamorig:LeftForeArm", "mixamorig:LeftArm", (0.0, 0.45, 1.45), (0.0, 0.7, 1.45)),
+        _bone("mixamorig:LeftHand", "mixamorig:LeftForeArm", (0.0, 0.7, 1.45), (0.0, 0.8, 1.45)),
+        _bone("mixamorig:RightShoulder", "mixamorig:Spine2", (0.0, -0.05, 1.45), (0.0, -0.18, 1.45)),
+        _bone("mixamorig:RightArm", "mixamorig:RightShoulder", (0.0, -0.18, 1.45), (0.0, -0.45, 1.45)),
+        _bone("mixamorig:RightForeArm", "mixamorig:RightArm", (0.0, -0.45, 1.45), (0.0, -0.7, 1.45)),
+        _bone("mixamorig:RightHand", "mixamorig:RightForeArm", (0.0, -0.7, 1.45), (0.0, -0.8, 1.45)),
+        _bone("mixamorig:LeftUpLeg", "mixamorig:Hips", (0.0, 0.1, 0.95), (0.0, 0.1, 0.55)),
+        _bone("mixamorig:LeftLeg", "mixamorig:LeftUpLeg", (0.0, 0.1, 0.55), (0.0, 0.1, 0.1)),
+        _bone("mixamorig:LeftFoot", "mixamorig:LeftLeg", (0.0, 0.1, 0.1), (0.15, 0.1, 0.0)),
+        _bone("mixamorig:LeftToeBase", "mixamorig:LeftFoot", (0.15, 0.1, 0.0), (0.25, 0.1, 0.0)),
+        _bone("mixamorig:RightUpLeg", "mixamorig:Hips", (0.0, -0.1, 0.95), (0.0, -0.1, 0.55)),
+        _bone("mixamorig:RightLeg", "mixamorig:RightUpLeg", (0.0, -0.1, 0.55), (0.0, -0.1, 0.1)),
+        _bone("mixamorig:RightFoot", "mixamorig:RightLeg", (0.0, -0.1, 0.1), (0.15, -0.1, 0.0)),
+        _bone("mixamorig:RightToeBase", "mixamorig:RightFoot", (0.15, -0.1, 0.0), (0.25, -0.1, 0.0)),
+    ]
+    chains = {
+        "spine": [["mixamorig:Spine", "mixamorig:Spine1", "mixamorig:Spine2"]],
+        "leg": {
+            "left": [["mixamorig:LeftUpLeg", "mixamorig:LeftLeg", "mixamorig:LeftFoot", "mixamorig:LeftToeBase"]],
+            "right": [["mixamorig:RightUpLeg", "mixamorig:RightLeg", "mixamorig:RightFoot", "mixamorig:RightToeBase"]],
+            "unsided": [],
+        },
+        "arm": {
+            "left": [["mixamorig:LeftArm", "mixamorig:LeftForeArm", "mixamorig:LeftHand"]],
+            "right": [["mixamorig:RightArm", "mixamorig:RightForeArm", "mixamorig:RightHand"]],
+            "unsided": [],
+        },
+    }
+    return bones, chains
+
+
 class Phase3ClassifierTests(unittest.TestCase):
     def test_build_plan_propagates_recommended_mesh_binding(self):
         bones = [
@@ -903,6 +944,28 @@ class ConventionReportTests(unittest.TestCase):
         self.assertEqual(mapping["Upper_Leg_Right"]["source_bone"], "Bip01 RThigh")
         self.assertEqual(mapping["Lower_Leg_Left"]["source_bone"], "Bip01 LCalf")
         self.assertEqual(mapping["Root"]["source_bone"], "Bip01 COM")
+
+    def test_mixamo_character_resolves_arm_leg_inversion(self):
+        bones, chains = _mixamo_character()
+        asset_dir = _write_single_armature_asset(
+            "mixamo_single", "Armature", bones, chains,
+            _placement_metadata((-0.3, -0.4, 0.0), (0.4, 0.4, 1.8)),
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+        armatures = {item["armature_name"]: item for item in report["armatures"]}
+        self.assertEqual(armatures["Armature"]["detected_convention"], "mixamo")
+
+        mapping = report["semantic_mapping"]
+        self.assertEqual(mapping["Hip"]["source_bone"], "mixamorig:Hips")
+        # The inversion fix: Arm=upper, ForeArm=lower, UpLeg=upper, Leg=lower.
+        self.assertEqual(mapping["Upper_Arm_Left"]["source_bone"], "mixamorig:LeftArm")
+        self.assertEqual(mapping["Lower_Arm_Left"]["source_bone"], "mixamorig:LeftForeArm")
+        self.assertEqual(mapping["Upper_Leg_Left"]["source_bone"], "mixamorig:LeftUpLeg")
+        self.assertEqual(mapping["Lower_Leg_Left"]["source_bone"], "mixamorig:LeftLeg")
+        self.assertEqual(mapping["Upper_Leg_Right"]["source_bone"], "mixamorig:RightUpLeg")
+        self.assertEqual(mapping["Lower_Leg_Right"]["source_bone"], "mixamorig:RightLeg")
+        self.assertEqual(mapping["Shoulder_Left"]["source_bone"], "mixamorig:LeftShoulder")
+        self.assertEqual(mapping["Full_Toes_Left"]["source_bone"], "mixamorig:LeftToeBase")
 
 
 if __name__ == "__main__":
