@@ -5,6 +5,10 @@
     "rename": [
       {
         "source": "DEF-spine",
+        "target": "Hip"
+      },
+      {
+        "source": "DEF-spine.001",
         "target": "Lower_Spine"
       },
       {
@@ -428,12 +432,6 @@
     },
     {
       "bone_name": "DEF-shin.R",
-      "reason": "supporting_chain_detail",
-      "origin": "primary",
-      "role": "unknown"
-    },
-    {
-      "bone_name": "DEF-spine.001",
       "reason": "supporting_chain_detail",
       "origin": "primary",
       "role": "unknown"

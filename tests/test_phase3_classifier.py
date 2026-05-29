@@ -265,15 +265,30 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(armatures["rig"]["selected_inputs"]["primary"], "rig_filtered.json")
         self.assertEqual(armatures["rig"]["selected_inputs"]["support"], "rig_all.json")
         self.assertEqual(report["semantic_mapping"]["Root"]["action"], "repair_in_builder")
-        self.assertEqual(report["semantic_mapping"]["Hip"]["action"], "repair_in_builder")
-        self.assertIn("paired_sided_pelvis_requires_centering", report["semantic_mapping"]["Hip"]["notes"])
+        # Hip is reassigned from the lateral pelvis pair to the spine-root pivot
+        # (DEF-spine); Lower_Spine shifts up to the next spine segment so the two no
+        # longer collide. The displaced pelvis pair is recorded for preservation.
+        self.assertEqual(report["semantic_mapping"]["Hip"]["action"], "alias_map")
+        self.assertEqual(report["semantic_mapping"]["Hip"]["source_bone"], "DEF-spine")
+        self.assertIn("hip_reassigned_to_spine_root_pivot", report["semantic_mapping"]["Hip"]["notes"])
+        self.assertEqual(
+            report["semantic_mapping"]["Hip"]["preserved_pelvis_pair_sources"],
+            ["DEF-pelvis.L", "DEF-pelvis.R"],
+        )
+        self.assertEqual(report["semantic_mapping"]["Lower_Spine"]["source_bone"], "DEF-spine.001")
         self.assertEqual(build_plan["root_resolutions"][0]["mode"], "create_new_root")
         self.assertEqual(build_plan["root_resolutions"][0]["source_bone"], "root")
         self.assertIn("root_noncompliant", report["review_flags"])
         self.assertIn("multiple_source_roots", build_plan["root_resolutions"][0]["blocker_codes"])
         self.assertIn("root_not_vertical", build_plan["root_resolutions"][0]["blocker_codes"])
         self.assertFalse(any(action["target"] == "Root" for action in build_plan["actions"]["rename"]))
-        self.assertFalse(any(action["target"] == "Hip" for action in build_plan["actions"]["rename"]))
+        # Hip now renames the spine-root source bone (alias_map), so it IS a rename.
+        self.assertTrue(
+            any(
+                action["target"] == "Hip" and action["source"] == "DEF-spine"
+                for action in build_plan["actions"]["rename"]
+            )
+        )
 
     def test_paired_sided_pelvis_marks_hip_for_builder_repair(self):
         bones = [

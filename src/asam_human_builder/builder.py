@@ -354,6 +354,23 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
             }
         )
 
+    # Extend the synthesized Root so its tail reaches the Hip head: ASAM wires
+    # Root -> Hip, so a tall ground->pelvis Root should visibly meet the Hip.
+    # Only applies to create_new_root; a reused source Root keeps its own geometry.
+    if root_resolution.get("mode") == "create_new_root" and "Root" in resolved_geometry and "Hip" in resolved_geometry:
+        up_index = int((root_resolution.get("up_axis") or placement_metadata["up_axis"])["index"])
+        root_geometry = resolved_geometry["Root"]
+        hip_head_up = resolved_geometry["Hip"]["head"][up_index]
+        if hip_head_up > root_geometry["head"][up_index]:
+            new_tail = list(root_geometry["tail"])
+            new_tail[up_index] = hip_head_up
+            root_geometry["tail"] = new_tail
+            root_geometry["length"] = sum((new_tail[i] - root_geometry["head"][i]) ** 2 for i in range(3)) ** 0.5
+            for bone in spec["bones"]:
+                if bone["name"] == "Root":
+                    bone["tail"] = _to_grp_root_local(new_tail, grp_root_local_origin)
+                    break
+
     preserved_root = _resolve_preserved_source_root_extra(root_resolution, source_bones)
     if preserved_root is not None:
         spec["bones"].append(
@@ -521,8 +538,14 @@ def _resolve_preserved_pelvis_pair(
     mesh_binding: dict,
 ) -> List[dict]:
     """
-    When Hip is built via paired-pelvis centering, preserve both source pelvis bones
-    as children of the synthetic Hip so their vertex weights are not destroyed.
+    Preserve the lateral source pelvis bones as children of the generated Hip so
+    their vertex weights are not destroyed.
+
+    Two cases produce a pelvis pair:
+    - Hip reassigned to the spine-root pivot: the displaced lateral pelvis bones are
+      recorded on the Hip payload as ``preserved_pelvis_pair_sources``.
+    - Legacy centered-pelvis Hip: derive the pair from the Hip source bone + its
+      opposite-side counterpart.
 
     A pelvis side is only preserved when at least one mesh in mesh_binding records
     weighted_vertex_count > 0 for that source bone — unweighted extras would clutter
@@ -533,18 +556,21 @@ def _resolve_preserved_pelvis_pair(
     side carries skin weight.
     """
     hip_payload = semantic_mapping.get("Hip", {})
-    if not _hip_requires_centered_pelvis_pair(hip_payload):
-        return []
 
-    primary_name = hip_payload.get("source_bone")
-    if not primary_name or primary_name not in source_bones:
+    recorded_sources = hip_payload.get("preserved_pelvis_pair_sources")
+    if recorded_sources:
+        names: List[str] = [name for name in recorded_sources if name in source_bones]
+    elif _hip_requires_centered_pelvis_pair(hip_payload):
+        primary_name = hip_payload.get("source_bone")
+        if not primary_name or primary_name not in source_bones:
+            return []
+        names = [primary_name]
+        for candidate in _opposite_name_candidates(primary_name):
+            if candidate in source_bones and candidate not in names:
+                names.append(candidate)
+                break
+    else:
         return []
-
-    names: List[str] = [primary_name]
-    for candidate in _opposite_name_candidates(primary_name):
-        if candidate in source_bones and candidate not in names:
-            names.append(candidate)
-            break
 
     weighted_names = [name for name in names if _bone_has_skin_weight(name, mesh_binding)]
     entries = [

@@ -470,6 +470,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
         target_candidates[target_name] = candidates
 
     resolved_targets = _resolve_targets(target_candidates, context)
+    _reconcile_hip_to_spine_pivot(resolved_targets, context)
     root_resolution = _resolve_root_compliance(resolved_targets, target_candidates.get("Root", []), context)
     mapped_bones = {
         payload["source_bone"]
@@ -815,6 +816,103 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]], context
         }
 
     return resolved
+
+
+def _mirror_sided_bone_name(name: str) -> Optional[str]:
+    """Return the opposite-side counterpart of a sided bone name, or None."""
+    for left, right in ((".L", ".R"), ("_L", "_R"), ("-L", "-R"), ("Left", "Right"), ("left", "right")):
+        if name.endswith(left) or left in name:
+            return name.replace(left, right)
+        if name.endswith(right) or right in name:
+            return name.replace(right, left)
+    return None
+
+
+def _reconcile_hip_to_spine_pivot(resolved_targets: Dict[str, dict], context: dict) -> None:
+    """Reassign ASAM Hip from a lateral pelvis pair to the spine-root pivot.
+
+    Rigify-style rigs expose no central Hip bone; the lowest spine bone is the
+    true pelvis pivot (it parents the legs and the rest of the spine, head at the
+    pelvis), while ``pelvis.L/.R`` are lateral deform helpers. When Hip resolved to
+    such a lateral pelvis pair AND a spine-chain root sits at the pelvis, move Hip
+    onto the spine root (real, non-degenerate geometry) and shift Lower_Spine up to
+    the next spine segment so the two no longer collide. The displaced pelvis pair
+    is recorded for preservation as Hip children (mesh drivers).
+
+    No-ops for rigs with an explicit named Hip (those never carry the
+    ``paired_sided_pelvis_requires_centering`` note), preserving their mapping.
+    """
+    hip_payload = resolved_targets.get("Hip", {})
+    if "paired_sided_pelvis_requires_centering" not in hip_payload.get("notes", []):
+        return
+
+    spine_chain = context.get("spine_chain") or []
+    if len(spine_chain) < 2:
+        return
+
+    bones = context["bones"]
+    spine_root_name, next_spine_name = spine_chain[0], spine_chain[1]
+    spine_root = bones.get(spine_root_name)
+    next_spine = bones.get(next_spine_name)
+    if spine_root is None or next_spine is None:
+        return
+
+    up = context["height_axis"]
+    pelvis_name = hip_payload.get("source_bone")
+    pelvis_bone = bones.get(pelvis_name) if pelvis_name else None
+    if pelvis_bone is not None:
+        # The spine root must sit at the pelvis (same level as the displaced pelvis
+        # pair) to be the Hip pivot; otherwise leave the mapping alone.
+        if abs(spine_root.head[up] - pelvis_bone.head[up]) > 0.05 * context["height_span"]:
+            return
+
+    # Do not steal a bone another target already claims.
+    claimed = {
+        payload.get("source_bone")
+        for target, payload in resolved_targets.items()
+        if target not in {"Hip", "Lower_Spine"} and payload.get("source_bone")
+    }
+    if spine_root_name in claimed or next_spine_name in claimed:
+        return
+
+    # The previous Lower_Spine payload describes the spine-root bone's geometry;
+    # reuse its confidence/evidence for the reassigned Hip.
+    prev_lower = resolved_targets.get("Lower_Spine", {})
+    pelvis_pair = [pelvis_name] if pelvis_name else []
+    mirror = _mirror_sided_bone_name(pelvis_name) if pelvis_name else None
+    if mirror and mirror in bones and mirror not in pelvis_pair:
+        pelvis_pair.append(mirror)
+
+    resolved_targets["Hip"] = {
+        "source_bone": spine_root_name,
+        "confidence": prev_lower.get("confidence", 0.7) if prev_lower.get("source_bone") == spine_root_name else 0.7,
+        "action": "alias_map",
+        "evidence": copy.deepcopy(prev_lower.get("evidence", {
+            "name": 0.0,
+            "hierarchy": 1.0,
+            "geometry": 0.0,
+            "source_origin": spine_root.origin,
+            "role": spine_root.role,
+        })),
+        "notes": ["hip_reassigned_to_spine_root_pivot"],
+        "preserved_pelvis_pair_sources": sorted(pelvis_pair),
+    }
+
+    if prev_lower.get("source_bone") == spine_root_name:
+        action = prev_lower.get("action")
+        resolved_targets["Lower_Spine"] = {
+            "source_bone": next_spine_name,
+            "confidence": prev_lower.get("confidence", 0.7),
+            "action": action if action in {"direct_map", "alias_map"} else "alias_map",
+            "evidence": {
+                "name": prev_lower.get("evidence", {}).get("name", 0.0),
+                "hierarchy": 1.0,
+                "geometry": prev_lower.get("evidence", {}).get("geometry", 0.0),
+                "source_origin": next_spine.origin,
+                "role": next_spine.role,
+            },
+            "notes": sorted(set(list(prev_lower.get("notes", [])) + ["lower_spine_shifted_above_hip_pivot"])),
+        }
 
 
 def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates: List[CandidateScore], context: dict) -> dict:

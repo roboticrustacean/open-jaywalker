@@ -10,9 +10,9 @@
     "ranking": [
       {
         "armature_name": "rig",
-        "ranking_score": 129.203,
+        "ranking_score": 129.283,
         "mapped_core_targets": 22,
-        "average_confidence": 0.943,
+        "average_confidence": 0.951,
         "mesh_bound_term": 10.0,
         "deform_evidence_term": 2.773,
         "extras_term": 2.0,
@@ -21,12 +21,12 @@
       },
       {
         "armature_name": "metarig",
-        "ranking_score": 103.716,
+        "ranking_score": 103.715,
         "mapped_core_targets": 20,
-        "average_confidence": 0.932,
+        "average_confidence": 0.941,
         "mesh_bound_term": 0.0,
         "deform_evidence_term": 0.0,
-        "extras_term": 0.896,
+        "extras_term": 0.805,
         "primary_input": "metarig_all.json"
       }
     ]
@@ -43,20 +43,20 @@
       "summary": {
         "mapped_core_targets": 20,
         "direct_map_targets": 18,
-        "alias_map_targets": 0,
-        "repair_targets": 2,
+        "alias_map_targets": 1,
+        "repair_targets": 1,
         "review_targets": 8,
         "missing_core_targets": 0,
-        "average_confidence": 0.932,
+        "average_confidence": 0.941,
         "mesh_bound_term": 0.0,
         "deform_evidence_term": 0.0,
-        "extras_term": 0.896,
+        "extras_term": 0.805,
         "deform_evidence": {
           "meshes_count": 0,
           "has_armature_modifier_link": false,
           "vertex_group_bone_hits": 0
         },
-        "ranking_score": 103.716
+        "ranking_score": 103.715
       },
       "asam_targets": {
         "Root": {
@@ -79,22 +79,26 @@
           ]
         },
         "Hip": {
-          "source_bone": "pelvis.L",
-          "confidence": 0.682,
-          "action": "repair_in_builder",
+          "source_bone": "spine",
+          "confidence": 0.86,
+          "action": "alias_map",
           "evidence": {
-            "name": 1.0,
-            "hierarchy": 0.0,
-            "geometry": 0.912,
+            "name": 0.72,
+            "hierarchy": 1.0,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
           "notes": [
-            "paired_sided_pelvis_requires_centering"
+            "hip_reassigned_to_spine_root_pivot"
+          ],
+          "preserved_pelvis_pair_sources": [
+            "pelvis.L",
+            "pelvis.R"
           ]
         },
         "Lower_Spine": {
-          "source_bone": "spine",
+          "source_bone": "spine.001",
           "confidence": 0.86,
           "action": "direct_map",
           "evidence": {
@@ -104,7 +108,9 @@
             "source_origin": "primary",
             "role": "unknown"
           },
-          "notes": []
+          "notes": [
+            "lower_spine_shifted_above_hip_pivot"
+          ]
         },
         "Upper_Spine": {
           "source_bone": "spine.003",
@@ -568,12 +574,6 @@
       },
       "extras_preserved": [
         {
-          "bone_name": "spine.001",
-          "reason": "supporting_chain_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
           "bone_name": "spine.002",
           "reason": "supporting_chain_detail",
           "origin": "primary",
@@ -607,6 +607,12 @@
         },
         {
           "bone_name": "heel.02.R",
+          "reason": "unclassified",
+          "origin": "primary",
+          "role": "unknown"
+        },
+        {
+          "bone_name": "pelvis.L",
           "reason": "unclassified",
           "origin": "primary",
           "role": "unknown"
@@ -692,11 +698,11 @@
       "summary": {
         "mapped_core_targets": 22,
         "direct_map_targets": 20,
-        "alias_map_targets": 0,
-        "repair_targets": 2,
+        "alias_map_targets": 1,
+        "repair_targets": 1,
         "review_targets": 6,
         "missing_core_targets": 0,
-        "average_confidence": 0.943,
+        "average_confidence": 0.951,
         "mesh_bound_term": 10.0,
         "deform_evidence_term": 2.773,
         "extras_term": 2.0,
@@ -705,7 +711,7 @@
           "has_armature_modifier_link": true,
           "vertex_group_bone_hits": 3
         },
-        "ranking_score": 129.203
+        "ranking_score": 129.283
       },
       "asam_targets": {
         "Root": {
@@ -728,22 +734,26 @@
           ]
         },
         "Hip": {
-          "source_bone": "DEF-pelvis.L",
-          "confidence": 0.683,
-          "action": "repair_in_builder",
+          "source_bone": "DEF-spine",
+          "confidence": 0.86,
+          "action": "alias_map",
           "evidence": {
-            "name": 1.0,
-            "hierarchy": 0.0,
-            "geometry": 0.917,
+            "name": 0.72,
+            "hierarchy": 1.0,
+            "geometry": 1.0,
             "source_origin": "primary",
             "role": "unknown"
           },
           "notes": [
-            "paired_sided_pelvis_requires_centering"
+            "hip_reassigned_to_spine_root_pivot"
+          ],
+          "preserved_pelvis_pair_sources": [
+            "DEF-pelvis.L",
+            "DEF-pelvis.R"
           ]
         },
         "Lower_Spine": {
-          "source_bone": "DEF-spine",
+          "source_bone": "DEF-spine.001",
           "confidence": 0.86,
           "action": "direct_map",
           "evidence": {
@@ -753,7 +763,9 @@
             "source_origin": "primary",
             "role": "unknown"
           },
-          "notes": []
+          "notes": [
+            "lower_spine_shifted_above_hip_pivot"
+          ]
         },
         "Upper_Spine": {
           "source_bone": "DEF-spine.004",
@@ -1443,12 +1455,6 @@
         },
         {
           "bone_name": "DEF-shin.R",
-          "reason": "supporting_chain_detail",
-          "origin": "primary",
-          "role": "unknown"
-        },
-        {
-          "bone_name": "DEF-spine.001",
           "reason": "supporting_chain_detail",
           "origin": "primary",
           "role": "unknown"
@@ -2194,6 +2200,12 @@
       ],
       "unclassified_bones": [
         {
+          "bone_name": "DEF-pelvis.L",
+          "reason": "unclassified",
+          "origin": "primary",
+          "role": "unknown"
+        },
+        {
           "bone_name": "DEF-pelvis.R",
           "reason": "unclassified",
           "origin": "primary",
@@ -2672,22 +2684,26 @@
       ]
     },
     "Hip": {
-      "source_bone": "DEF-pelvis.L",
-      "confidence": 0.683,
-      "action": "repair_in_builder",
+      "source_bone": "DEF-spine",
+      "confidence": 0.86,
+      "action": "alias_map",
       "evidence": {
-        "name": 1.0,
-        "hierarchy": 0.0,
-        "geometry": 0.917,
+        "name": 0.72,
+        "hierarchy": 1.0,
+        "geometry": 1.0,
         "source_origin": "primary",
         "role": "unknown"
       },
       "notes": [
-        "paired_sided_pelvis_requires_centering"
+        "hip_reassigned_to_spine_root_pivot"
+      ],
+      "preserved_pelvis_pair_sources": [
+        "DEF-pelvis.L",
+        "DEF-pelvis.R"
       ]
     },
     "Lower_Spine": {
-      "source_bone": "DEF-spine",
+      "source_bone": "DEF-spine.001",
       "confidence": 0.86,
       "action": "direct_map",
       "evidence": {
@@ -2697,7 +2713,9 @@
         "source_origin": "primary",
         "role": "unknown"
       },
-      "notes": []
+      "notes": [
+        "lower_spine_shifted_above_hip_pivot"
+      ]
     },
     "Upper_Spine": {
       "source_bone": "DEF-spine.004",
@@ -3374,6 +3392,12 @@
     }
   ],
   "unclassified_bones": [
+    {
+      "bone_name": "DEF-pelvis.L",
+      "reason": "unclassified",
+      "origin": "primary",
+      "role": "unknown"
+    },
     {
       "bone_name": "DEF-pelvis.R",
       "reason": "unclassified",
