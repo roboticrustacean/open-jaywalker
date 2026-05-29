@@ -1550,10 +1550,10 @@ def _target_side(target_name: str) -> Optional[str]:
     return None
 
 
-def _name_evidence(target_name: str, bone: BoneInfo) -> float:
+def _name_evidence(target_name: str, bone: BoneInfo, convention: str = "none") -> float:
     family = CORE_FAMILY_BY_TARGET[target_name]
     side = _target_side(target_name)
-    base_score = _family_name_score(family, bone)
+    base_score = _family_name_score(family, bone, convention)
 
     if side and bone.side and bone.side != side:
         base_score *= 0.05
@@ -1563,7 +1563,13 @@ def _name_evidence(target_name: str, bone: BoneInfo) -> float:
     return _clamp(base_score)
 
 
-def _family_name_score(family: str, bone: BoneInfo) -> float:
+def _family_name_score(family: str, bone: BoneInfo, convention: str = "none") -> float:
+    if convention != "none":
+        alias_map = BONE_CONVENTIONS[convention].alias_families
+        mapped = alias_map.get(_compact_stem(bone.compact_name))
+        if mapped is not None:
+            return 0.95 if family in mapped else 0.0
+
     tokens = set(bone.tokens)
     compact = bone.compact_name
 

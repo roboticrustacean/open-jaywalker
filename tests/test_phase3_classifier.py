@@ -790,6 +790,34 @@ class ConventionDetectionTests(unittest.TestCase):
         tags = _detect_family_tags("upleg", "upleg", ["up", "leg"], "none")
         self.assertNotIn("upper_leg", tags)
 
+    @staticmethod
+    def _bone_info(compact, tokens, side=None):
+        return BoneInfo(
+            name=compact, parent=None, head=(0, 0, 0), tail=(0, 0, 1), length=1.0,
+            origin="primary", normalized_name="_".join(tokens), compact_name=compact,
+            tokens=list(tokens), side=side, midpoint=(0, 0, 0.5), min_point=(0, 0, 0),
+            max_point=(0, 0, 1), role="deform", role_modifier=1.0, family_tags=set(),
+        )
+
+    def test_mixamo_arm_is_upper_not_lower(self):
+        bone = self._bone_info("arm", ["arm"])
+        self.assertEqual(_family_name_score("upper_arm", bone, "mixamo"), 0.95)
+        self.assertEqual(_family_name_score("lower_arm", bone, "mixamo"), 0.0)
+
+    def test_mixamo_leg_is_lower_not_upper(self):
+        bone = self._bone_info("leg", ["leg"])
+        self.assertEqual(_family_name_score("lower_leg", bone, "mixamo"), 0.95)
+        self.assertEqual(_family_name_score("upper_leg", bone, "mixamo"), 0.0)
+
+    def test_biped_com_scores_root(self):
+        bone = self._bone_info("com", ["com"])
+        self.assertEqual(_family_name_score("root", bone, "biped"), 0.95)
+
+    def test_non_alias_token_falls_through_to_generic(self):
+        # "wrist" has no alias entry; generic hand rule (0.82) must still apply.
+        bone = self._bone_info("wrist", ["wrist"])
+        self.assertEqual(_family_name_score("hand", bone, "mixamo"), 0.82)
+
 
 if __name__ == "__main__":
     unittest.main()
