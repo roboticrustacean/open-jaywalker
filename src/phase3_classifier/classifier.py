@@ -834,7 +834,11 @@ def _resolve_root_compliance(resolved_targets: Dict[str, dict], root_candidates:
     placement_metadata = context["placement_metadata"]
     grp_root_local_origin = [float(value) for value in placement_metadata["bbox_ground_center"]]
 
-    preserve_source_root_as_extra = (
+    # Disabled for now: the source armature is left untouched and already retains its
+    # own root, so duplicating it into the generated armature produces a confusing
+    # second (often non-vertical) root. Re-enable by restoring the candidate-based
+    # condition below.
+    preserve_source_root_as_extra = False and (
         candidate is not None
         and candidate_bone is not None
         and candidate.role not in {"control", "mechanism"}

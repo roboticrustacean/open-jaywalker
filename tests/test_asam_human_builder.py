@@ -660,6 +660,15 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(build_spec["source_armature_name"], "rig")
         self.assertGreater(len(build_spec["extras_preserved"]), 0)
 
+        # Root preservation is disabled: the generated armature must contain exactly
+        # one root bone (the synthesized vertical Root), not the horizontal source root.
+        root_bones = [bone for bone in build_spec["bones"] if bone["name"].lower() == "root"]
+        self.assertEqual([bone["name"] for bone in root_bones], ["Root"])
+        self.assertEqual(
+            [bone for bone in build_spec["bones"] if bone.get("geometry_source") == "preserved_source_root"],
+            [],
+        )
+
         root_bone = _spec_bone(build_spec, "Root")
         self.assertEqual(root_bone["geometry_source"], "root_resolution")
         self.assertEqual(root_bone["source_bone"], "root")
@@ -669,18 +678,22 @@ class AsamHumanBuilderTests(unittest.TestCase):
 
         hip_bone = _spec_bone(build_spec, "Hip")
         side_axis = build_plan["placement_metadata"]["side_axis"]["index"]
+        up_axis = build_plan["placement_metadata"]["up_axis"]["index"]
         # In Grp_Root-local coords, the centerline is at 0 (bbox_ground_center
         # coincides with grp_root_local_origin on the side axis).
         local_centerline = 0.0
-        lower_spine_bone = _spec_bone(build_spec, "Lower_Spine")
 
         self.assertEqual(hip_bone["geometry_source"], "centered_pelvis_pair")
         self.assertEqual(hip_bone["source_bone"], "DEF-pelvis.L")
-        self.assertEqual(hip_bone["head"], root_bone["tail"])
+        # Hip head sits at the pelvis (the level of the preserved pelvis-pair heads),
+        # centered on the spine, NOT at the Root tail (knee level).
+        pelvis_left = _spec_bone(build_spec, "DEF-pelvis_Left")
+        self.assertAlmostEqual(hip_bone["head"][up_axis], pelvis_left["head"][up_axis], places=6)
+        self.assertGreater(hip_bone["head"][up_axis], root_bone["tail"][up_axis])
         self.assertAlmostEqual(hip_bone["head"][side_axis], local_centerline, places=6)
         self.assertAlmostEqual(hip_bone["tail"][side_axis], local_centerline, places=6)
-        for hip_value, spine_value in zip(hip_bone["tail"], lower_spine_bone["head"]):
-            self.assertAlmostEqual(hip_value, spine_value, places=6)
+        # Hip is a short bone pointing up toward the spine base (non-degenerate).
+        self.assertGreater(hip_bone["tail"][up_axis], hip_bone["head"][up_axis])
 
         # Lock the realistic-data contract: both source pelvis bones must be
         # preserved as children of Hip under their ASAM spec-style names, and
@@ -699,7 +712,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
             self.assertEqual(preserved_bone["source_bone"], source_name)
             self.assertEqual(preserved_bone["semantic_action"], "preserve_paired_pelvis")
 
-    def test_repaired_paired_pelvis_creates_centered_hip_between_root_and_spine(self):
+    def test_repaired_paired_pelvis_creates_centered_hip_at_pelvis_pointing_to_spine(self):
         classifier_report = _base_classifier_report()
         build_plan = _base_build_plan()
         classifier_report["semantic_mapping"]["Hip"]["action"] = "repair_in_builder"
@@ -718,11 +731,17 @@ class AsamHumanBuilderTests(unittest.TestCase):
         root_bone = _spec_bone(build_spec, "Root")
         hip_bone = _spec_bone(build_spec, "Hip")
         side_axis = build_plan["placement_metadata"]["side_axis"]["index"]
+        up_axis = build_plan["placement_metadata"]["up_axis"]["index"]
         centerline = build_plan["placement_metadata"]["bbox_ground_center"][side_axis]
 
         self.assertEqual(hip_bone["geometry_source"], "centered_pelvis_pair")
         self.assertEqual(hip_bone["source_bone"], "pelvis.L")
-        self.assertEqual(hip_bone["head"], root_bone["tail"])
+        # Hip head is anchored at the centered pelvis-pair head (both pelvis heads
+        # at z=1.0), NOT at the synthesized Root tail (z=0.36). The head must sit
+        # above the Root tail so the bone is anatomically coherent.
+        self.assertEqual(hip_bone["head"], [0.0, 0.0, 1.0])
+        self.assertGreater(hip_bone["head"][up_axis], root_bone["tail"][up_axis])
+        # Tail still points to the Lower_Spine head, so Hip connects pelvis -> spine.
         self.assertEqual(hip_bone["tail"], [0.0, 0.0, 1.2])
         self.assertAlmostEqual(hip_bone["head"][side_axis], centerline)
         self.assertAlmostEqual(hip_bone["tail"][side_axis], centerline)

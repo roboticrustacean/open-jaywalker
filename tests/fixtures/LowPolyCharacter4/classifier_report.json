@@ -1114,7 +1114,7 @@
           0.05099785327911377,
           0.0033478213008493185
         ],
-        "preserve_source_root_as_extra": true,
+        "preserve_source_root_as_extra": false,
         "blocker_codes": [
           "multiple_source_roots",
           "root_children_not_hip_only",
@@ -3059,7 +3059,7 @@
         0.05099785327911377,
         0.0033478213008493185
       ],
-      "preserve_source_root_as_extra": true,
+      "preserve_source_root_as_extra": false,
       "blocker_codes": [
         "multiple_source_roots",
         "root_children_not_hip_only",

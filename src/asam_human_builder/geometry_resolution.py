@@ -143,7 +143,22 @@ def _resolve_centered_hip_geometry(
     default_length = _default_length_for_target("Hip", placement_metadata)
     default_direction = _default_direction_for_target("Hip", placement_metadata, root_geometry)
 
-    head = list(root_geometry["tail"])
+    source_geometry = source_bones.get(source_bone_name) if source_bone_name in source_bones else None
+    opposite_geometry = _find_opposite_pelvis_geometry(source_bone_name, source_bones)
+
+    # ASAM Hip sits at the pelvis, where the source pelvis pair originates, not at
+    # the synthesized Root's tail (an arbitrary bbox-ratio display stub). Anchor the
+    # head to the centered pelvis-pair head so the bone is anatomically coherent and
+    # stays the common parent of Lower_Spine and both legs.
+    if source_geometry is not None and opposite_geometry is not None:
+        head = [
+            float((source_geometry["head"][index] + opposite_geometry["head"][index]) / 2.0)
+            for index in range(3)
+        ]
+    elif source_geometry is not None:
+        head = list(source_geometry["head"])
+    else:
+        head = list(root_geometry["tail"])
     head[side_axis] = centerline
 
     if lower_spine_geometry is not None:
@@ -151,8 +166,6 @@ def _resolve_centered_hip_geometry(
         tail[side_axis] = centerline
         return _ensure_non_zero_geometry(head, tail, placement_metadata)
 
-    opposite_geometry = _find_opposite_pelvis_geometry(source_bone_name, source_bones)
-    source_geometry = source_bones.get(source_bone_name) if source_bone_name in source_bones else None
     if source_geometry is not None and opposite_geometry is not None:
         averaged_tail = [
             float((source_geometry["tail"][index] + opposite_geometry["tail"][index]) / 2.0)
