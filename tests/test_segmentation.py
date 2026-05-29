@@ -16,7 +16,8 @@ from phase3_classifier.segmentation import (  # noqa: E402
     CharacterGroup,
     MIN_CHARACTER_BONES,
     detect_characters,
-    build_character_view,  # noqa: E402
+    build_character_view,
+    assign_meshes_to_characters,  # noqa: E402
 )
 
 from phase3_classifier.classifier import ArmatureInput  # noqa: E402
@@ -146,6 +147,70 @@ class BuildCharacterViewTests(unittest.TestCase):
     def test_placement_metadata_omitted_for_per_character_derivation(self):
         view = build_character_view(self.primary, self.hero0, mesh_binding=None)
         self.assertNotIn("placement_metadata", view.primary_data)
+
+
+def _crowd_mesh_binding():
+    return {
+        "armature_object_name": "Object_4",
+        "meshes": [
+            {
+                "mesh_name": "Hero000_Body",
+                "armature_link": "modifier",
+                "modifiers": [],
+                "vertex_groups": ["Hero000Pelvis_1", "Hero000LThigh_5"],
+                "vertex_group_stats": {
+                    "non_empty_group_count": 2,
+                    "per_group": [
+                        {"name": "Hero000Pelvis_1", "weighted_vertex_count": 5},
+                        {"name": "Hero000LThigh_5", "weighted_vertex_count": 3},
+                    ],
+                },
+                "material_slots": [],
+                "warnings": [],
+            },
+            {
+                "mesh_name": "Prop",
+                "armature_link": "modifier",
+                "modifiers": [],
+                "vertex_groups": ["_rootJoint"],
+                "vertex_group_stats": {
+                    "non_empty_group_count": 1,
+                    "per_group": [{"name": "_rootJoint", "weighted_vertex_count": 4}],
+                },
+                "material_slots": [],
+                "warnings": [],
+            },
+        ],
+    }
+
+
+class AssignMeshesTests(unittest.TestCase):
+    def setUp(self):
+        primary = _crowd_primary_data()
+        self.groups, _ = detect_characters(primary["bones"])
+
+    def test_mesh_assigned_to_majority_prefix_character(self):
+        per_char, unassigned = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
+        self.assertIn("Hero000", per_char)
+        names = [mesh["mesh_name"] for mesh in per_char["Hero000"]["meshes"]]
+        self.assertEqual(names, ["Hero000_Body"])
+
+    def test_vertex_group_names_stripped(self):
+        per_char, _ = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
+        mesh = per_char["Hero000"]["meshes"][0]
+        self.assertEqual(mesh["vertex_groups"], ["Pelvis", "LThigh"])
+        self.assertEqual(
+            [entry["name"] for entry in mesh["vertex_group_stats"]["per_group"]],
+            ["Pelvis", "LThigh"],
+        )
+
+    def test_unassignable_mesh_recorded(self):
+        _, unassigned = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
+        self.assertEqual(unassigned, ["Prop"])
+
+    def test_character_with_no_meshes_gets_empty_binding(self):
+        per_char, _ = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
+        self.assertEqual(per_char["Hero001"]["meshes"], [])
 
 
 if __name__ == "__main__":

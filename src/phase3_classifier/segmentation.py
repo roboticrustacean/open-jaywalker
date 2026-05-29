@@ -171,3 +171,46 @@ def build_character_view(primary_data: dict, group: CharacterGroup, mesh_binding
         primary_data=view_primary,
         support_data=None,
     )
+
+
+def _mesh_owner_prefix(mesh: dict, known_prefixes: set) -> Optional[str]:
+    """Pick the character prefix that owns the majority of weighted vertices."""
+    weights: Dict[str, int] = {}
+    per_group = mesh.get("vertex_group_stats", {}).get("per_group", [])
+    for entry in per_group:
+        prefix = derive_character_prefix(entry["name"])
+        if prefix in known_prefixes:
+            weights[prefix] = weights.get(prefix, 0) + int(entry.get("weighted_vertex_count", 0))
+    if not weights:
+        return None
+    return max(sorted(weights), key=lambda prefix: weights[prefix])
+
+
+def _strip_mesh_binding(mesh: dict, prefix: str) -> dict:
+    """Strip the character prefix from a mesh's vertex-group names."""
+    out = copy.deepcopy(mesh)
+    out["vertex_groups"] = [strip_character_prefix(name, prefix) for name in mesh.get("vertex_groups", [])]
+    stats = out.get("vertex_group_stats", {})
+    for entry in stats.get("per_group", []):
+        entry["name"] = strip_character_prefix(entry["name"], prefix)
+    return out
+
+
+def assign_meshes_to_characters(
+    mesh_binding: Optional[dict],
+    groups: List[CharacterGroup],
+) -> Tuple[Dict[str, dict], List[str]]:
+    """Return {character_id: mesh_binding} and a list of unassignable mesh names."""
+    known = {group.prefix for group in groups}
+    per_char: Dict[str, dict] = {
+        group.character_id: {"armature_object_name": group.character_id, "meshes": []}
+        for group in groups
+    }
+    unassigned: List[str] = []
+    for mesh in (mesh_binding or {}).get("meshes", []):
+        owner = _mesh_owner_prefix(mesh, known)
+        if owner is None:
+            unassigned.append(mesh["mesh_name"])
+            continue
+        per_char[owner]["meshes"].append(_strip_mesh_binding(mesh, owner))
+    return per_char, sorted(unassigned)
