@@ -13,7 +13,11 @@ import math
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
+from types import MappingProxyType
+from typing import Dict, FrozenSet, Iterable, List, Literal, Mapping, Optional, Sequence, Set, Tuple
+
+# The set of naming conventions the classifier can detect and apply.
+Convention = Literal["none", "biped", "mixamo"]
 
 
 CORE_TARGETS: List[str] = [
@@ -184,24 +188,24 @@ CORE_FAMILY_BY_TARGET: Dict[str, str] = {
 
 # Translation from a scoring-family name (CORE_FAMILY_BY_TARGET values) to the
 # family-tag vocabulary used by _detect_family_tags / _score_target_candidate.
-SCORING_FAMILY_TO_TAGS: Dict[str, Set[str]] = {
-    "root": {"root"},
-    "hip": {"hip"},
-    "lower_spine": {"spine", "lower_spine"},
-    "upper_spine": {"spine", "upper_spine"},
-    "neck": {"neck"},
-    "head": {"head"},
-    "eye": {"eye"},
-    "shoulder": {"shoulder"},
-    "upper_arm": {"upper_arm"},
-    "lower_arm": {"lower_arm"},
-    "hand": {"hand"},
-    "full_thumb": {"thumb"},
-    "full_fingers": {"finger"},
-    "upper_leg": {"upper_leg"},
-    "lower_leg": {"lower_leg"},
-    "foot": {"foot"},
-    "full_toes": {"toe"},
+SCORING_FAMILY_TO_TAGS: Dict[str, FrozenSet[str]] = {
+    "root": frozenset({"root"}),
+    "hip": frozenset({"hip"}),
+    "lower_spine": frozenset({"spine", "lower_spine"}),
+    "upper_spine": frozenset({"spine", "upper_spine"}),
+    "neck": frozenset({"neck"}),
+    "head": frozenset({"head"}),
+    "eye": frozenset({"eye"}),
+    "shoulder": frozenset({"shoulder"}),
+    "upper_arm": frozenset({"upper_arm"}),
+    "lower_arm": frozenset({"lower_arm"}),
+    "hand": frozenset({"hand"}),
+    "full_thumb": frozenset({"thumb"}),
+    "full_fingers": frozenset({"finger"}),
+    "upper_leg": frozenset({"upper_leg"}),
+    "lower_leg": frozenset({"lower_leg"}),
+    "foot": frozenset({"foot"}),
+    "full_toes": frozenset({"toe"}),
 }
 
 
@@ -209,13 +213,14 @@ SCORING_FAMILY_TO_TAGS: Dict[str, Set[str]] = {
 class BoneConvention:
     name: str
     # Keys are digit-stripped *compact* names; values are scoring-family names.
-    alias_families: Dict[str, frozenset]
+    # Wrapped in MappingProxyType so the shared module-level registry is read-only.
+    alias_families: Mapping[str, FrozenSet[str]]
 
 
 BONE_CONVENTIONS: Dict[str, BoneConvention] = {
     "biped": BoneConvention(
         name="biped",
-        alias_families={
+        alias_families=MappingProxyType({
             "com": frozenset({"root"}),
             "pelvis": frozenset({"hip"}),
             "spine": frozenset({"lower_spine", "upper_spine"}),
@@ -227,11 +232,11 @@ BONE_CONVENTIONS: Dict[str, BoneConvention] = {
             "calf": frozenset({"lower_leg"}),
             "foot": frozenset({"foot"}),
             "toe": frozenset({"full_toes"}),
-        },
+        }),
     ),
     "mixamo": BoneConvention(
         name="mixamo",
-        alias_families={
+        alias_families=MappingProxyType({
             "hips": frozenset({"hip"}),
             "spine": frozenset({"lower_spine", "upper_spine"}),
             "neck": frozenset({"neck"}),
@@ -244,7 +249,7 @@ BONE_CONVENTIONS: Dict[str, BoneConvention] = {
             "leg": frozenset({"lower_leg"}),
             "foot": frozenset({"foot"}),
             "toebase": frozenset({"full_toes"}),
-        },
+        }),
     ),
 }
 
@@ -594,7 +599,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
     }
 
 
-def _build_context(bones: Dict[str, BoneInfo], primary_data: dict, support_data: Optional[dict], convention: str = "none") -> dict:
+def _build_context(bones: Dict[str, BoneInfo], primary_data: dict, support_data: Optional[dict], convention: Convention = "none") -> dict:
     children_map = {name: list(bone.child_names) for name, bone in bones.items()}
     derived_height_axis, derived_lateral_axis = _infer_axes(bones.values())
     derived_centerline = _median([bone.midpoint[derived_lateral_axis] for bone in bones.values()])
@@ -727,7 +732,7 @@ def _derive_placement_metadata_from_bones(
     }
 
 
-def _build_bone_index(primary_data: dict, support_data: Optional[dict], convention: str = "none") -> Dict[str, BoneInfo]:
+def _build_bone_index(primary_data: dict, support_data: Optional[dict], convention: Convention = "none") -> Dict[str, BoneInfo]:
     raw_bones: Dict[str, dict] = {}
     origins: Dict[str, str] = {}
 
@@ -1553,7 +1558,7 @@ def _target_side(target_name: str) -> Optional[str]:
     return None
 
 
-def _name_evidence(target_name: str, bone: BoneInfo, convention: str = "none") -> float:
+def _name_evidence(target_name: str, bone: BoneInfo, convention: Convention = "none") -> float:
     family = CORE_FAMILY_BY_TARGET[target_name]
     side = _target_side(target_name)
     base_score = _family_name_score(family, bone, convention)
@@ -1566,7 +1571,7 @@ def _name_evidence(target_name: str, bone: BoneInfo, convention: str = "none") -
     return _clamp(base_score)
 
 
-def _family_name_score(family: str, bone: BoneInfo, convention: str = "none") -> float:
+def _family_name_score(family: str, bone: BoneInfo, convention: Convention = "none") -> float:
     if convention != "none":
         alias_map = BONE_CONVENTIONS[convention].alias_families
         mapped = alias_map.get(_compact_stem(bone.compact_name))
@@ -2002,7 +2007,7 @@ def _infer_chain_side(
     return "left" if offset > 0 else "right"
 
 
-def _detect_convention(primary_data: dict, support_data: Optional[dict]) -> str:
+def _detect_convention(primary_data: dict, support_data: Optional[dict]) -> Convention:
     """Identify a non-Rigify naming convention from the raw bone set.
 
     Conservative signatures avoid false positives on Rigify/ASAM rigs:
@@ -2032,7 +2037,7 @@ def _detect_convention(primary_data: dict, support_data: Optional[dict]) -> str:
     return "none"
 
 
-def _normalize_bone_name(name: str, convention: str = "none") -> Tuple[str, str, List[str], Optional[str]]:
+def _normalize_bone_name(name: str, convention: Convention = "none") -> Tuple[str, str, List[str], Optional[str]]:
     transformed = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1_\2", name)
     transformed = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", transformed)
     transformed = transformed.split(":")[-1].lower()
@@ -2059,7 +2064,7 @@ def _detect_family_tags(
     normalized_name: str,
     compact_name: str,
     tokens: Sequence[str],
-    convention: str = "none",
+    convention: Convention = "none",
 ) -> Set[str]:
     family_tags: Set[str] = set()
     token_set = set(tokens)

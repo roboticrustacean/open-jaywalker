@@ -258,6 +258,8 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertTrue(report_path.exists())
         self.assertTrue(plan_path.exists())
         self.assertEqual(report["recommended_primary_armature"], "Armature")
+        asam_armatures = {item["armature_name"]: item for item in report["armatures"]}
+        self.assertEqual(asam_armatures["Armature"]["detected_convention"], "none")
         self.assertEqual(len(report["missing_targets"]), 0)
         self.assertGreaterEqual(
             sum(1 for payload in report["semantic_mapping"].values() if payload["action"] == "direct_map"),
@@ -336,6 +338,8 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertEqual(report["recommended_primary_armature"], "rig")
 
         armatures = {item["armature_name"]: item for item in report["armatures"]}
+        self.assertEqual(armatures["rig"]["detected_convention"], "none")
+        self.assertEqual(armatures["metarig"]["detected_convention"], "none")
 
         rig_summary = armatures["rig"]["summary"]
         metarig_summary = armatures["metarig"]["summary"]
