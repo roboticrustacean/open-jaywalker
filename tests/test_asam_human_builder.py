@@ -1864,6 +1864,22 @@ class CrowdBlenderTests(unittest.TestCase):
         self.assertIsNotNone(parent.children.get(child_name))
         self.assertIsNone(fake.context.scene.collection.children.get(child_name))
 
+    def test_build_armature_in_blender_strips_prefix_then_remaps(self):
+        build_spec = _minimal_crowd_build_spec()   # Hip built from source_bone "Pelvis"
+        build_spec["mesh_binding"] = {
+            "armature_object_name": build_spec["source_armature_name"],
+            "meshes": [{"mesh_name": "Body000", "armature_link": "modifier"}],
+        }
+        fake = _fake_with_source_armature(
+            build_spec["source_armature_name"],
+            meshes=[("Body000", ["Hero000Pelvis_093"])],
+        )
+        result = build_armature_in_blender(build_spec, fake, character_prefix="Hero000")
+        generated = fake.data.objects.get(result["duplicated_meshes"][0]["generated_mesh_name"])
+        # Prefixed group -> stripped ('Pelvis') -> ASAM target ('Hip').
+        self.assertIn("Hip", generated.vertex_groups)
+        self.assertNotIn("Hero000Pelvis_093", generated.vertex_groups)
+
 
 class CrowdDetectionTests(unittest.TestCase):
     def test_is_crowd_plan_true_when_characters_present(self):

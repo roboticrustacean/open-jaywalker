@@ -9,6 +9,7 @@ try:
         GENERATED_ASSET_KEY,
         GENERATED_MARKER_KEY,
         choose_generated_collection_action,
+        compute_prefix_strip_renames,
         compute_vertex_group_remap_plan,
     )
 except ImportError:  # pragma: no cover - Blender script path fallback
@@ -16,6 +17,7 @@ except ImportError:  # pragma: no cover - Blender script path fallback
         GENERATED_ASSET_KEY,
         GENERATED_MARKER_KEY,
         choose_generated_collection_action,
+        compute_prefix_strip_renames,
         compute_vertex_group_remap_plan,
     )
 
@@ -338,6 +340,12 @@ def _duplicate_bound_meshes(
         retargeted = _retarget_armature_modifiers(generated_mesh, source_armature, generated_armature)
         if record.get("armature_link") == "parent" and not retargeted:
             mesh_warnings.append("parent_only_no_armature_modifier:{0}".format(mesh_name))
+
+        if character_prefix:
+            prefix_renames = compute_prefix_strip_renames(
+                _vertex_group_names(generated_mesh), character_prefix
+            )
+            _apply_vertex_group_renames(generated_mesh, prefix_renames)
 
         group_names = _vertex_group_names(generated_mesh)
         remap_plan = compute_vertex_group_remap_plan(
