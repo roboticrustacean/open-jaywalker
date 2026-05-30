@@ -381,6 +381,9 @@ class _FakeCollectionChildren:
     def get(self, name: str):
         return self._children.get(name)
 
+    def __iter__(self):
+        return iter(list(self._children.values()))
+
 
 class _FakeCollection(_FakeProps):
     def __init__(self, name: str, bpy_module=None):
@@ -1879,6 +1882,43 @@ class CrowdBlenderTests(unittest.TestCase):
         # Prefixed group -> stripped ('Pelvis') -> ASAM target ('Hip').
         self.assertIn("Hip", generated.vertex_groups)
         self.assertNotIn("Hero000Pelvis_093", generated.vertex_groups)
+
+    def test_build_crowd_in_blender_creates_wrapper_with_children(self):
+        from asam_human_builder.builder import apply_character_naming
+        from asam_human_builder.blender_builder import build_crowd_in_blender
+        spec_a = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        spec_b = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero001")
+        fake = _fake_with_source_armature("Object_4")   # one source armature, shared
+        decomposition = {"source_armature": "Object_4", "character_count": 2,
+                         "character_ids": ["Hero000", "Hero001"],
+                         "shared_bones": [], "unassigned_meshes": []}
+        result = build_crowd_in_blender(
+            "crowd", "ASAM_crowd",
+            [("Hero000", spec_a), ("Hero001", spec_b)], decomposition, fake,
+        )
+        wrapper = fake.data.collections.get("ASAM_crowd")
+        self.assertIsNotNone(wrapper.children.get("ASAM_crowd_Hero000"))
+        self.assertIsNotNone(wrapper.children.get("ASAM_crowd_Hero001"))
+        self.assertEqual(len(result["characters"]), 2)
+        self.assertEqual(result["failed_characters"], [])
+
+    def test_build_crowd_in_blender_continues_past_failure(self):
+        from asam_human_builder.builder import apply_character_naming
+        from asam_human_builder.blender_builder import build_crowd_in_blender
+        spec_ok = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        bad_spec = {"asset_name": "crowd"}   # missing keys -> raises inside builder
+        fake = _fake_with_source_armature("Object_4")
+        decomposition = {"source_armature": "Object_4", "character_count": 2,
+                         "character_ids": ["Hero000", "BadOne"],
+                         "shared_bones": [], "unassigned_meshes": []}
+        result = build_crowd_in_blender(
+            "crowd", "ASAM_crowd",
+            [("Hero000", spec_ok), ("BadOne", bad_spec)], decomposition, fake,
+        )
+        self.assertEqual(len(result["characters"]), 1)
+        self.assertEqual(result["characters"][0]["character_id"], "Hero000")
+        self.assertEqual(len(result["failed_characters"]), 1)
+        self.assertEqual(result["failed_characters"][0]["character_id"], "BadOne")
 
 
 class CrowdDetectionTests(unittest.TestCase):

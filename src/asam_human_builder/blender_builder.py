@@ -506,3 +506,76 @@ def _ensure_object_mode(bpy_module) -> None:
         return
     if getattr(active_object, "mode", "OBJECT") != "OBJECT":
         bpy_module.ops.object.mode_set(mode="OBJECT")
+
+
+def build_crowd_in_blender(
+    asset_name: str,
+    wrapper_collection_name: str,
+    character_specs,
+    decomposition: dict,
+    bpy_module=None,
+) -> dict:
+    """Build N per-character ASAM humans, each nested under one wrapper collection.
+
+    Continue-on-error: a character that fails to build is recorded in
+    `failed_characters` and does not abort the rest of the batch.
+    """
+    bpy_module = bpy_module or _require_bpy()
+
+    _remove_generated_crowd_wrapper(bpy_module, wrapper_collection_name, asset_name)
+    wrapper = _create_collection(bpy_module, wrapper_collection_name, asset_name)
+
+    characters = []
+    failed = []
+    for character_id, spec in character_specs:
+        try:
+            result = build_armature_in_blender(
+                spec, bpy_module, parent_collection=wrapper, character_prefix=character_id
+            )
+            result["character_id"] = character_id
+            characters.append(result)
+        except Exception as exc:  # continue-on-error by design
+            failed.append({"character_id": character_id, "error": str(exc)})
+
+    return {
+        "wrapper_collection_name": wrapper.name,
+        "characters": characters,
+        "failed_characters": failed,
+        "decomposition": decomposition,
+    }
+
+
+def _remove_generated_crowd_wrapper(bpy_module, wrapper_name: str, asset_name: str) -> None:
+    """Remove a previously-generated crowd wrapper and its generated child collections.
+
+    No-op if the wrapper is absent. Refuses to touch a wrapper that is not a safe
+    generated output for this asset (mirrors _remove_generated_collection's guard).
+    """
+    wrapper = bpy_module.data.collections.get(wrapper_name)
+    if wrapper is None:
+        return
+    if not bool(wrapper.get(GENERATED_MARKER_KEY)) or wrapper.get(GENERATED_ASSET_KEY) != asset_name:
+        raise ValueError(
+            "Refusing to rebuild over non-generated collection '{0}'".format(wrapper_name)
+        )
+
+    _ensure_object_mode(bpy_module)
+
+    # Remove each generated child collection (objects + the collection itself).
+    for child in list(wrapper.children):
+        if not bool(child.get(GENERATED_MARKER_KEY)) or child.get(GENERATED_ASSET_KEY) != asset_name:
+            raise ValueError(
+                "Refusing to remove crowd child '{0}'; not a safe generated output".format(child.name)
+            )
+        for obj in list(child.all_objects):
+            data_block = obj.data if getattr(obj, "type", None) == "ARMATURE" else None
+            bpy_module.data.objects.remove(obj, do_unlink=True)
+            if data_block is not None and getattr(data_block, "users", 0) == 0:
+                bpy_module.data.armatures.remove(data_block)
+        wrapper.children.unlink(child)
+        bpy_module.data.collections.remove(child)
+
+    for scene in bpy_module.data.scenes:
+        if scene.collection.children.get(wrapper.name) is not None:
+            scene.collection.children.unlink(wrapper)
+    bpy_module.data.collections.remove(wrapper)
