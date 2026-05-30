@@ -703,3 +703,20 @@ def _build_children_map(bone_parents: dict) -> Dict[str, List[str]]:
     return children_map
 
 
+def compute_prefix_strip_renames(vertex_group_names: Sequence[str], character_id: str) -> List[dict]:
+    """Plan renames that strip a character prefix from a duplicated mesh's vertex groups.
+
+    The source mesh keeps original group names ('Hero000Pelvis_093'); strip the prefix
+    ('Pelvis') so the existing ASAM remap ('Pelvis' -> 'Hip') can match. Identity renames
+    (already prefix-free) are skipped.
+    """
+    from phase3_classifier.segmentation import strip_character_prefix
+
+    renames: List[dict] = []
+    for name in vertex_group_names:
+        target = strip_character_prefix(name, character_id)
+        if target != name:
+            renames.append({"source": name, "target": target})
+    return renames
+
+

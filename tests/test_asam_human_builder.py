@@ -2049,5 +2049,21 @@ class CrowdSourceBoneSliceTests(unittest.TestCase):
         self.assertEqual(sliced["Pelvis"]["name"], "Pelvis")
 
 
+class CrowdVertexGroupStripTests(unittest.TestCase):
+    def test_compute_prefix_strip_renames(self):
+        from asam_human_builder.builder import compute_prefix_strip_renames
+        renames = compute_prefix_strip_renames(["Hero000Pelvis_093", "Hero000Spine0_094"], "Hero000")
+        self.assertEqual(
+            sorted(renames, key=lambda r: r["source"]),
+            [{"source": "Hero000Pelvis_093", "target": "Pelvis"},
+             {"source": "Hero000Spine0_094", "target": "Spine0"}],
+        )
+
+    def test_compute_prefix_strip_renames_skips_identity(self):
+        from asam_human_builder.builder import compute_prefix_strip_renames
+        # A group with no matching prefix strips to itself -> no rename emitted.
+        self.assertEqual(compute_prefix_strip_renames(["Pelvis"], "Hero000"), [])
+
+
 if __name__ == "__main__":
     unittest.main()
