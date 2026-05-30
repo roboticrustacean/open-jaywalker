@@ -1247,6 +1247,24 @@ class AsamHumanBuilderTests(unittest.TestCase):
                 "TestAsset",
             )
 
+
+class CrowdNamingTests(unittest.TestCase):
+    def test_apply_character_naming_overrides_generated_names(self):
+        from asam_human_builder.builder import apply_character_naming
+        spec = {
+            "generated_collection_name": "ASAM_crowd",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_crowd",
+        }
+        apply_character_naming(spec, "crowd", "Hero000")
+        self.assertEqual(spec["generated_collection_name"], "ASAM_crowd_Hero000")
+        self.assertEqual(spec["group_root_name"], "Grp_Root_Hero000")
+        self.assertEqual(spec["generated_armature_name"], "Armature_crowd_Hero000")
+
+    def test_wrapper_collection_name(self):
+        from asam_human_builder.builder import wrapper_collection_name
+        self.assertEqual(wrapper_collection_name("crowd"), "ASAM_crowd")
+
     def test_resolve_default_asset_dir_uses_blend_name(self):
         resolved = resolve_default_asset_dir(
             "C:/assets/openmatexamplehuman.blend",

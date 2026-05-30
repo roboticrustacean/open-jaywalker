@@ -139,6 +139,22 @@ def is_crowd_plan(build_plan: dict) -> bool:
     return bool(build_plan.get("characters"))
 
 
+def wrapper_collection_name(asset_name: str) -> str:
+    """Name of the crowd wrapper collection that holds all per-character child collections."""
+    return "ASAM_{0}".format(asset_name)
+
+
+def apply_character_naming(spec: dict, asset_name: str, character_id: str) -> dict:
+    """Override the generated collection/group-root/armature names with per-character ones.
+
+    Object names are global in bpy.data, so each character needs a unique suffix.
+    """
+    spec["generated_collection_name"] = "ASAM_{0}_{1}".format(asset_name, character_id)
+    spec["group_root_name"] = "Grp_Root_{0}".format(character_id)
+    spec["generated_armature_name"] = "Armature_{0}_{1}".format(asset_name, character_id)
+    return spec
+
+
 def read_builder_inputs(asset_dir: Path) -> Tuple[dict, dict]:
     """Read classifier_report.json and build_plan.json WITHOUT flat-shape validation.
 
