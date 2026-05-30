@@ -160,6 +160,31 @@ def read_builder_inputs(asset_dir: Path) -> Tuple[dict, dict]:
     return classifier_report, build_plan
 
 
+def slice_source_bones_for_character(full_index: Dict[str, dict], character_id: str) -> Dict[str, dict]:
+    """Filter a raw source-bone index to one character and strip its prefix from names.
+
+    `full_index` is keyed by original bone names (from build_source_bone_index_from_export);
+    the result is keyed by prefix-stripped names matching the per-character semantic_mapping.
+    World geometry (head/tail/length) is preserved so each rig lands at its world location.
+    """
+    from phase3_classifier.segmentation import derive_character_prefix, strip_character_prefix
+
+    sliced: Dict[str, dict] = {}
+    for original_name, geometry in full_index.items():
+        if derive_character_prefix(original_name) != character_id:
+            continue
+        stripped = strip_character_prefix(original_name, character_id)
+        new_geometry = dict(geometry)
+        new_geometry["name"] = stripped
+        parent = geometry.get("parent")
+        if parent and derive_character_prefix(parent) == character_id:
+            new_geometry["parent"] = strip_character_prefix(parent, character_id)
+        else:
+            new_geometry["parent"] = None
+        sliced[stripped] = new_geometry
+    return sliced
+
+
 def _find_character_entry(entries, character_id: str) -> dict:
     for entry in entries or []:
         if entry.get("character_id") == character_id:

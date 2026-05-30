@@ -2012,5 +2012,24 @@ class CrowdFlatInputsTests(unittest.TestCase):
             build_character_flat_inputs(classifier_report, build_plan, "Nope")
 
 
+class CrowdSourceBoneSliceTests(unittest.TestCase):
+    def test_slice_source_bones_filters_and_strips(self):
+        from asam_human_builder.builder import slice_source_bones_for_character
+        full_index = {
+            "Hero000Pelvis_001": {"name": "Hero000Pelvis_001", "parent": "_rootJoint",
+                                  "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.2], "length": 0.2},
+            "Hero000Spine0_002": {"name": "Hero000Spine0_002", "parent": "Hero000Pelvis_001",
+                                  "head": [0.0, 0.0, 1.2], "tail": [0.0, 0.0, 1.4], "length": 0.2},
+            "Hero001Pelvis_003": {"name": "Hero001Pelvis_003", "parent": "_rootJoint",
+                                  "head": [5.0, 0.0, 1.0], "tail": [5.0, 0.0, 1.2], "length": 0.2},
+        }
+        sliced = slice_source_bones_for_character(full_index, "Hero000")
+        self.assertEqual(set(sliced), {"Pelvis", "Spine0"})
+        self.assertEqual(sliced["Pelvis"]["parent"], None)          # parent outside group -> None
+        self.assertEqual(sliced["Spine0"]["parent"], "Pelvis")      # parent inside group -> stripped
+        self.assertEqual(sliced["Pelvis"]["head"], [0.0, 0.0, 1.0]) # world geometry preserved
+        self.assertEqual(sliced["Pelvis"]["name"], "Pelvis")
+
+
 if __name__ == "__main__":
     unittest.main()
