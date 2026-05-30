@@ -34,8 +34,14 @@ def snapshot_existing_collections(bpy_module) -> List[dict]:
     return collections
 
 
-def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
-    """Create or rebuild the generated ASAM armature in the open Blender file."""
+def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collection=None, character_prefix=None) -> dict:
+    """Create or rebuild the generated ASAM armature in the open Blender file.
+
+    parent_collection: when supplied, the generated collection is linked under this
+        collection instead of the scene root (crowd fan-out use case).
+    character_prefix: when supplied, strips the prefix from duplicated meshes' vertex
+        groups before the ASAM remap (used by a later task).
+    """
     bpy_module = bpy_module or _require_bpy()
     asset_name = build_spec["asset_name"]
     collection_name = build_spec["generated_collection_name"]
@@ -77,7 +83,7 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
         group_root_name,
         armature_name,
     )
-    collection = _create_collection(bpy_module, collection_name, asset_name)
+    collection = _create_collection(bpy_module, collection_name, asset_name, parent_collection)
     grp_root_local_origin = build_spec.get("grp_root_local_origin", [0.0, 0.0, 0.0])
     group_root = _create_group_root(
         bpy_module, group_root_name, asset_name, collection, grp_root_local_origin
@@ -90,6 +96,7 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
         collection,
         source_armature,
         armature_object,
+        character_prefix,
     )
 
     return {
@@ -252,11 +259,14 @@ def _resolve_unique_name(preferred_name: str, is_in_use, fallback_bases: List[st
         suffix += 1
 
 
-def _create_collection(bpy_module, collection_name: str, asset_name: str):
+def _create_collection(bpy_module, collection_name: str, asset_name: str, parent_collection=None):
     collection = bpy_module.data.collections.new(collection_name)
     collection[GENERATED_MARKER_KEY] = True
     collection[GENERATED_ASSET_KEY] = asset_name
-    bpy_module.context.scene.collection.children.link(collection)
+    if parent_collection is not None:
+        parent_collection.children.link(collection)
+    else:
+        bpy_module.context.scene.collection.children.link(collection)
     return collection
 
 
@@ -295,6 +305,7 @@ def _duplicate_bound_meshes(
     collection,
     source_armature,
     generated_armature,
+    character_prefix=None,
 ) -> dict:
     duplicated_meshes = []
     skipped_meshes = []

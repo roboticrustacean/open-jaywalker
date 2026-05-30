@@ -487,6 +487,37 @@ class _FakeBpy:
         return source
 
 
+def _minimal_crowd_build_spec(asset_name="crowd", character_id="Hero000", source_armature="Object_4"):
+    """A tiny generated-armature spec for fake-bpy crowd tests: one Hip from 'Pelvis'."""
+    return {
+        "asset_name": asset_name,
+        "source_armature_name": source_armature,
+        "generated_collection_name": "ASAM_{0}".format(asset_name),
+        "group_root_name": "Grp_Root",
+        "generated_armature_name": "Armature_{0}".format(asset_name),
+        "grp_root_local_origin": [0.0, 0.0, 0.0],
+        "bones": [
+            {"name": "Hip", "parent_bone": None, "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.2],
+             "use_connect": False, "geometry_source": "source_bone", "source_bone": "Pelvis",
+             "semantic_action": "direct_map"},
+        ],
+        "mesh_binding": {"armature_object_name": source_armature, "meshes": []},
+        "extras_preserved": [],
+        "preserved_pelvis_pair": [],
+        "warnings": [],
+    }
+
+
+def _fake_with_source_armature(source_armature="Object_4", meshes=None):
+    """_FakeBpy with the source armature present, plus optional (mesh_name, [vgroups]) meshes."""
+    bpy = _FakeBpy()
+    armature = bpy.add_source_armature(source_armature)
+    for mesh_name, vgroups in (meshes or []):
+        mesh = bpy.add_source_mesh(mesh_name, armature)
+        mesh.vertex_groups = list(vgroups)
+    return bpy
+
+
 class AsamHumanBuilderTests(unittest.TestCase):
     def test_builder_report_carries_root_anchor_metadata(self):
         """builder_report records grp_root_local_origin, root_mode, and preserved_source_root."""
@@ -1820,6 +1851,18 @@ class CrowdNamingTests(unittest.TestCase):
             "The following ASAM-normative bones are missing from CORE_TARGETS: {0}".format(sorted(missing)),
         )
         self.assertEqual(len(CORE_TARGETS), 28, "CORE_TARGETS should have exactly 28 bones.")
+
+
+class CrowdBlenderTests(unittest.TestCase):
+    def test_build_armature_in_blender_nests_under_parent_collection(self):
+        build_spec = _minimal_crowd_build_spec()
+        fake = _fake_with_source_armature(build_spec["source_armature_name"])
+        parent = fake.data.collections.new("ASAM_wrapper")
+        result = build_armature_in_blender(build_spec, fake, parent_collection=parent)
+        child_name = result["generated_collection_name"]
+        # Child is linked under the wrapper, NOT the scene root.
+        self.assertIsNotNone(parent.children.get(child_name))
+        self.assertIsNone(fake.context.scene.collection.children.get(child_name))
 
 
 class CrowdDetectionTests(unittest.TestCase):
