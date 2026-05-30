@@ -160,6 +160,44 @@ def read_builder_inputs(asset_dir: Path) -> Tuple[dict, dict]:
     return classifier_report, build_plan
 
 
+def _find_character_entry(entries, character_id: str) -> dict:
+    for entry in entries or []:
+        if entry.get("character_id") == character_id:
+            return entry
+    raise KeyError("No character entry for {0}".format(character_id))
+
+
+def build_character_flat_inputs(
+    classifier_report: dict, build_plan: dict, character_id: str
+) -> Tuple[dict, dict]:
+    """Synthesize a flat-shaped (classifier_report, build_plan) pair for one character.
+
+    The synthesized pair is fed to the unchanged single-character `build_armature_spec`.
+    `recommended_primary_armature` is the real crowd source armature so mesh retargeting
+    and flat validation line up; per-character mesh_binding.armature_object_name already
+    equals it after the segmentation fix.
+    """
+    decomposition = classifier_report["asset_summary"]["character_decomposition"]
+    source_armature = decomposition["source_armature"]
+    report_entry = _find_character_entry(classifier_report.get("characters"), character_id)
+    plan_entry = _find_character_entry(build_plan.get("characters"), character_id)
+
+    flat_report = {
+        "recommended_primary_armature": source_armature,
+        "semantic_mapping": report_entry["semantic_mapping"],
+    }
+    flat_plan = {
+        "asset_name": build_plan["asset_name"],
+        "recommended_primary_armature": source_armature,
+        "root_resolutions": plan_entry["root_resolutions"],
+        "placement_metadata": plan_entry["placement_metadata"],
+        "mesh_binding": plan_entry["mesh_binding"],
+        "proposed_asam_hierarchy": plan_entry["proposed_asam_hierarchy"],
+        "extras_preserved": plan_entry.get("extras_preserved", []),
+    }
+    return flat_report, flat_plan
+
+
 def compute_vertex_group_remap_plan(
     bones: Sequence[dict],
     vertex_group_names: Sequence[str],

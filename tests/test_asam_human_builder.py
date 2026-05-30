@@ -1970,5 +1970,47 @@ class ComputeVertexGroupRemapPlanTests(unittest.TestCase):
         self.assertEqual(plan["asam_targets_without_source_group"], [])
 
 
+class CrowdFlatInputsTests(unittest.TestCase):
+    def _inputs(self):
+        classifier_report = {
+            "asset_summary": {"character_decomposition": {"source_armature": "Object_4"}},
+            "characters": [
+                {"character_id": "Hero000", "semantic_mapping": {"Hip": {"action": "x"}}},
+                {"character_id": "Hero001", "semantic_mapping": {"Hip": {"action": "y"}}},
+            ],
+        }
+        build_plan = {
+            "asset_name": "crowd",
+            "characters": [
+                {"character_id": "Hero000", "root_resolutions": [{"r": 0}],
+                 "placement_metadata": {"p": 0}, "proposed_asam_hierarchy": {"h": 0},
+                 "extras_preserved": [],
+                 "mesh_binding": {"armature_object_name": "Object_4", "meshes": []}},
+                {"character_id": "Hero001", "root_resolutions": [{"r": 1}],
+                 "placement_metadata": {"p": 1}, "proposed_asam_hierarchy": {"h": 1},
+                 "extras_preserved": [],
+                 "mesh_binding": {"armature_object_name": "Object_4", "meshes": []}},
+            ],
+        }
+        return classifier_report, build_plan
+
+    def test_build_character_flat_inputs_pairs_by_id(self):
+        from asam_human_builder.builder import build_character_flat_inputs
+        classifier_report, build_plan = self._inputs()
+        flat_report, flat_plan = build_character_flat_inputs(classifier_report, build_plan, "Hero001")
+        self.assertEqual(flat_report["recommended_primary_armature"], "Object_4")
+        self.assertEqual(flat_report["semantic_mapping"], {"Hip": {"action": "y"}})
+        self.assertEqual(flat_plan["asset_name"], "crowd")
+        self.assertEqual(flat_plan["recommended_primary_armature"], "Object_4")
+        self.assertEqual(flat_plan["root_resolutions"], [{"r": 1}])
+        self.assertEqual(flat_plan["mesh_binding"]["armature_object_name"], "Object_4")
+
+    def test_build_character_flat_inputs_unknown_id_raises(self):
+        from asam_human_builder.builder import build_character_flat_inputs
+        classifier_report, build_plan = self._inputs()
+        with self.assertRaises(KeyError):
+            build_character_flat_inputs(classifier_report, build_plan, "Nope")
+
+
 if __name__ == "__main__":
     unittest.main()
