@@ -134,6 +134,32 @@ def validate_builder_inputs(classifier_report: dict, build_plan: dict) -> None:
         ) from exc
 
 
+def is_crowd_plan(build_plan: dict) -> bool:
+    """True iff the build plan carries a non-empty per-character `characters` array."""
+    return bool(build_plan.get("characters"))
+
+
+def read_builder_inputs(asset_dir: Path) -> Tuple[dict, dict]:
+    """Read classifier_report.json and build_plan.json WITHOUT flat-shape validation.
+
+    Crowd reports pop the top-level `semantic_mapping`, which `validate_builder_inputs`
+    requires; callers that may receive a crowd asset must use this and branch on
+    `is_crowd_plan` before validating the flat shape.
+    """
+    asset_dir = Path(asset_dir).resolve()
+    report_path = asset_dir / "classifier_report.json"
+    plan_path = asset_dir / "build_plan.json"
+    if not report_path.exists():
+        raise FileNotFoundError("Missing classifier_report.json in {0}".format(asset_dir))
+    if not plan_path.exists():
+        raise FileNotFoundError("Missing build_plan.json in {0}".format(asset_dir))
+    with report_path.open("r", encoding="utf-8") as handle:
+        classifier_report = json.load(handle)
+    with plan_path.open("r", encoding="utf-8") as handle:
+        build_plan = json.load(handle)
+    return classifier_report, build_plan
+
+
 def compute_vertex_group_remap_plan(
     bones: Sequence[dict],
     vertex_group_names: Sequence[str],

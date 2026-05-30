@@ -1804,6 +1804,17 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(len(CORE_TARGETS), 28, "CORE_TARGETS should have exactly 28 bones.")
 
 
+class CrowdDetectionTests(unittest.TestCase):
+    def test_is_crowd_plan_true_when_characters_present(self):
+        from asam_human_builder.builder import is_crowd_plan
+        self.assertTrue(is_crowd_plan({"characters": [{"character_id": "A"}]}))
+
+    def test_is_crowd_plan_false_when_absent_or_empty(self):
+        from asam_human_builder.builder import is_crowd_plan
+        self.assertFalse(is_crowd_plan({}))
+        self.assertFalse(is_crowd_plan({"characters": []}))
+
+
 def _remap_bone(name: str, source_bone, geometry_source: str = "source_bone") -> dict:
     """
     Build a spec-bone dict suitable for both compute_vertex_group_remap_plan and
