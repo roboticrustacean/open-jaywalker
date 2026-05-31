@@ -2235,6 +2235,21 @@ class CrowdSpecsFromAssetDirTests(unittest.TestCase):
         self.assertEqual(len(result["specs"]), 1)
 
 
+class SingleCharacterRegressionTests(unittest.TestCase):
+    maxDiff = None
+
+    def test_single_character_specs_have_no_crowd_shape(self):
+        from asam_human_builder.builder import build_character_specs_from_asset_dir
+        for asset_name in ("LowPolyCharacter4", "openmatexamplehuman"):
+            asset_dir = _copy_asset_folder(asset_name)
+            write_asset_report(asset_dir)
+            result = build_character_specs_from_asset_dir(asset_dir)
+            self.assertFalse(result["crowd"], asset_name)
+            self.assertEqual(len(result["specs"]), 1, asset_name)
+            self.assertNotIn("character_specs", result, asset_name)
+            self.assertNotIn("wrapper_collection_name", result, asset_name)
+
+
 class CrowdBuilderReportTests(unittest.TestCase):
     def _spec(self, cid):
         return {
