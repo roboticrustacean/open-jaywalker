@@ -196,13 +196,13 @@ class AssignMeshesTests(unittest.TestCase):
         self.groups, _ = detect_characters(primary["bones"])
 
     def test_mesh_assigned_to_majority_prefix_character(self):
-        per_char, unassigned = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
+        per_char, unassigned = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups, "Object_4")
         self.assertIn("Hero000", per_char)
         names = [mesh["mesh_name"] for mesh in per_char["Hero000"]["meshes"]]
         self.assertEqual(names, ["Hero000_Body"])
 
     def test_vertex_group_names_stripped(self):
-        per_char, _ = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
+        per_char, _ = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups, "Object_4")
         mesh = per_char["Hero000"]["meshes"][0]
         self.assertEqual(mesh["vertex_groups"], ["Pelvis", "LThigh"])
         self.assertEqual(
@@ -211,12 +211,17 @@ class AssignMeshesTests(unittest.TestCase):
         )
 
     def test_unassignable_mesh_recorded(self):
-        _, unassigned = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
+        _, unassigned = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups, "Object_4")
         self.assertEqual(unassigned, ["Prop"])
 
     def test_character_with_no_meshes_gets_empty_binding(self):
-        per_char, _ = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups)
+        per_char, _ = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups, "Object_4")
         self.assertEqual(per_char["Hero001"]["meshes"], [])
+
+    def test_assign_meshes_uses_source_armature_name(self):
+        per_char, _unassigned = assign_meshes_to_characters(_crowd_mesh_binding(), self.groups, "Object_4")
+        self.assertEqual(per_char["Hero000"]["armature_object_name"], "Object_4")
+        self.assertEqual(per_char["Hero001"]["armature_object_name"], "Object_4")
 
 
 class SegmentRecommendedTests(unittest.TestCase):

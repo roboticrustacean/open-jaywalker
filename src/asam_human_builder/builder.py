@@ -134,6 +134,111 @@ def validate_builder_inputs(classifier_report: dict, build_plan: dict) -> None:
         ) from exc
 
 
+def is_crowd_plan(build_plan: dict) -> bool:
+    """True iff the build plan carries a non-empty per-character `characters` array."""
+    return bool(build_plan.get("characters"))
+
+
+def wrapper_collection_name(asset_name: str) -> str:
+    """Name of the crowd wrapper collection that holds all per-character child collections."""
+    return "ASAM_{0}".format(asset_name)
+
+
+def apply_character_naming(spec: dict, asset_name: str, character_id: str) -> dict:
+    """Override the generated collection/group-root/armature names with per-character ones.
+
+    Object names are global in bpy.data, so each character needs a unique suffix.
+    """
+    spec["generated_collection_name"] = "ASAM_{0}_{1}".format(asset_name, character_id)
+    spec["group_root_name"] = "Grp_Root_{0}".format(character_id)
+    spec["generated_armature_name"] = "Armature_{0}_{1}".format(asset_name, character_id)
+    return spec
+
+
+def read_builder_inputs(asset_dir: Path) -> Tuple[dict, dict]:
+    """Read classifier_report.json and build_plan.json WITHOUT flat-shape validation.
+
+    Crowd reports pop the top-level `semantic_mapping`, which `validate_builder_inputs`
+    requires; callers that may receive a crowd asset must use this and branch on
+    `is_crowd_plan` before validating the flat shape.
+    """
+    asset_dir = Path(asset_dir).resolve()
+    report_path = asset_dir / "classifier_report.json"
+    plan_path = asset_dir / "build_plan.json"
+    if not report_path.exists():
+        raise FileNotFoundError("Missing classifier_report.json in {0}".format(asset_dir))
+    if not plan_path.exists():
+        raise FileNotFoundError("Missing build_plan.json in {0}".format(asset_dir))
+    with report_path.open("r", encoding="utf-8") as handle:
+        classifier_report = json.load(handle)
+    with plan_path.open("r", encoding="utf-8") as handle:
+        build_plan = json.load(handle)
+    return classifier_report, build_plan
+
+
+def slice_source_bones_for_character(full_index: Dict[str, dict], character_id: str) -> Dict[str, dict]:
+    """Filter a raw source-bone index to one character and strip its prefix from names.
+
+    `full_index` is keyed by original bone names (from build_source_bone_index_from_export);
+    the result is keyed by prefix-stripped names matching the per-character semantic_mapping.
+    World geometry (head/tail/length) is preserved so each rig lands at its world location.
+    """
+    from phase3_classifier.segmentation import derive_character_prefix, strip_character_prefix
+
+    sliced: Dict[str, dict] = {}
+    for original_name, geometry in full_index.items():
+        if derive_character_prefix(original_name) != character_id:
+            continue
+        stripped = strip_character_prefix(original_name, character_id)
+        new_geometry = dict(geometry)
+        new_geometry["name"] = stripped
+        parent = geometry.get("parent")
+        if parent and derive_character_prefix(parent) == character_id:
+            new_geometry["parent"] = strip_character_prefix(parent, character_id)
+        else:
+            new_geometry["parent"] = None
+        sliced[stripped] = new_geometry
+    return sliced
+
+
+def _find_character_entry(entries, character_id: str) -> dict:
+    for entry in entries or []:
+        if entry.get("character_id") == character_id:
+            return entry
+    raise KeyError("No character entry for {0}".format(character_id))
+
+
+def build_character_flat_inputs(
+    classifier_report: dict, build_plan: dict, character_id: str
+) -> Tuple[dict, dict]:
+    """Synthesize a flat-shaped (classifier_report, build_plan) pair for one character.
+
+    The synthesized pair is fed to the unchanged single-character `build_armature_spec`.
+    `recommended_primary_armature` is the real crowd source armature so mesh retargeting
+    and flat validation line up; per-character mesh_binding.armature_object_name already
+    equals it after the segmentation fix.
+    """
+    decomposition = classifier_report["asset_summary"]["character_decomposition"]
+    source_armature = decomposition["source_armature"]
+    report_entry = _find_character_entry(classifier_report.get("characters"), character_id)
+    plan_entry = _find_character_entry(build_plan.get("characters"), character_id)
+
+    flat_report = {
+        "recommended_primary_armature": source_armature,
+        "semantic_mapping": report_entry["semantic_mapping"],
+    }
+    flat_plan = {
+        "asset_name": build_plan["asset_name"],
+        "recommended_primary_armature": source_armature,
+        "root_resolutions": plan_entry["root_resolutions"],
+        "placement_metadata": plan_entry["placement_metadata"],
+        "mesh_binding": plan_entry["mesh_binding"],
+        "proposed_asam_hierarchy": plan_entry["proposed_asam_hierarchy"],
+        "extras_preserved": plan_entry.get("extras_preserved", []),
+    }
+    return flat_report, flat_plan
+
+
 def compute_vertex_group_remap_plan(
     bones: Sequence[dict],
     vertex_group_names: Sequence[str],
@@ -596,5 +701,108 @@ def _build_children_map(bone_parents: dict) -> Dict[str, List[str]]:
         if parent in children_map:
             children_map[parent].append(target)
     return children_map
+
+
+def compute_prefix_strip_renames(vertex_group_names: Sequence[str], character_id: str) -> List[dict]:
+    """Plan renames that strip a character prefix from a duplicated mesh's vertex groups.
+
+    The source mesh keeps original group names ('Hero000Pelvis_093'); strip the prefix
+    ('Pelvis') so the existing ASAM remap ('Pelvis' -> 'Hip') can match. Identity renames
+    (already prefix-free) are skipped.
+    """
+    from phase3_classifier.segmentation import strip_character_prefix
+
+    renames: List[dict] = []
+    for name in vertex_group_names:
+        target = strip_character_prefix(name, character_id)
+        if target != name:
+            renames.append({"source": name, "target": target})
+    return renames
+
+
+def build_character_specs_from_asset_dir(asset_dir: Path) -> dict:
+    """Resolve build specs for an asset dir, fanning out crowd plans per character.
+
+    Returns one of:
+      single: {"crowd": False, "asset_name": str, "specs": [spec]}
+      crowd:  {"crowd": True, "asset_name": str, "wrapper_collection_name": str,
+               "decomposition": dict, "character_specs": [(character_id, spec), ...]}
+    """
+    asset_dir = Path(asset_dir).resolve()
+    classifier_report, build_plan = read_builder_inputs(asset_dir)
+
+    if not is_crowd_plan(build_plan):
+        # Unchanged single-character path.
+        validate_builder_inputs(classifier_report, build_plan)
+        source_bones = build_source_bone_index_from_export(
+            asset_dir, build_plan["recommended_primary_armature"]
+        )
+        spec = build_armature_spec(classifier_report, build_plan, source_bones)
+        return {"crowd": False, "asset_name": build_plan["asset_name"], "specs": [spec]}
+
+    decomposition = classifier_report["asset_summary"]["character_decomposition"]
+    source_armature = decomposition["source_armature"]
+    asset_name = build_plan["asset_name"]
+    full_index = build_source_bone_index_from_export(asset_dir, source_armature)
+
+    character_specs = []
+    for entry in build_plan["characters"]:
+        character_id = entry["character_id"]
+        flat_report, flat_plan = build_character_flat_inputs(
+            classifier_report, build_plan, character_id
+        )
+        source_bones = slice_source_bones_for_character(full_index, character_id)
+        spec = build_armature_spec(flat_report, flat_plan, source_bones)
+        apply_character_naming(spec, asset_name, character_id)
+        character_specs.append((character_id, spec))
+
+    return {
+        "crowd": True,
+        "asset_name": asset_name,
+        "wrapper_collection_name": wrapper_collection_name(asset_name),
+        "decomposition": decomposition,
+        "character_specs": character_specs,
+    }
+
+
+def build_crowd_builder_report(
+    asset_name: str, decomposition: dict, character_specs, crowd_execution: dict
+) -> dict:
+    """Summarize a crowd build: one per-character builder report plus failures."""
+    spec_by_id = {character_id: spec for character_id, spec in character_specs}
+    char_reports = []
+    for execution in crowd_execution["characters"]:
+        character_id = execution["character_id"]
+        spec = spec_by_id.get(character_id)
+        if spec is None:
+            continue
+        report = build_builder_report(spec, execution)
+        report["character_id"] = character_id
+        char_reports.append(report)
+
+    return {
+        "asset_name": asset_name,
+        "crowd": True,
+        "character_decomposition_summary": {
+            "source_armature": decomposition.get("source_armature"),
+            "character_count": decomposition.get("character_count"),
+            "character_ids": decomposition.get("character_ids", []),
+            "shared_bones": decomposition.get("shared_bones", []),
+            "unassigned_meshes": decomposition.get("unassigned_meshes", []),
+        },
+        "characters": char_reports,
+        "failed_characters": crowd_execution.get("failed_characters", []),
+    }
+
+
+def write_crowd_builder_report(asset_dir: Path, crowd_report: dict) -> Tuple[dict, Path]:
+    """Write a crowd builder report to builder_report.json."""
+    asset_dir = Path(asset_dir).resolve()
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    report_path = asset_dir / "builder_report.json"
+    with report_path.open("w", encoding="utf-8") as handle:
+        json.dump(crowd_report, handle, indent=2)
+        handle.write("\n")
+    return crowd_report, report_path
 
 

@@ -204,11 +204,12 @@ def _strip_mesh_binding(mesh: dict, prefix: str) -> dict:
 def assign_meshes_to_characters(
     mesh_binding: Optional[dict],
     groups: List[CharacterGroup],
+    source_armature_name: Optional[str],
 ) -> Tuple[Dict[str, dict], List[str]]:
     """Return {character_id: mesh_binding} and a list of unassignable mesh names."""
     known = {group.prefix for group in groups}
     per_char: Dict[str, dict] = {
-        group.character_id: {"armature_object_name": group.character_id, "meshes": []}
+        group.character_id: {"armature_object_name": source_armature_name, "meshes": []}
         for group in groups
     }
     unassigned: List[str] = []
@@ -268,7 +269,9 @@ def segment_recommended(asset_name: str, recommended_input) -> Optional[Segmenta
         return None
 
     per_char_binding, unassigned = assign_meshes_to_characters(
-        recommended_input.primary_data.get("mesh_binding"), groups
+        recommended_input.primary_data.get("mesh_binding"),
+        groups,
+        recommended_input.armature_name,
     )
 
     report_characters: List[dict] = []

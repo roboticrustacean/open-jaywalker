@@ -9,6 +9,7 @@ try:
         GENERATED_ASSET_KEY,
         GENERATED_MARKER_KEY,
         choose_generated_collection_action,
+        compute_prefix_strip_renames,
         compute_vertex_group_remap_plan,
     )
 except ImportError:  # pragma: no cover - Blender script path fallback
@@ -16,6 +17,7 @@ except ImportError:  # pragma: no cover - Blender script path fallback
         GENERATED_ASSET_KEY,
         GENERATED_MARKER_KEY,
         choose_generated_collection_action,
+        compute_prefix_strip_renames,
         compute_vertex_group_remap_plan,
     )
 
@@ -34,8 +36,14 @@ def snapshot_existing_collections(bpy_module) -> List[dict]:
     return collections
 
 
-def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
-    """Create or rebuild the generated ASAM armature in the open Blender file."""
+def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collection=None, character_prefix=None) -> dict:
+    """Create or rebuild the generated ASAM armature in the open Blender file.
+
+    parent_collection: when supplied, the generated collection is linked under this
+        collection instead of the scene root (crowd fan-out use case).
+    character_prefix: when supplied, strips the prefix from duplicated meshes' vertex
+        groups before the ASAM remap (used by a later task).
+    """
     bpy_module = bpy_module or _require_bpy()
     asset_name = build_spec["asset_name"]
     collection_name = build_spec["generated_collection_name"]
@@ -77,7 +85,7 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
         group_root_name,
         armature_name,
     )
-    collection = _create_collection(bpy_module, collection_name, asset_name)
+    collection = _create_collection(bpy_module, collection_name, asset_name, parent_collection)
     grp_root_local_origin = build_spec.get("grp_root_local_origin", [0.0, 0.0, 0.0])
     group_root = _create_group_root(
         bpy_module, group_root_name, asset_name, collection, grp_root_local_origin
@@ -90,6 +98,7 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None) -> dict:
         collection,
         source_armature,
         armature_object,
+        character_prefix,
     )
 
     return {
@@ -252,11 +261,14 @@ def _resolve_unique_name(preferred_name: str, is_in_use, fallback_bases: List[st
         suffix += 1
 
 
-def _create_collection(bpy_module, collection_name: str, asset_name: str):
+def _create_collection(bpy_module, collection_name: str, asset_name: str, parent_collection=None):
     collection = bpy_module.data.collections.new(collection_name)
     collection[GENERATED_MARKER_KEY] = True
     collection[GENERATED_ASSET_KEY] = asset_name
-    bpy_module.context.scene.collection.children.link(collection)
+    if parent_collection is not None:
+        parent_collection.children.link(collection)
+    else:
+        bpy_module.context.scene.collection.children.link(collection)
     return collection
 
 
@@ -295,6 +307,7 @@ def _duplicate_bound_meshes(
     collection,
     source_armature,
     generated_armature,
+    character_prefix=None,
 ) -> dict:
     duplicated_meshes = []
     skipped_meshes = []
@@ -327,6 +340,12 @@ def _duplicate_bound_meshes(
         retargeted = _retarget_armature_modifiers(generated_mesh, source_armature, generated_armature)
         if record.get("armature_link") == "parent" and not retargeted:
             mesh_warnings.append("parent_only_no_armature_modifier:{0}".format(mesh_name))
+
+        if character_prefix:
+            prefix_renames = compute_prefix_strip_renames(
+                _vertex_group_names(generated_mesh), character_prefix
+            )
+            _apply_vertex_group_renames(generated_mesh, prefix_renames)
 
         group_names = _vertex_group_names(generated_mesh)
         remap_plan = compute_vertex_group_remap_plan(
@@ -487,3 +506,79 @@ def _ensure_object_mode(bpy_module) -> None:
         return
     if getattr(active_object, "mode", "OBJECT") != "OBJECT":
         bpy_module.ops.object.mode_set(mode="OBJECT")
+
+
+def build_crowd_in_blender(
+    asset_name: str,
+    wrapper_collection_name: str,
+    character_specs,
+    decomposition: dict,
+    bpy_module=None,
+) -> dict:
+    """Build N per-character ASAM humans, each nested under one wrapper collection.
+
+    Continue-on-error: a character that fails to build is recorded in
+    `failed_characters` and does not abort the rest of the batch.
+    """
+    bpy_module = bpy_module or _require_bpy()
+
+    _remove_generated_crowd_wrapper(bpy_module, wrapper_collection_name, asset_name)
+    wrapper = _create_collection(bpy_module, wrapper_collection_name, asset_name)
+
+    characters = []
+    failed = []
+    for character_id, spec in character_specs:
+        try:
+            result = build_armature_in_blender(
+                spec, bpy_module, parent_collection=wrapper, character_prefix=character_id
+            )
+            result["character_id"] = character_id
+            characters.append(result)
+        except Exception as exc:  # continue-on-error by design
+            failed.append({"character_id": character_id, "error": str(exc)})
+
+    return {
+        "wrapper_collection_name": wrapper.name,
+        "characters": characters,
+        "failed_characters": failed,
+        "decomposition": decomposition,
+    }
+
+
+def _remove_generated_crowd_wrapper(bpy_module, wrapper_name: str, asset_name: str) -> None:
+    """Remove a previously-generated crowd wrapper and its generated child collections.
+
+    No-op if the wrapper is absent. Refuses to touch a wrapper that is not a safe
+    generated output for this asset (mirrors _remove_generated_collection's guard).
+    """
+    wrapper = bpy_module.data.collections.get(wrapper_name)
+    if wrapper is None:
+        return
+    if not bool(wrapper.get(GENERATED_MARKER_KEY)) or wrapper.get(GENERATED_ASSET_KEY) != asset_name:
+        raise ValueError(
+            "Refusing to rebuild over non-generated collection '{0}'".format(wrapper_name)
+        )
+
+    _ensure_object_mode(bpy_module)
+
+    # Remove each generated child collection (objects + the collection itself).
+    for child in list(wrapper.children):
+        if not bool(child.get(GENERATED_MARKER_KEY)) or child.get(GENERATED_ASSET_KEY) != asset_name:
+            raise ValueError(
+                "Refusing to remove crowd child '{0}'; not a safe generated output".format(child.name)
+            )
+        # Mirror _remove_generated_collection's safety contract: refuse to delete a
+        # child that contains any non-generated object before removing anything.
+        _validate_generated_collection_contents(child, asset_name)
+        for obj in list(child.all_objects):
+            data_block = obj.data if getattr(obj, "type", None) == "ARMATURE" else None
+            bpy_module.data.objects.remove(obj, do_unlink=True)
+            if data_block is not None and getattr(data_block, "users", 0) == 0:
+                bpy_module.data.armatures.remove(data_block)
+        wrapper.children.unlink(child)
+        bpy_module.data.collections.remove(child)
+
+    for scene in bpy_module.data.scenes:
+        if scene.collection.children.get(wrapper.name) is not None:
+            scene.collection.children.unlink(wrapper)
+    bpy_module.data.collections.remove(wrapper)

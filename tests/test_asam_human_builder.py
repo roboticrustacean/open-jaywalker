@@ -1,4 +1,5 @@
 import copy
+import json as _json
 import shutil
 import sys
 import tempfile
@@ -27,14 +28,58 @@ from asam_human_builder.blender_builder import (  # noqa: E402
     purge_previous_generated_artifacts,
 )
 from phase3_classifier.classifier import (  # noqa: E402
+    ArmatureInput,
     CORE_TARGETS,
     DEFERRED_TARGETS,
     TARGET_PARENTS,
     write_asset_report,
 )
+from phase3_classifier.segmentation import segment_recommended  # noqa: E402
 
 
 FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
+
+
+def _two_character_primary_data():
+    # Proven biped shape (mirrors tests/test_segmentation.py): each Hero gets a 6-bone
+    # chain the classifier maps cleanly (Pelvis -> Hip, etc.). X offset separates people.
+    def person(prefix, x):
+        return [
+            {"name": prefix + "COM_0",    "parent": "_rootJoint",       "head": [x, 0, 1.0], "tail": [x, 0, 1.1], "length": 0.1},
+            {"name": prefix + "Pelvis_1", "parent": prefix + "COM_0",   "head": [x, 0, 1.0], "tail": [x, 0, 1.1], "length": 0.1},
+            {"name": prefix + "Spine0_2", "parent": prefix + "Pelvis_1","head": [x, 0, 1.1], "tail": [x, 0, 1.3], "length": 0.2},
+            {"name": prefix + "Spine1_3", "parent": prefix + "Spine0_2","head": [x, 0, 1.3], "tail": [x, 0, 1.5], "length": 0.2},
+            {"name": prefix + "Head_4",   "parent": prefix + "Spine1_3","head": [x, 0, 1.5], "tail": [x, 0, 1.7], "length": 0.2},
+            {"name": prefix + "LThigh_5", "parent": prefix + "Pelvis_1","head": [x, 0.1, 1.0], "tail": [x, 0.1, 0.5], "length": 0.5},
+        ]
+    bones = [{"name": "_rootJoint", "parent": None, "head": [0, 0, 0], "tail": [0, 0, 0.1], "length": 0.1}]
+    bones += person("Hero000", 0.0) + person("Hero001", 5.0)
+    return {"armature_name": "Object_4", "source_file": "crowd.blend", "filter": None,
+            "bone_count": len(bones), "bones": bones, "chains": {}}
+
+
+def _write_crowd_asset(tmp_dir):
+    primary = _two_character_primary_data()
+    recommended_input = ArmatureInput(
+        armature_name="Object_4", all_path=None, filtered_path=None,
+        primary_path=None, support_path=None, primary_data=primary, support_data=None,
+    )
+    seg = segment_recommended("crowd", recommended_input)
+    decomposition = seg.decomposition
+    classifier_report = {
+        "recommended_primary_armature": "Object_4",
+        "asset_summary": {"character_decomposition": decomposition},
+        "characters": seg.report_characters,
+    }
+    build_plan = {
+        "asset_name": "crowd",
+        "recommended_primary_armature": "Object_4",
+        "characters": seg.plan_characters,
+    }
+    (tmp_dir / "classifier_report.json").write_text(_json.dumps(classifier_report), encoding="utf-8")
+    (tmp_dir / "build_plan.json").write_text(_json.dumps(build_plan), encoding="utf-8")
+    # Raw export keyed by ORIGINAL bone names, as build_source_bone_index_from_export expects.
+    (tmp_dir / "Object_4_all.json").write_text(_json.dumps({"bones": primary["bones"]}), encoding="utf-8")
 
 
 def _copy_asset_folder(asset_name: str) -> Path:
@@ -381,6 +426,9 @@ class _FakeCollectionChildren:
     def get(self, name: str):
         return self._children.get(name)
 
+    def __iter__(self):
+        return iter(list(self._children.values()))
+
 
 class _FakeCollection(_FakeProps):
     def __init__(self, name: str, bpy_module=None):
@@ -485,6 +533,37 @@ class _FakeBpy:
         if armature_modifier:
             source.modifiers.append(_FakeModifier("Armature", "ARMATURE", source_armature))
         return source
+
+
+def _minimal_crowd_build_spec(asset_name="crowd", character_id="Hero000", source_armature="Object_4"):
+    """A tiny generated-armature spec for fake-bpy crowd tests: one Hip from 'Pelvis'."""
+    return {
+        "asset_name": asset_name,
+        "source_armature_name": source_armature,
+        "generated_collection_name": "ASAM_{0}".format(asset_name),
+        "group_root_name": "Grp_Root",
+        "generated_armature_name": "Armature_{0}".format(asset_name),
+        "grp_root_local_origin": [0.0, 0.0, 0.0],
+        "bones": [
+            {"name": "Hip", "parent_bone": None, "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.2],
+             "use_connect": False, "geometry_source": "source_bone", "source_bone": "Pelvis",
+             "semantic_action": "direct_map"},
+        ],
+        "mesh_binding": {"armature_object_name": source_armature, "meshes": []},
+        "extras_preserved": [],
+        "preserved_pelvis_pair": [],
+        "warnings": [],
+    }
+
+
+def _fake_with_source_armature(source_armature="Object_4", meshes=None):
+    """_FakeBpy with the source armature present, plus optional (mesh_name, [vgroups]) meshes."""
+    bpy = _FakeBpy()
+    armature = bpy.add_source_armature(source_armature)
+    for mesh_name, vgroups in (meshes or []):
+        mesh = bpy.add_source_mesh(mesh_name, armature)
+        mesh.vertex_groups = list(vgroups)
+    return bpy
 
 
 class AsamHumanBuilderTests(unittest.TestCase):
@@ -1247,6 +1326,24 @@ class AsamHumanBuilderTests(unittest.TestCase):
                 "TestAsset",
             )
 
+
+class CrowdNamingTests(unittest.TestCase):
+    def test_apply_character_naming_overrides_generated_names(self):
+        from asam_human_builder.builder import apply_character_naming
+        spec = {
+            "generated_collection_name": "ASAM_crowd",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_crowd",
+        }
+        apply_character_naming(spec, "crowd", "Hero000")
+        self.assertEqual(spec["generated_collection_name"], "ASAM_crowd_Hero000")
+        self.assertEqual(spec["group_root_name"], "Grp_Root_Hero000")
+        self.assertEqual(spec["generated_armature_name"], "Armature_crowd_Hero000")
+
+    def test_wrapper_collection_name(self):
+        from asam_human_builder.builder import wrapper_collection_name
+        self.assertEqual(wrapper_collection_name("crowd"), "ASAM_crowd")
+
     def test_resolve_default_asset_dir_uses_blend_name(self):
         resolved = resolve_default_asset_dir(
             "C:/assets/openmatexamplehuman.blend",
@@ -1804,6 +1901,137 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(len(CORE_TARGETS), 28, "CORE_TARGETS should have exactly 28 bones.")
 
 
+class CrowdBlenderTests(unittest.TestCase):
+    def test_build_armature_in_blender_nests_under_parent_collection(self):
+        build_spec = _minimal_crowd_build_spec()
+        fake = _fake_with_source_armature(build_spec["source_armature_name"])
+        parent = fake.data.collections.new("ASAM_wrapper")
+        result = build_armature_in_blender(build_spec, fake, parent_collection=parent)
+        child_name = result["generated_collection_name"]
+        # Child is linked under the wrapper, NOT the scene root.
+        self.assertIsNotNone(parent.children.get(child_name))
+        self.assertIsNone(fake.context.scene.collection.children.get(child_name))
+
+    def test_build_armature_in_blender_strips_prefix_then_remaps(self):
+        build_spec = _minimal_crowd_build_spec()   # Hip built from source_bone "Pelvis"
+        build_spec["mesh_binding"] = {
+            "armature_object_name": build_spec["source_armature_name"],
+            "meshes": [{"mesh_name": "Body000", "armature_link": "modifier"}],
+        }
+        fake = _fake_with_source_armature(
+            build_spec["source_armature_name"],
+            meshes=[("Body000", ["Hero000Pelvis_093"])],
+        )
+        result = build_armature_in_blender(build_spec, fake, character_prefix="Hero000")
+        generated = fake.data.objects.get(result["duplicated_meshes"][0]["generated_mesh_name"])
+        # Prefixed group -> stripped ('Pelvis') -> ASAM target ('Hip').
+        self.assertIn("Hip", generated.vertex_groups)
+        self.assertNotIn("Hero000Pelvis_093", generated.vertex_groups)
+
+    def test_build_crowd_in_blender_creates_wrapper_with_children(self):
+        from asam_human_builder.builder import apply_character_naming
+        from asam_human_builder.blender_builder import build_crowd_in_blender
+        spec_a = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        spec_b = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero001")
+        fake = _fake_with_source_armature("Object_4")   # one source armature, shared
+        decomposition = {"source_armature": "Object_4", "character_count": 2,
+                         "character_ids": ["Hero000", "Hero001"],
+                         "shared_bones": [], "unassigned_meshes": []}
+        result = build_crowd_in_blender(
+            "crowd", "ASAM_crowd",
+            [("Hero000", spec_a), ("Hero001", spec_b)], decomposition, fake,
+        )
+        wrapper = fake.data.collections.get("ASAM_crowd")
+        self.assertIsNotNone(wrapper.children.get("ASAM_crowd_Hero000"))
+        self.assertIsNotNone(wrapper.children.get("ASAM_crowd_Hero001"))
+        self.assertEqual(len(result["characters"]), 2)
+        self.assertEqual(result["failed_characters"], [])
+
+    def test_build_crowd_in_blender_continues_past_failure(self):
+        from asam_human_builder.builder import apply_character_naming
+        from asam_human_builder.blender_builder import build_crowd_in_blender
+        spec_ok = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        bad_spec = {"asset_name": "crowd"}   # missing keys -> raises inside builder
+        fake = _fake_with_source_armature("Object_4")
+        decomposition = {"source_armature": "Object_4", "character_count": 2,
+                         "character_ids": ["Hero000", "BadOne"],
+                         "shared_bones": [], "unassigned_meshes": []}
+        result = build_crowd_in_blender(
+            "crowd", "ASAM_crowd",
+            [("Hero000", spec_ok), ("BadOne", bad_spec)], decomposition, fake,
+        )
+        self.assertEqual(len(result["characters"]), 1)
+        self.assertEqual(result["characters"][0]["character_id"], "Hero000")
+        self.assertEqual(len(result["failed_characters"]), 1)
+        self.assertEqual(result["failed_characters"][0]["character_id"], "BadOne")
+
+    def test_build_crowd_in_blender_rebuild_removes_previous_wrapper(self):
+        from asam_human_builder.builder import apply_character_naming
+        from asam_human_builder.blender_builder import build_crowd_in_blender
+        fake = _fake_with_source_armature("Object_4")
+        decomposition = {"source_armature": "Object_4", "character_count": 1,
+                         "character_ids": ["Hero000"],
+                         "shared_bones": [], "unassigned_meshes": []}
+
+        def run():
+            spec = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+            return build_crowd_in_blender(
+                "crowd", "ASAM_crowd", [("Hero000", spec)], decomposition, fake,
+            )
+
+        first = run()
+        self.assertEqual(first["failed_characters"], [])
+        # Rebuild: the second run must purge the prior wrapper + child, not stack a
+        # duplicate, and must succeed (no name collisions left behind).
+        second = run()
+        self.assertEqual(second["failed_characters"], [])
+        self.assertEqual(len(second["characters"]), 1)
+        wrapper = fake.data.collections.get("ASAM_crowd")
+        self.assertIsNotNone(wrapper.children.get("ASAM_crowd_Hero000"))
+        # Exactly one wrapper and one child collection exist after the rebuild.
+        all_names = [c.name for c in fake.data.collections]
+        self.assertEqual(all_names.count("ASAM_crowd"), 1)
+        self.assertEqual(all_names.count("ASAM_crowd_Hero000"), 1)
+
+    def test_remove_generated_crowd_wrapper_rejects_foreign_object_in_child(self):
+        from asam_human_builder.builder import (
+            GENERATED_ASSET_KEY,
+            GENERATED_MARKER_KEY,
+            apply_character_naming,
+        )
+        from asam_human_builder.blender_builder import build_crowd_in_blender
+        fake = _fake_with_source_armature("Object_4")
+        decomposition = {"source_armature": "Object_4", "character_count": 1,
+                         "character_ids": ["Hero000"],
+                         "shared_bones": [], "unassigned_meshes": []}
+        spec = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        build_crowd_in_blender(
+            "crowd", "ASAM_crowd", [("Hero000", spec)], decomposition, fake,
+        )
+        # A user manually links a NON-generated object into the generated child.
+        child = fake.data.collections.get("ASAM_crowd_Hero000")
+        intruder = fake.add_source_mesh("UserMesh", None)
+        child.objects.link(intruder)
+        # Rebuild must refuse rather than silently delete the foreign object.
+        spec2 = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        with self.assertRaises(ValueError):
+            build_crowd_in_blender(
+                "crowd", "ASAM_crowd", [("Hero000", spec2)], decomposition, fake,
+            )
+        self.assertIsNotNone(fake.data.objects.get("UserMesh"))
+
+
+class CrowdDetectionTests(unittest.TestCase):
+    def test_is_crowd_plan_true_when_characters_present(self):
+        from asam_human_builder.builder import is_crowd_plan
+        self.assertTrue(is_crowd_plan({"characters": [{"character_id": "A"}]}))
+
+    def test_is_crowd_plan_false_when_absent_or_empty(self):
+        from asam_human_builder.builder import is_crowd_plan
+        self.assertFalse(is_crowd_plan({}))
+        self.assertFalse(is_crowd_plan({"characters": []}))
+
+
 def _remap_bone(name: str, source_bone, geometry_source: str = "source_bone") -> dict:
     """
     Build a spec-bone dict suitable for both compute_vertex_group_remap_plan and
@@ -1957,6 +2185,170 @@ class ComputeVertexGroupRemapPlanTests(unittest.TestCase):
 
         self.assertEqual(plan["renames"], [{"source": "DEF-hand.L", "target": "Hand_Left"}])
         self.assertEqual(plan["asam_targets_without_source_group"], [])
+
+
+class CrowdFlatInputsTests(unittest.TestCase):
+    def _inputs(self):
+        classifier_report = {
+            "asset_summary": {"character_decomposition": {"source_armature": "Object_4"}},
+            "characters": [
+                {"character_id": "Hero000", "semantic_mapping": {"Hip": {"action": "x"}}},
+                {"character_id": "Hero001", "semantic_mapping": {"Hip": {"action": "y"}}},
+            ],
+        }
+        build_plan = {
+            "asset_name": "crowd",
+            "characters": [
+                {"character_id": "Hero000", "root_resolutions": [{"r": 0}],
+                 "placement_metadata": {"p": 0}, "proposed_asam_hierarchy": {"h": 0},
+                 "extras_preserved": [],
+                 "mesh_binding": {"armature_object_name": "Object_4", "meshes": []}},
+                {"character_id": "Hero001", "root_resolutions": [{"r": 1}],
+                 "placement_metadata": {"p": 1}, "proposed_asam_hierarchy": {"h": 1},
+                 "extras_preserved": [],
+                 "mesh_binding": {"armature_object_name": "Object_4", "meshes": []}},
+            ],
+        }
+        return classifier_report, build_plan
+
+    def test_build_character_flat_inputs_pairs_by_id(self):
+        from asam_human_builder.builder import build_character_flat_inputs
+        classifier_report, build_plan = self._inputs()
+        flat_report, flat_plan = build_character_flat_inputs(classifier_report, build_plan, "Hero001")
+        self.assertEqual(flat_report["recommended_primary_armature"], "Object_4")
+        self.assertEqual(flat_report["semantic_mapping"], {"Hip": {"action": "y"}})
+        self.assertEqual(flat_plan["asset_name"], "crowd")
+        self.assertEqual(flat_plan["recommended_primary_armature"], "Object_4")
+        self.assertEqual(flat_plan["root_resolutions"], [{"r": 1}])
+        self.assertEqual(flat_plan["mesh_binding"]["armature_object_name"], "Object_4")
+
+    def test_build_character_flat_inputs_unknown_id_raises(self):
+        from asam_human_builder.builder import build_character_flat_inputs
+        classifier_report, build_plan = self._inputs()
+        with self.assertRaises(KeyError):
+            build_character_flat_inputs(classifier_report, build_plan, "Nope")
+
+
+class CrowdSourceBoneSliceTests(unittest.TestCase):
+    def test_slice_source_bones_filters_and_strips(self):
+        from asam_human_builder.builder import slice_source_bones_for_character
+        full_index = {
+            "Hero000Pelvis_001": {"name": "Hero000Pelvis_001", "parent": "_rootJoint",
+                                  "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.2], "length": 0.2},
+            "Hero000Spine0_002": {"name": "Hero000Spine0_002", "parent": "Hero000Pelvis_001",
+                                  "head": [0.0, 0.0, 1.2], "tail": [0.0, 0.0, 1.4], "length": 0.2},
+            "Hero001Pelvis_003": {"name": "Hero001Pelvis_003", "parent": "_rootJoint",
+                                  "head": [5.0, 0.0, 1.0], "tail": [5.0, 0.0, 1.2], "length": 0.2},
+        }
+        sliced = slice_source_bones_for_character(full_index, "Hero000")
+        self.assertEqual(set(sliced), {"Pelvis", "Spine0"})
+        self.assertEqual(sliced["Pelvis"]["parent"], None)          # parent outside group -> None
+        self.assertEqual(sliced["Spine0"]["parent"], "Pelvis")      # parent inside group -> stripped
+        self.assertEqual(sliced["Pelvis"]["head"], [0.0, 0.0, 1.0]) # world geometry preserved
+        self.assertEqual(sliced["Pelvis"]["name"], "Pelvis")
+
+
+class CrowdVertexGroupStripTests(unittest.TestCase):
+    def test_compute_prefix_strip_renames(self):
+        from asam_human_builder.builder import compute_prefix_strip_renames
+        renames = compute_prefix_strip_renames(["Hero000Pelvis_093", "Hero000Spine0_094"], "Hero000")
+        self.assertEqual(
+            sorted(renames, key=lambda r: r["source"]),
+            [{"source": "Hero000Pelvis_093", "target": "Pelvis"},
+             {"source": "Hero000Spine0_094", "target": "Spine0"}],
+        )
+
+    def test_compute_prefix_strip_renames_skips_identity(self):
+        from asam_human_builder.builder import compute_prefix_strip_renames
+        # A group with no matching prefix strips to itself -> no rename emitted.
+        self.assertEqual(compute_prefix_strip_renames(["Pelvis"], "Hero000"), [])
+
+
+class CrowdSpecsFromAssetDirTests(unittest.TestCase):
+    def test_returns_one_spec_per_character_with_geometry(self):
+        from asam_human_builder.builder import build_character_specs_from_asset_dir
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _write_crowd_asset(tmp)
+            result = build_character_specs_from_asset_dir(tmp)
+        self.assertTrue(result["crowd"])
+        self.assertEqual(result["asset_name"], "crowd")
+        self.assertEqual(result["wrapper_collection_name"], "ASAM_crowd")
+        ids = [cid for cid, _spec in result["character_specs"]]
+        self.assertEqual(ids, ["Hero000", "Hero001"])
+        for cid, spec in result["character_specs"]:
+            self.assertEqual(spec["generated_collection_name"], "ASAM_crowd_{0}".format(cid))
+            self.assertEqual(spec["generated_armature_name"], "Armature_crowd_{0}".format(cid))
+            # Each character resolves Hip geometry from its OWN bones (no cross-character mixing).
+            self.assertTrue(any(b["name"] == "Hip" for b in spec["bones"]))
+
+    def test_single_character_returns_unchanged_path(self):
+        from asam_human_builder.builder import build_character_specs_from_asset_dir
+        asset_dir = FIXTURE_ROOT / "openmatexamplehuman"
+        result = build_character_specs_from_asset_dir(asset_dir)
+        self.assertFalse(result["crowd"])
+        self.assertEqual(len(result["specs"]), 1)
+
+
+class SingleCharacterRegressionTests(unittest.TestCase):
+    maxDiff = None
+
+    def test_single_character_specs_have_no_crowd_shape(self):
+        from asam_human_builder.builder import build_character_specs_from_asset_dir
+        for asset_name in ("LowPolyCharacter4", "openmatexamplehuman"):
+            asset_dir = _copy_asset_folder(asset_name)
+            write_asset_report(asset_dir)
+            result = build_character_specs_from_asset_dir(asset_dir)
+            self.assertFalse(result["crowd"], asset_name)
+            self.assertEqual(len(result["specs"]), 1, asset_name)
+            self.assertNotIn("character_specs", result, asset_name)
+            self.assertNotIn("wrapper_collection_name", result, asset_name)
+
+
+class CrowdBuilderReportTests(unittest.TestCase):
+    def _spec(self, cid):
+        return {
+            "asset_name": "crowd",
+            "source_armature_name": "Object_4",
+            "bones": [{"name": "Hip", "geometry_source": "source_bone", "source_bone": "Pelvis"}],
+            "extras_preserved": [],
+        }
+
+    def test_build_crowd_builder_report_collects_characters_and_failures(self):
+        from asam_human_builder.builder import build_crowd_builder_report
+        character_specs = [("Hero000", self._spec("Hero000"))]
+        decomposition = {"source_armature": "Object_4", "character_count": 2,
+                         "character_ids": ["Hero000", "BadOne"],
+                         "shared_bones": ["_rootJoint"], "unassigned_meshes": []}
+        crowd_execution = {
+            "wrapper_collection_name": "ASAM_crowd",
+            "characters": [{
+                "character_id": "Hero000",
+                "generated_collection_name": "ASAM_crowd_Hero000",
+                "group_root_name": "Grp_Root_Hero000",
+                "generated_armature_name": "Armature_crowd_Hero000",
+                "collection_action": "create",
+                "duplicated_meshes": [], "skipped_meshes": [], "mesh_warnings": [],
+            }],
+            "failed_characters": [{"character_id": "BadOne", "error": "boom"}],
+        }
+        report = build_crowd_builder_report("crowd", decomposition, character_specs, crowd_execution)
+        self.assertTrue(report["crowd"])
+        self.assertEqual(report["asset_name"], "crowd")
+        self.assertEqual(report["character_decomposition_summary"]["character_count"], 2)
+        self.assertEqual(len(report["characters"]), 1)
+        self.assertEqual(report["characters"][0]["character_id"], "Hero000")
+        self.assertEqual(report["failed_characters"], [{"character_id": "BadOne", "error": "boom"}])
+
+    def test_write_crowd_builder_report_roundtrips(self):
+        from asam_human_builder.builder import write_crowd_builder_report
+        with tempfile.TemporaryDirectory() as d:
+            crowd_report = {"asset_name": "crowd", "crowd": True, "characters": []}
+            report, report_path = write_crowd_builder_report(Path(d), crowd_report)
+            self.assertTrue(report_path.exists())
+            self.assertEqual(report_path.name, "builder_report.json")
+            with report_path.open(encoding="utf-8") as handle:
+                self.assertEqual(_json.load(handle), crowd_report)
 
 
 if __name__ == "__main__":
