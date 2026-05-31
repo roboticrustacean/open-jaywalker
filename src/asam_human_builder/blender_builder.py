@@ -567,6 +567,9 @@ def _remove_generated_crowd_wrapper(bpy_module, wrapper_name: str, asset_name: s
             raise ValueError(
                 "Refusing to remove crowd child '{0}'; not a safe generated output".format(child.name)
             )
+        # Mirror _remove_generated_collection's safety contract: refuse to delete a
+        # child that contains any non-generated object before removing anything.
+        _validate_generated_collection_contents(child, asset_name)
         for obj in list(child.all_objects):
             data_block = obj.data if getattr(obj, "type", None) == "ARMATURE" else None
             bpy_module.data.objects.remove(obj, do_unlink=True)

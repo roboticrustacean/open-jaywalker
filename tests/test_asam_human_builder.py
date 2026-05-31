@@ -1965,6 +1965,61 @@ class CrowdBlenderTests(unittest.TestCase):
         self.assertEqual(len(result["failed_characters"]), 1)
         self.assertEqual(result["failed_characters"][0]["character_id"], "BadOne")
 
+    def test_build_crowd_in_blender_rebuild_removes_previous_wrapper(self):
+        from asam_human_builder.builder import apply_character_naming
+        from asam_human_builder.blender_builder import build_crowd_in_blender
+        fake = _fake_with_source_armature("Object_4")
+        decomposition = {"source_armature": "Object_4", "character_count": 1,
+                         "character_ids": ["Hero000"],
+                         "shared_bones": [], "unassigned_meshes": []}
+
+        def run():
+            spec = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+            return build_crowd_in_blender(
+                "crowd", "ASAM_crowd", [("Hero000", spec)], decomposition, fake,
+            )
+
+        first = run()
+        self.assertEqual(first["failed_characters"], [])
+        # Rebuild: the second run must purge the prior wrapper + child, not stack a
+        # duplicate, and must succeed (no name collisions left behind).
+        second = run()
+        self.assertEqual(second["failed_characters"], [])
+        self.assertEqual(len(second["characters"]), 1)
+        wrapper = fake.data.collections.get("ASAM_crowd")
+        self.assertIsNotNone(wrapper.children.get("ASAM_crowd_Hero000"))
+        # Exactly one wrapper and one child collection exist after the rebuild.
+        all_names = [c.name for c in fake.data.collections]
+        self.assertEqual(all_names.count("ASAM_crowd"), 1)
+        self.assertEqual(all_names.count("ASAM_crowd_Hero000"), 1)
+
+    def test_remove_generated_crowd_wrapper_rejects_foreign_object_in_child(self):
+        from asam_human_builder.builder import (
+            GENERATED_ASSET_KEY,
+            GENERATED_MARKER_KEY,
+            apply_character_naming,
+        )
+        from asam_human_builder.blender_builder import build_crowd_in_blender
+        fake = _fake_with_source_armature("Object_4")
+        decomposition = {"source_armature": "Object_4", "character_count": 1,
+                         "character_ids": ["Hero000"],
+                         "shared_bones": [], "unassigned_meshes": []}
+        spec = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        build_crowd_in_blender(
+            "crowd", "ASAM_crowd", [("Hero000", spec)], decomposition, fake,
+        )
+        # A user manually links a NON-generated object into the generated child.
+        child = fake.data.collections.get("ASAM_crowd_Hero000")
+        intruder = fake.add_source_mesh("UserMesh", None)
+        child.objects.link(intruder)
+        # Rebuild must refuse rather than silently delete the foreign object.
+        spec2 = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        with self.assertRaises(ValueError):
+            build_crowd_in_blender(
+                "crowd", "ASAM_crowd", [("Hero000", spec2)], decomposition, fake,
+            )
+        self.assertIsNotNone(fake.data.objects.get("UserMesh"))
+
 
 class CrowdDetectionTests(unittest.TestCase):
     def test_is_crowd_plan_true_when_characters_present(self):
