@@ -1,4 +1,5 @@
 import copy
+import json as _json
 import shutil
 import sys
 import tempfile
@@ -27,14 +28,58 @@ from asam_human_builder.blender_builder import (  # noqa: E402
     purge_previous_generated_artifacts,
 )
 from phase3_classifier.classifier import (  # noqa: E402
+    ArmatureInput,
     CORE_TARGETS,
     DEFERRED_TARGETS,
     TARGET_PARENTS,
     write_asset_report,
 )
+from phase3_classifier.segmentation import segment_recommended  # noqa: E402
 
 
 FIXTURE_ROOT = REPO_ROOT / "tests" / "fixtures"
+
+
+def _two_character_primary_data():
+    # Proven biped shape (mirrors tests/test_segmentation.py): each Hero gets a 6-bone
+    # chain the classifier maps cleanly (Pelvis -> Hip, etc.). X offset separates people.
+    def person(prefix, x):
+        return [
+            {"name": prefix + "COM_0",    "parent": "_rootJoint",       "head": [x, 0, 1.0], "tail": [x, 0, 1.1], "length": 0.1},
+            {"name": prefix + "Pelvis_1", "parent": prefix + "COM_0",   "head": [x, 0, 1.0], "tail": [x, 0, 1.1], "length": 0.1},
+            {"name": prefix + "Spine0_2", "parent": prefix + "Pelvis_1","head": [x, 0, 1.1], "tail": [x, 0, 1.3], "length": 0.2},
+            {"name": prefix + "Spine1_3", "parent": prefix + "Spine0_2","head": [x, 0, 1.3], "tail": [x, 0, 1.5], "length": 0.2},
+            {"name": prefix + "Head_4",   "parent": prefix + "Spine1_3","head": [x, 0, 1.5], "tail": [x, 0, 1.7], "length": 0.2},
+            {"name": prefix + "LThigh_5", "parent": prefix + "Pelvis_1","head": [x, 0.1, 1.0], "tail": [x, 0.1, 0.5], "length": 0.5},
+        ]
+    bones = [{"name": "_rootJoint", "parent": None, "head": [0, 0, 0], "tail": [0, 0, 0.1], "length": 0.1}]
+    bones += person("Hero000", 0.0) + person("Hero001", 5.0)
+    return {"armature_name": "Object_4", "source_file": "crowd.blend", "filter": None,
+            "bone_count": len(bones), "bones": bones, "chains": {}}
+
+
+def _write_crowd_asset(tmp_dir):
+    primary = _two_character_primary_data()
+    recommended_input = ArmatureInput(
+        armature_name="Object_4", all_path=None, filtered_path=None,
+        primary_path=None, support_path=None, primary_data=primary, support_data=None,
+    )
+    seg = segment_recommended("crowd", recommended_input)
+    decomposition = seg.decomposition
+    classifier_report = {
+        "recommended_primary_armature": "Object_4",
+        "asset_summary": {"character_decomposition": decomposition},
+        "characters": seg.report_characters,
+    }
+    build_plan = {
+        "asset_name": "crowd",
+        "recommended_primary_armature": "Object_4",
+        "characters": seg.plan_characters,
+    }
+    (tmp_dir / "classifier_report.json").write_text(_json.dumps(classifier_report), encoding="utf-8")
+    (tmp_dir / "build_plan.json").write_text(_json.dumps(build_plan), encoding="utf-8")
+    # Raw export keyed by ORIGINAL bone names, as build_source_bone_index_from_export expects.
+    (tmp_dir / "Object_4_all.json").write_text(_json.dumps({"bones": primary["bones"]}), encoding="utf-8")
 
 
 def _copy_asset_folder(asset_name: str) -> Path:
@@ -2162,6 +2207,32 @@ class CrowdVertexGroupStripTests(unittest.TestCase):
         from asam_human_builder.builder import compute_prefix_strip_renames
         # A group with no matching prefix strips to itself -> no rename emitted.
         self.assertEqual(compute_prefix_strip_renames(["Pelvis"], "Hero000"), [])
+
+
+class CrowdSpecsFromAssetDirTests(unittest.TestCase):
+    def test_returns_one_spec_per_character_with_geometry(self):
+        from asam_human_builder.builder import build_character_specs_from_asset_dir
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _write_crowd_asset(tmp)
+            result = build_character_specs_from_asset_dir(tmp)
+        self.assertTrue(result["crowd"])
+        self.assertEqual(result["asset_name"], "crowd")
+        self.assertEqual(result["wrapper_collection_name"], "ASAM_crowd")
+        ids = [cid for cid, _spec in result["character_specs"]]
+        self.assertEqual(ids, ["Hero000", "Hero001"])
+        for cid, spec in result["character_specs"]:
+            self.assertEqual(spec["generated_collection_name"], "ASAM_crowd_{0}".format(cid))
+            self.assertEqual(spec["generated_armature_name"], "Armature_crowd_{0}".format(cid))
+            # Each character resolves Hip geometry from its OWN bones (no cross-character mixing).
+            self.assertTrue(any(b["name"] == "Hip" for b in spec["bones"]))
+
+    def test_single_character_returns_unchanged_path(self):
+        from asam_human_builder.builder import build_character_specs_from_asset_dir
+        asset_dir = FIXTURE_ROOT / "openmatexamplehuman"
+        result = build_character_specs_from_asset_dir(asset_dir)
+        self.assertFalse(result["crowd"])
+        self.assertEqual(len(result["specs"]), 1)
 
 
 if __name__ == "__main__":

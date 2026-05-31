@@ -720,3 +720,48 @@ def compute_prefix_strip_renames(vertex_group_names: Sequence[str], character_id
     return renames
 
 
+def build_character_specs_from_asset_dir(asset_dir: Path) -> dict:
+    """Resolve build specs for an asset dir, fanning out crowd plans per character.
+
+    Returns one of:
+      single: {"crowd": False, "asset_name": str, "specs": [spec]}
+      crowd:  {"crowd": True, "asset_name": str, "wrapper_collection_name": str,
+               "decomposition": dict, "character_specs": [(character_id, spec), ...]}
+    """
+    asset_dir = Path(asset_dir).resolve()
+    classifier_report, build_plan = read_builder_inputs(asset_dir)
+
+    if not is_crowd_plan(build_plan):
+        # Unchanged single-character path.
+        validate_builder_inputs(classifier_report, build_plan)
+        source_bones = build_source_bone_index_from_export(
+            asset_dir, build_plan["recommended_primary_armature"]
+        )
+        spec = build_armature_spec(classifier_report, build_plan, source_bones)
+        return {"crowd": False, "asset_name": build_plan["asset_name"], "specs": [spec]}
+
+    decomposition = classifier_report["asset_summary"]["character_decomposition"]
+    source_armature = decomposition["source_armature"]
+    asset_name = build_plan["asset_name"]
+    full_index = build_source_bone_index_from_export(asset_dir, source_armature)
+
+    character_specs = []
+    for entry in build_plan["characters"]:
+        character_id = entry["character_id"]
+        flat_report, flat_plan = build_character_flat_inputs(
+            classifier_report, build_plan, character_id
+        )
+        source_bones = slice_source_bones_for_character(full_index, character_id)
+        spec = build_armature_spec(flat_report, flat_plan, source_bones)
+        apply_character_naming(spec, asset_name, character_id)
+        character_specs.append((character_id, spec))
+
+    return {
+        "crowd": True,
+        "asset_name": asset_name,
+        "wrapper_collection_name": wrapper_collection_name(asset_name),
+        "decomposition": decomposition,
+        "character_specs": character_specs,
+    }
+
+
