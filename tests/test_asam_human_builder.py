@@ -2235,5 +2235,51 @@ class CrowdSpecsFromAssetDirTests(unittest.TestCase):
         self.assertEqual(len(result["specs"]), 1)
 
 
+class CrowdBuilderReportTests(unittest.TestCase):
+    def _spec(self, cid):
+        return {
+            "asset_name": "crowd",
+            "source_armature_name": "Object_4",
+            "bones": [{"name": "Hip", "geometry_source": "source_bone", "source_bone": "Pelvis"}],
+            "extras_preserved": [],
+        }
+
+    def test_build_crowd_builder_report_collects_characters_and_failures(self):
+        from asam_human_builder.builder import build_crowd_builder_report
+        character_specs = [("Hero000", self._spec("Hero000"))]
+        decomposition = {"source_armature": "Object_4", "character_count": 2,
+                         "character_ids": ["Hero000", "BadOne"],
+                         "shared_bones": ["_rootJoint"], "unassigned_meshes": []}
+        crowd_execution = {
+            "wrapper_collection_name": "ASAM_crowd",
+            "characters": [{
+                "character_id": "Hero000",
+                "generated_collection_name": "ASAM_crowd_Hero000",
+                "group_root_name": "Grp_Root_Hero000",
+                "generated_armature_name": "Armature_crowd_Hero000",
+                "collection_action": "create",
+                "duplicated_meshes": [], "skipped_meshes": [], "mesh_warnings": [],
+            }],
+            "failed_characters": [{"character_id": "BadOne", "error": "boom"}],
+        }
+        report = build_crowd_builder_report("crowd", decomposition, character_specs, crowd_execution)
+        self.assertTrue(report["crowd"])
+        self.assertEqual(report["asset_name"], "crowd")
+        self.assertEqual(report["character_decomposition_summary"]["character_count"], 2)
+        self.assertEqual(len(report["characters"]), 1)
+        self.assertEqual(report["characters"][0]["character_id"], "Hero000")
+        self.assertEqual(report["failed_characters"], [{"character_id": "BadOne", "error": "boom"}])
+
+    def test_write_crowd_builder_report_roundtrips(self):
+        from asam_human_builder.builder import write_crowd_builder_report
+        with tempfile.TemporaryDirectory() as d:
+            crowd_report = {"asset_name": "crowd", "crowd": True, "characters": []}
+            report, report_path = write_crowd_builder_report(Path(d), crowd_report)
+            self.assertTrue(report_path.exists())
+            self.assertEqual(report_path.name, "builder_report.json")
+            with report_path.open(encoding="utf-8") as handle:
+                self.assertEqual(_json.load(handle), crowd_report)
+
+
 if __name__ == "__main__":
     unittest.main()

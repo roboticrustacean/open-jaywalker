@@ -765,3 +765,44 @@ def build_character_specs_from_asset_dir(asset_dir: Path) -> dict:
     }
 
 
+def build_crowd_builder_report(
+    asset_name: str, decomposition: dict, character_specs, crowd_execution: dict
+) -> dict:
+    """Summarize a crowd build: one per-character builder report plus failures."""
+    spec_by_id = {character_id: spec for character_id, spec in character_specs}
+    char_reports = []
+    for execution in crowd_execution["characters"]:
+        character_id = execution["character_id"]
+        spec = spec_by_id.get(character_id)
+        if spec is None:
+            continue
+        report = build_builder_report(spec, execution)
+        report["character_id"] = character_id
+        char_reports.append(report)
+
+    return {
+        "asset_name": asset_name,
+        "crowd": True,
+        "character_decomposition_summary": {
+            "source_armature": decomposition.get("source_armature"),
+            "character_count": decomposition.get("character_count"),
+            "character_ids": decomposition.get("character_ids", []),
+            "shared_bones": decomposition.get("shared_bones", []),
+            "unassigned_meshes": decomposition.get("unassigned_meshes", []),
+        },
+        "characters": char_reports,
+        "failed_characters": crowd_execution.get("failed_characters", []),
+    }
+
+
+def write_crowd_builder_report(asset_dir: Path, crowd_report: dict) -> Tuple[dict, Path]:
+    """Write a crowd builder report to builder_report.json."""
+    asset_dir = Path(asset_dir).resolve()
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    report_path = asset_dir / "builder_report.json"
+    with report_path.open("w", encoding="utf-8") as handle:
+        json.dump(crowd_report, handle, indent=2)
+        handle.write("\n")
+    return crowd_report, report_path
+
+
