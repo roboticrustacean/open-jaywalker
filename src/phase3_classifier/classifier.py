@@ -1447,6 +1447,24 @@ def _compute_extras_term(extras_preserved: List[dict]) -> float:
     return round(min(math.log1p(len(extras_preserved)) * 0.5, 2.0), 3)
 
 
+def _compute_vertex_group_coverage(vertex_group_bone_hits: int, vertex_group_count: int) -> float:
+    """Fraction of the bound mesh's vertex groups this armature's bones cover (0..1).
+
+    Convention-agnostic skin-weight signal: how much of the skin this armature
+    accounts for. A true deform rig approaches 1.0; a pure control rig is low.
+    """
+    return round(vertex_group_bone_hits / max(vertex_group_count, 1), 3)
+
+
+def _compute_deform_purity(vertex_group_bone_hits: int, armature_bone_count: int) -> float:
+    """Fraction of this armature's bones that actually drive skin (0..1).
+
+    Breaks a coverage tie between a clean deform rig (~1.0) and a bushy superset
+    control rig that copies the deform bone names but adds scaffolding bones (low).
+    """
+    return round(vertex_group_bone_hits / max(armature_bone_count, 1), 3)
+
+
 def _build_armature_summary(
     resolved_targets: Dict[str, dict],
     review_flags: List[str],
@@ -1472,6 +1490,14 @@ def _build_armature_summary(
     )
     deform_evidence_term = _compute_deform_evidence_term(mesh_stats["vertex_group_bone_hits"])
     extras_term = _compute_extras_term(extras_preserved)
+    vertex_group_coverage = _compute_vertex_group_coverage(
+        mesh_stats["vertex_group_bone_hits"],
+        mesh_stats["vertex_group_count"],
+    )
+    deform_purity = _compute_deform_purity(
+        mesh_stats["vertex_group_bone_hits"],
+        len(armature_bones),
+    )
 
     ranking_score = round(
         (len(mapped) * 5.0)
@@ -1496,6 +1522,8 @@ def _build_armature_summary(
         "mesh_bound_term": mesh_bound_term,
         "deform_evidence_term": deform_evidence_term,
         "extras_term": extras_term,
+        "vertex_group_coverage": vertex_group_coverage,
+        "deform_purity": deform_purity,
         "deform_evidence": mesh_stats,
         "ranking_score": ranking_score,
     }

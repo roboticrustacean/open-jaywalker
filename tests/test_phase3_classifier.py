@@ -20,6 +20,8 @@ from phase3_classifier.classifier import (  # noqa: E402
     _compute_mesh_bound_term,
     _compute_deform_evidence_term,
     _compute_extras_term,
+    _compute_vertex_group_coverage,
+    _compute_deform_purity,
     _compute_selection_tiebreaker,
     _detect_convention,
     _normalize_bone_name,
@@ -722,6 +724,38 @@ class Phase3ClassifierTests(unittest.TestCase):
         # planar = sqrt(0.086318**2 + 0.009727**2) ~= 0.086865
         self.assertAlmostEqual(magnitude, 0.086865, places=4)
 
+    def test_summary_emits_coverage_and_purity_fields(self):
+        bones = [
+            _bone("Hip", None, (0.0, 0.0, 1.0), (0.0, 0.0, 1.1)),
+            _bone("Lower_Spine", "Hip", (0.0, 0.0, 1.1), (0.0, 0.0, 1.25)),
+            _bone("Upper_Spine", "Lower_Spine", (0.0, 0.0, 1.25), (0.0, 0.0, 1.45)),
+        ]
+        chains = {
+            "spine": [["Lower_Spine", "Upper_Spine"]],
+            "leg": {"left": [], "right": [], "unsided": []},
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        binding = {
+            "armature_object_name": "Rig",
+            "meshes": [
+                {
+                    "mesh_name": "BodyMesh",
+                    "modifiers": [{"type": "ARMATURE", "object": "Rig"}],
+                    "vertex_groups": ["Hip", "Lower_Spine", "Upper_Spine"],
+                }
+            ],
+        }
+        asset_dir = _write_single_armature_asset(
+            "coverage_fields", "Rig", bones, chains, None, binding
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+        summary = report["armatures"][0]["summary"]
+        self.assertIn("vertex_group_coverage", summary)
+        self.assertIn("deform_purity", summary)
+        self.assertEqual(summary["vertex_group_coverage"], 1.0)
+        self.assertEqual(summary["deform_purity"], 1.0)
+        self.assertEqual(summary["deform_evidence"]["vertex_group_count"], 3)
+
 
 class ArmatureScoringHelperTests(unittest.TestCase):
     def test_mesh_bound_term_zero_when_meshes_count_zero(self):
@@ -824,6 +858,26 @@ class ArmatureScoringHelperTests(unittest.TestCase):
     def test_extras_term_caps_at_two(self):
         extras = [{"bone_name": "bone_{}".format(i)} for i in range(200)]
         self.assertEqual(_compute_extras_term(extras), 2.0)
+
+
+class SkinWeightSignalTests(unittest.TestCase):
+    def test_coverage_is_hits_over_vertex_group_count(self):
+        self.assertEqual(_compute_vertex_group_coverage(8, 10), 0.8)
+
+    def test_coverage_full_when_all_groups_hit(self):
+        self.assertEqual(_compute_vertex_group_coverage(20, 20), 1.0)
+
+    def test_coverage_zero_guard_when_no_vertex_groups(self):
+        self.assertEqual(_compute_vertex_group_coverage(0, 0), 0.0)
+
+    def test_purity_is_hits_over_bone_count(self):
+        self.assertEqual(_compute_deform_purity(20, 80), 0.25)
+
+    def test_purity_full_for_pure_deform_rig(self):
+        self.assertEqual(_compute_deform_purity(20, 20), 1.0)
+
+    def test_purity_zero_guard_when_no_bones(self):
+        self.assertEqual(_compute_deform_purity(0, 0), 0.0)
 
 
 class ArmatureSelectionCascadeTests(unittest.TestCase):
