@@ -28,8 +28,15 @@ import blender_builder
 importlib.reload(builder)
 importlib.reload(blender_builder)
 
-from builder import build_armature_spec_from_asset_dir, print_builder_summary, resolve_default_asset_dir, write_builder_report  # noqa: E402
-from blender_builder import build_armature_in_blender  # noqa: E402
+from builder import (  # noqa: E402
+    build_character_specs_from_asset_dir,
+    build_crowd_builder_report,
+    print_builder_summary,
+    resolve_default_asset_dir,
+    write_builder_report,
+    write_crowd_builder_report,
+)
+from blender_builder import build_armature_in_blender, build_crowd_in_blender  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -65,10 +72,32 @@ def main(argv=None) -> int:
     print("STARTING ASAM HUMAN BUILDER")
     print("=" * 60 + "\n")
 
-    _, _, build_spec = build_armature_spec_from_asset_dir(asset_dir)
-    execution_result = build_armature_in_blender(build_spec, bpy)
-    builder_report, report_path = write_builder_report(asset_dir, build_spec, execution_result)
-    print_builder_summary(builder_report, report_path)
+    resolved = build_character_specs_from_asset_dir(asset_dir)
+    if resolved["crowd"]:
+        crowd_execution = build_crowd_in_blender(
+            resolved["asset_name"],
+            resolved["wrapper_collection_name"],
+            resolved["character_specs"],
+            resolved["decomposition"],
+            bpy,
+        )
+        crowd_report = build_crowd_builder_report(
+            resolved["asset_name"],
+            resolved["decomposition"],
+            resolved["character_specs"],
+            crowd_execution,
+        )
+        _, report_path = write_crowd_builder_report(asset_dir, crowd_report)
+        print("Crowd build: {0} characters built, {1} failed. Report: {2}".format(
+            len(crowd_report["characters"]),
+            len(crowd_report["failed_characters"]),
+            report_path,
+        ))
+    else:
+        build_spec = resolved["specs"][0]
+        execution_result = build_armature_in_blender(build_spec, bpy)
+        builder_report, report_path = write_builder_report(asset_dir, build_spec, execution_result)
+        print_builder_summary(builder_report, report_path)
     return 0
 
 
