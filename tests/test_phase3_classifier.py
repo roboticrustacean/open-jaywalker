@@ -749,7 +749,12 @@ class ArmatureScoringHelperTests(unittest.TestCase):
         result = _collect_mesh_binding_stats(None, "rig", {"spine"})
         self.assertEqual(
             result,
-            {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0},
+            {
+                "meshes_count": 0,
+                "has_armature_modifier_link": False,
+                "vertex_group_bone_hits": 0,
+                "vertex_group_count": 0,
+            },
         )
 
     def test_collect_mesh_binding_stats_empty_meshes(self):
@@ -775,6 +780,19 @@ class ArmatureScoringHelperTests(unittest.TestCase):
         result = _collect_mesh_binding_stats(binding, "rig", {"spine", "head"})
         self.assertEqual(result["meshes_count"], 1)
         self.assertTrue(result["has_armature_modifier_link"])
+        self.assertEqual(result["vertex_group_bone_hits"], 2)
+
+    def test_collect_mesh_binding_stats_reports_vertex_group_count(self):
+        binding = {
+            "meshes": [
+                {
+                    "modifiers": [{"type": "ARMATURE", "object": "rig"}],
+                    "vertex_groups": ["spine", "head", "extra_mask"],
+                }
+            ]
+        }
+        result = _collect_mesh_binding_stats(binding, "rig", {"spine", "head"})
+        self.assertEqual(result["vertex_group_count"], 3)
         self.assertEqual(result["vertex_group_bone_hits"], 2)
 
     def test_collect_mesh_binding_stats_modifier_to_other_armature(self):

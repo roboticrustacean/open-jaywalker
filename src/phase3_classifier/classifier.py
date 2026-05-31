@@ -1387,11 +1387,17 @@ def _collect_mesh_binding_stats(
     armature_bone_names_lower: Set[str],
 ) -> dict:
     """Walk mesh_binding once and return the raw stats needed by armature scoring."""
+    empty = {
+        "meshes_count": 0,
+        "has_armature_modifier_link": False,
+        "vertex_group_bone_hits": 0,
+        "vertex_group_count": 0,
+    }
     if not mesh_binding:
-        return {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0}
+        return dict(empty)
     meshes = mesh_binding.get("meshes") or []
     if not meshes:
-        return {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0}
+        return dict(empty)
 
     has_armature_modifier_link = False
     vertex_group_names_lower: Set[str] = set()
@@ -1406,6 +1412,7 @@ def _collect_mesh_binding_stats(
         "meshes_count": len(meshes),
         "has_armature_modifier_link": has_armature_modifier_link,
         "vertex_group_bone_hits": len(armature_bone_names_lower & vertex_group_names_lower),
+        "vertex_group_count": len(vertex_group_names_lower),
     }
 
 
