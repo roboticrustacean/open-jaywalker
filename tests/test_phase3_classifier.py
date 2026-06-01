@@ -1251,6 +1251,56 @@ class MultiArmatureSelectionTests(unittest.TestCase):
             by_name["DeformRig"]["ranking_score"],
         )
 
+    def test_superset_control_rig_loses_on_deform_purity(self):
+        deform_bones, deform_chains = _mixamo_character()
+        deform_vgs = [b["name"] for b in deform_bones]
+        # ControlRig contains all deform names (coverage ~1.0 too) + 60 scaffolding bones.
+        control_bones, control_chains = _mixamo_with_extra_control_bones(60)
+
+        asset_dir = _write_multi_armature_asset(
+            "superset_control",
+            [
+                ("DeformRig", deform_bones, deform_chains, _mesh_binding_for("DeformRig", deform_vgs)),
+                ("ControlRig", control_bones, control_chains, _mesh_binding_for("ControlRig", deform_vgs)),
+            ],
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+
+        self.assertEqual(report["recommended_primary_armature"], "DeformRig")
+        top = report["asset_summary"]["ranking"][0]
+        self.assertEqual(top["selection_tiebreaker"], "deform_purity")
+        by_name = {e["armature_name"]: e for e in report["asset_summary"]["ranking"]}
+        self.assertEqual(
+            by_name["DeformRig"]["vertex_group_coverage"],
+            by_name["ControlRig"]["vertex_group_coverage"],
+        )
+        self.assertGreater(
+            by_name["DeformRig"]["deform_purity"],
+            by_name["ControlRig"]["deform_purity"],
+        )
+
+    def test_no_binding_falls_back_to_ranking_score(self):
+        full_bones, full_chains = _biped_character()
+        partial_bones, partial_chains = _mixamo_character_without_toes()
+        # Neither armature has a mesh_binding -> both mesh_bound_term == 0.
+        asset_dir = _write_multi_armature_asset(
+            "no_binding",
+            [
+                ("FullRig", full_bones, full_chains, None),
+                ("PartialRig", partial_bones, partial_chains, None),
+            ],
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+
+        ranking = report["asset_summary"]["ranking"]
+        by_name = {e["armature_name"]: e for e in ranking}
+        self.assertEqual(by_name["FullRig"]["mesh_bound_term"], 0.0)
+        self.assertEqual(by_name["PartialRig"]["mesh_bound_term"], 0.0)
+        # No binding: the better-mapped rig wins on the bundled scalar, as today.
+        winner = report["recommended_primary_armature"]
+        self.assertEqual(winner, max(by_name, key=lambda n: by_name[n]["ranking_score"]))
+        self.assertEqual(ranking[0]["selection_tiebreaker"], "score")
+
 
 if __name__ == "__main__":
     unittest.main()
