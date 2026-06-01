@@ -37,6 +37,7 @@ from builder import (  # noqa: E402
     write_crowd_builder_report,
 )
 from blender_builder import build_armature_in_blender, build_crowd_in_blender  # noqa: E402
+from pipeline_paths import MissingPrerequisiteError, require_asset_inputs  # noqa: E402
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -61,12 +62,13 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv if argv is not None else _extract_script_argv(sys.argv))
 
     asset_dir = Path(args.asset_dir).resolve() if args.asset_dir else resolve_default_asset_dir(bpy.data.filepath, SCRIPT_DIR)
-    if not asset_dir.exists():
-        raise FileNotFoundError(
-            "Builder input folder does not exist: {0}. Run src/pipeline/main.py or src/phase3_classifier/main.py first.".format(
-                asset_dir
-            )
+    try:
+        require_asset_inputs(
+            asset_dir, ["classifier_report.json", "build_plan.json"], "phase 3 classifier"
         )
+    except MissingPrerequisiteError as err:
+        print("error: {0}".format(err), file=sys.stderr)
+        return 1
 
     print("\n" + "=" * 60)
     print("STARTING ASAM HUMAN BUILDER")
