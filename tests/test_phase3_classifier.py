@@ -750,6 +750,20 @@ class Phase3ClassifierTests(unittest.TestCase):
         self.assertIn("Recommended primary armature: Armature", result.stdout)
         self.assertIn("Root resolution: reuse_existing_root", result.stdout)
 
+    def test_cli_entrypoint_missing_inputs_fails_cleanly(self):
+        """Empty --asset-dir: exit 1, one-line error + hint, no traceback (#27)."""
+        empty_dir = Path(tempfile.mkdtemp(prefix="phase3_classifier_empty_"))
+        result = subprocess.run(
+            [sys.executable, str(CLI_PATH), "--asset-dir", str(empty_dir)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertEqual(result.returncode, 1, msg=result.stdout + "\n" + result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertIn("inspector", result.stderr)
+        self.assertIn("error:", result.stderr)
+
     def test_root_blocker_codes_helper_exists(self):
         from phase3_classifier.classifier import _root_blocker_codes, _root_advisory_codes  # noqa: F401
         self.assertTrue(callable(_root_blocker_codes))
