@@ -907,61 +907,71 @@ class ArmatureSelectionCascadeTests(unittest.TestCase):
         self.assertEqual(len(ranking), 1)
         self.assertEqual(ranking[0]["selection_tiebreaker"], "sole_candidate")
 
-    def _make_report(self, name, score, mesh_bound, deform_evidence, mapped, avg_conf):
+    def _make_report(self, name, score, mesh_bound, coverage, purity, mapped, avg_conf):
         return {
             "armature_name": name,
             "summary": {
                 "ranking_score": score,
                 "mesh_bound_term": mesh_bound,
-                "deform_evidence_term": deform_evidence,
+                "vertex_group_coverage": coverage,
+                "deform_purity": purity,
                 "mapped_core_targets": mapped,
                 "average_confidence": avg_conf,
             },
         }
 
     def test_tiebreaker_sole_candidate(self):
-        reports = [self._make_report("only", 100.0, 10.0, 6.0, 22, 0.9)]
+        reports = [self._make_report("only", 100.0, 10.0, 1.0, 1.0, 22, 0.9)]
         self.assertEqual(_compute_selection_tiebreaker(reports), "sole_candidate")
 
-    def test_tiebreaker_score_when_scores_differ(self):
+    def test_tiebreaker_mesh_bound_decides_first(self):
         reports = [
-            self._make_report("a", 100.0, 0.0, 0.0, 20, 0.9),
-            self._make_report("b", 90.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("bound", 90.0, 10.0, 0.5, 0.5, 20, 0.9),
+            self._make_report("unbound", 120.0, 0.0, 0.0, 0.0, 28, 0.95),
         ]
-        self.assertEqual(_compute_selection_tiebreaker(reports), "score")
-
-    def test_tiebreaker_mesh_bound_when_scores_tie(self):
-        reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
-            self._make_report("b", 100.0, 0.0, 6.0, 22, 0.9),
-        ]
+        # Even though "unbound" has a higher ranking_score, binding leads the cascade.
         self.assertEqual(_compute_selection_tiebreaker(reports), "mesh_bound_term")
 
-    def test_tiebreaker_deform_evidence_when_score_and_mesh_bound_tie(self):
+    def test_tiebreaker_coverage_when_binding_ties(self):
         reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
-            self._make_report("b", 100.0, 10.0, 4.0, 22, 0.9),
+            self._make_report("deform", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
+            self._make_report("control", 120.0, 10.0, 0.1, 0.1, 28, 0.95),
         ]
-        self.assertEqual(_compute_selection_tiebreaker(reports), "deform_evidence_term")
+        self.assertEqual(_compute_selection_tiebreaker(reports), "vertex_group_coverage")
 
-    def test_tiebreaker_mapped_targets_when_upstream_tie(self):
+    def test_tiebreaker_purity_when_coverage_ties(self):
         reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 24, 0.9),
-            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("deform", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
+            self._make_report("superset", 120.0, 10.0, 1.0, 0.2, 28, 0.95),
+        ]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "deform_purity")
+
+    def test_tiebreaker_score_when_binding_and_skin_signals_tie(self):
+        reports = [
+            self._make_report("a", 110.0, 0.0, 0.0, 0.0, 24, 0.9),
+            self._make_report("b", 100.0, 0.0, 0.0, 0.0, 22, 0.9),
+        ]
+        # No armature bound: cascade falls through to ranking_score (today's behavior).
+        self.assertEqual(_compute_selection_tiebreaker(reports), "score")
+
+    def test_tiebreaker_mapped_targets_when_score_ties(self):
+        reports = [
+            self._make_report("a", 100.0, 10.0, 1.0, 1.0, 24, 0.9),
+            self._make_report("b", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
         ]
         self.assertEqual(_compute_selection_tiebreaker(reports), "mapped_core_targets")
 
     def test_tiebreaker_confidence_when_mapped_ties(self):
         reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.95),
-            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("a", 100.0, 10.0, 1.0, 1.0, 22, 0.95),
+            self._make_report("b", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
         ]
         self.assertEqual(_compute_selection_tiebreaker(reports), "average_confidence")
 
     def test_tiebreaker_armature_name_when_all_numeric_signals_tie(self):
         reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
-            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("a", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
+            self._make_report("b", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
         ]
         self.assertEqual(_compute_selection_tiebreaker(reports), "armature_name")
 

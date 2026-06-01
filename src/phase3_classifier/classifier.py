@@ -359,6 +359,25 @@ def discover_armatures(asset_dir: Path) -> List[ArmatureInput]:
     return armatures
 
 
+# Ordered selection cascade. Each entry is (audit_label, summary_field); the sort
+# key negates each field (higher is better) and _compute_selection_tiebreaker walks
+# the same list so the two can never drift. Binding leads, then the skin-weight
+# signals, then today's bundled scalar as the no-binding fallback.
+_SELECTION_CASCADE: Tuple[Tuple[str, str], ...] = (
+    ("mesh_bound_term", "mesh_bound_term"),
+    ("vertex_group_coverage", "vertex_group_coverage"),
+    ("deform_purity", "deform_purity"),
+    ("score", "ranking_score"),
+    ("mapped_core_targets", "mapped_core_targets"),
+    ("average_confidence", "average_confidence"),
+)
+
+
+def _selection_key(report: dict) -> tuple:
+    summary = report["summary"]
+    return tuple(-summary[field] for _, field in _SELECTION_CASCADE) + (report["armature_name"],)
+
+
 def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
     asset_dir = asset_dir.resolve()
     if not asset_dir.is_dir():
@@ -370,18 +389,7 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
 
     armature_reports = [classify_armature(asset_dir.name, armature_input) for armature_input in armature_inputs]
 
-    def _ranking_key(report: dict) -> tuple:
-        summary = report["summary"]
-        return (
-            -summary["ranking_score"],
-            -summary["mesh_bound_term"],
-            -summary["deform_evidence_term"],
-            -summary["mapped_core_targets"],
-            -summary["average_confidence"],
-            report["armature_name"],
-        )
-
-    ranked_reports = sorted(armature_reports, key=_ranking_key)
+    ranked_reports = sorted(armature_reports, key=_selection_key)
     recommended_report = ranked_reports[0]
     selection_tiebreaker = _compute_selection_tiebreaker(ranked_reports)
     mesh_binding = copy.deepcopy(recommended_report.get("mesh_binding"))
@@ -462,6 +470,8 @@ def _build_ranking_entry(report: dict, selection_tiebreaker: Optional[str]) -> d
         "mesh_bound_term": summary["mesh_bound_term"],
         "deform_evidence_term": summary["deform_evidence_term"],
         "extras_term": summary["extras_term"],
+        "vertex_group_coverage": summary["vertex_group_coverage"],
+        "deform_purity": summary["deform_purity"],
         "primary_input": report["selected_inputs"]["primary"],
     }
     if selection_tiebreaker is not None:
@@ -470,12 +480,11 @@ def _build_ranking_entry(report: dict, selection_tiebreaker: Optional[str]) -> d
 
 
 def _compute_selection_tiebreaker(ranked_reports: List[dict]) -> str:
-    """Identify which step of the ranking cascade decided the top pick.
+    """Identify which step of the selection cascade decided the top pick.
 
-    Returns 'sole_candidate' when there is only one armature, 'score' when
-    the primary ranking_score already separated the top two, or the name of
-    the first cascade step on which the top candidate strictly beats the
-    second-place candidate.
+    Returns 'sole_candidate' when there is only one armature, otherwise the audit
+    label of the first cascade step on which the top candidate strictly beats the
+    second-place candidate, or 'armature_name' when every numeric signal ties.
     """
     if len(ranked_reports) <= 1:
         return "sole_candidate"
@@ -483,16 +492,9 @@ def _compute_selection_tiebreaker(ranked_reports: List[dict]) -> str:
     top_summary = ranked_reports[0]["summary"]
     runner_summary = ranked_reports[1]["summary"]
 
-    if top_summary["ranking_score"] != runner_summary["ranking_score"]:
-        return "score"
-    if top_summary["mesh_bound_term"] != runner_summary["mesh_bound_term"]:
-        return "mesh_bound_term"
-    if top_summary["deform_evidence_term"] != runner_summary["deform_evidence_term"]:
-        return "deform_evidence_term"
-    if top_summary["mapped_core_targets"] != runner_summary["mapped_core_targets"]:
-        return "mapped_core_targets"
-    if top_summary["average_confidence"] != runner_summary["average_confidence"]:
-        return "average_confidence"
+    for label, field in _SELECTION_CASCADE:
+        if top_summary[field] != runner_summary[field]:
+            return label
     return "armature_name"
 
 
