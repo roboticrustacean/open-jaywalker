@@ -1931,8 +1931,10 @@ class CrowdBlenderTests(unittest.TestCase):
     def test_build_crowd_in_blender_creates_wrapper_with_children(self):
         from asam_human_builder.builder import apply_character_naming
         from asam_human_builder.blender_builder import build_crowd_in_blender
-        spec_a = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
-        spec_b = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero001")
+        spec_a = _minimal_crowd_build_spec()
+        apply_character_naming(spec_a, "crowd", "Hero000")
+        spec_b = _minimal_crowd_build_spec()
+        apply_character_naming(spec_b, "crowd", "Hero001")
         fake = _fake_with_source_armature("Object_4")   # one source armature, shared
         decomposition = {"source_armature": "Object_4", "character_count": 2,
                          "character_ids": ["Hero000", "Hero001"],
@@ -1950,7 +1952,8 @@ class CrowdBlenderTests(unittest.TestCase):
     def test_build_crowd_in_blender_continues_past_failure(self):
         from asam_human_builder.builder import apply_character_naming
         from asam_human_builder.blender_builder import build_crowd_in_blender
-        spec_ok = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        spec_ok = _minimal_crowd_build_spec()
+        apply_character_naming(spec_ok, "crowd", "Hero000")
         bad_spec = {"asset_name": "crowd"}   # missing keys -> raises inside builder
         fake = _fake_with_source_armature("Object_4")
         decomposition = {"source_armature": "Object_4", "character_count": 2,
@@ -1974,7 +1977,8 @@ class CrowdBlenderTests(unittest.TestCase):
                          "shared_bones": [], "unassigned_meshes": []}
 
         def run():
-            spec = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+            spec = _minimal_crowd_build_spec()
+            apply_character_naming(spec, "crowd", "Hero000")
             return build_crowd_in_blender(
                 "crowd", "ASAM_crowd", [("Hero000", spec)], decomposition, fake,
             )
@@ -2004,7 +2008,8 @@ class CrowdBlenderTests(unittest.TestCase):
         decomposition = {"source_armature": "Object_4", "character_count": 1,
                          "character_ids": ["Hero000"],
                          "shared_bones": [], "unassigned_meshes": []}
-        spec = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        spec = _minimal_crowd_build_spec()
+        apply_character_naming(spec, "crowd", "Hero000")
         build_crowd_in_blender(
             "crowd", "ASAM_crowd", [("Hero000", spec)], decomposition, fake,
         )
@@ -2013,7 +2018,8 @@ class CrowdBlenderTests(unittest.TestCase):
         intruder = fake.add_source_mesh("UserMesh", None)
         child.objects.link(intruder)
         # Rebuild must refuse rather than silently delete the foreign object.
-        spec2 = apply_character_naming(_minimal_crowd_build_spec(), "crowd", "Hero000")
+        spec2 = _minimal_crowd_build_spec()
+        apply_character_naming(spec2, "crowd", "Hero000")
         with self.assertRaises(ValueError):
             build_crowd_in_blender(
                 "crowd", "ASAM_crowd", [("Hero000", spec2)], decomposition, fake,

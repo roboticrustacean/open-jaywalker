@@ -50,21 +50,13 @@ REQUIRED_PLAN_FIELDS = {
 }
 
 def load_builder_inputs(asset_dir: Path) -> Tuple[dict, dict]:
-    """Load classifier and build-plan JSON inputs for the builder."""
-    asset_dir = Path(asset_dir).resolve()
-    report_path = asset_dir / "classifier_report.json"
-    plan_path = asset_dir / "build_plan.json"
+    """Load classifier and build-plan JSON inputs, then validate the flat shape.
 
-    if not report_path.exists():
-        raise FileNotFoundError("Missing classifier_report.json in {0}".format(asset_dir))
-    if not plan_path.exists():
-        raise FileNotFoundError("Missing build_plan.json in {0}".format(asset_dir))
-
-    with report_path.open("r", encoding="utf-8") as handle:
-        classifier_report = json.load(handle)
-    with plan_path.open("r", encoding="utf-8") as handle:
-        build_plan = json.load(handle)
-
+    Delegates the path resolution + missing-file + JSON parsing to
+    `read_builder_inputs`; the only thing this adds is `validate_builder_inputs`,
+    so the flat-shape callers and the no-validate (crowd) callers share one loader.
+    """
+    classifier_report, build_plan = read_builder_inputs(asset_dir)
     validate_builder_inputs(classifier_report, build_plan)
     return classifier_report, build_plan
 
@@ -144,15 +136,16 @@ def wrapper_collection_name(asset_name: str) -> str:
     return "ASAM_{0}".format(asset_name)
 
 
-def apply_character_naming(spec: dict, asset_name: str, character_id: str) -> dict:
-    """Override the generated collection/group-root/armature names with per-character ones.
+def apply_character_naming(spec: dict, asset_name: str, character_id: str) -> None:
+    """Override the generated collection/group-root/armature names in place.
 
     Object names are global in bpy.data, so each character needs a unique suffix.
+    Mutates `spec` and returns None (single-purpose API; callers keep their own
+    reference to `spec`).
     """
     spec["generated_collection_name"] = "ASAM_{0}_{1}".format(asset_name, character_id)
     spec["group_root_name"] = "Grp_Root_{0}".format(character_id)
     spec["generated_armature_name"] = "Armature_{0}_{1}".format(asset_name, character_id)
-    return spec
 
 
 def read_builder_inputs(asset_dir: Path) -> Tuple[dict, dict]:
@@ -732,8 +725,8 @@ def build_character_specs_from_asset_dir(asset_dir: Path) -> dict:
     classifier_report, build_plan = read_builder_inputs(asset_dir)
 
     if not is_crowd_plan(build_plan):
-        # Unchanged single-character path.
-        validate_builder_inputs(classifier_report, build_plan)
+        # Unchanged single-character path. build_armature_spec validates its inputs,
+        # so no separate validate_builder_inputs call is needed here.
         source_bones = build_source_bone_index_from_export(
             asset_dir, build_plan["recommended_primary_armature"]
         )
