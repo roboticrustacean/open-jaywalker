@@ -961,7 +961,9 @@ class ArmatureSelectionCascadeTests(unittest.TestCase):
 
         ranking = report["asset_summary"]["ranking"]
         self.assertEqual(ranking[0]["armature_name"], "rig")
-        self.assertEqual(ranking[0]["selection_tiebreaker"], "score")
+        # rig is mesh-bound and metarig is not, so the binding step of the cascade
+        # decides the pick (more truthful than the old bundled-"score" audit).
+        self.assertEqual(ranking[0]["selection_tiebreaker"], "mesh_bound_term")
         self.assertNotIn("selection_tiebreaker", ranking[1])
 
     def test_lowpoly_ranking_entries_include_new_terms(self):
