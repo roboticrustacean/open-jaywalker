@@ -20,6 +20,8 @@ from phase3_classifier.classifier import (  # noqa: E402
     _compute_mesh_bound_term,
     _compute_deform_evidence_term,
     _compute_extras_term,
+    _compute_vertex_group_coverage,
+    _compute_deform_purity,
     _compute_selection_tiebreaker,
     _detect_convention,
     _normalize_bone_name,
@@ -132,6 +134,80 @@ def _write_single_armature_asset(
         json.dump(payload, handle)
 
     return asset_dir
+
+
+def _mesh_binding_for(armature_name, vertex_groups):
+    """A mesh-binding where `armature_name` modifier-drives BodyMesh with the
+    given vertex-group names (so meshes_count=1 and has_armature_modifier_link)."""
+    return {
+        "armature_object_name": armature_name,
+        "meshes": [
+            {
+                "mesh_name": "BodyMesh",
+                "armature_link": "modifier",
+                "modifiers": [{"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": armature_name}],
+                "vertex_groups": list(vertex_groups),
+                "vertex_group_stats": {"non_empty_group_count": len(vertex_groups), "per_group": []},
+                "material_slots": [],
+                "warnings": [],
+            }
+        ],
+    }
+
+
+def _write_multi_armature_asset(asset_name, armatures):
+    """Write one asset dir containing several `<armature>_all.json` files.
+
+    `armatures` is a list of (armature_name, bones, chains, mesh_binding|None).
+    """
+    temp_root = Path(tempfile.mkdtemp(prefix="phase3_multi_"))
+    asset_dir = temp_root / asset_name
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    for armature_name, bones, chains, mesh_binding in armatures:
+        hierarchy = {bone["name"]: [] for bone in bones}
+        for bone in bones:
+            parent = bone["parent"]
+            if parent in hierarchy:
+                hierarchy[parent].append(bone["name"])
+        payload = {
+            "armature_name": armature_name,
+            "source_file": f"{asset_name}.blend",
+            "filter": None,
+            "bone_count": len(bones),
+            "hierarchy": hierarchy,
+            "bones": bones,
+            "chains": chains,
+        }
+        if mesh_binding is not None:
+            payload["mesh_binding"] = mesh_binding
+        with (asset_dir / f"{armature_name}_all.json").open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+    return asset_dir
+
+
+def _mixamo_character_without_toes():
+    """Full mixamo skeleton minus the two ToeBase bones (so Full_Toes go unmapped)."""
+    bones, chains = _mixamo_character()
+    drop = {"mixamorig:LeftToeBase", "mixamorig:RightToeBase"}
+    bones = [b for b in bones if b["name"] not in drop]
+    chains = {
+        "spine": chains["spine"],
+        "leg": {side: [[n for n in chain if n not in drop] for chain in chains["leg"][side]] for side in chains["leg"]},
+        "arm": chains["arm"],
+    }
+    return bones, chains
+
+
+def _mixamo_with_extra_control_bones(extra_count=60):
+    """Mixamo deform skeleton PLUS scaffolding bones absent from any vertex group.
+
+    Covers the same vertex groups as the deform rig (so coverage ties) but has far
+    lower deform purity (most bones don't drive skin)."""
+    bones, chains = _mixamo_character()
+    root = bones[0]["name"]
+    for index in range(extra_count):
+        bones.append(_bone(f"mixamorig:CTRL_Twist_{index}", root, (0.5, 0.0, 1.0), (0.5, 0.0, 1.05)))
+    return bones, chains
 
 
 def _biped_character():
@@ -722,6 +798,38 @@ class Phase3ClassifierTests(unittest.TestCase):
         # planar = sqrt(0.086318**2 + 0.009727**2) ~= 0.086865
         self.assertAlmostEqual(magnitude, 0.086865, places=4)
 
+    def test_summary_emits_coverage_and_purity_fields(self):
+        bones = [
+            _bone("Hip", None, (0.0, 0.0, 1.0), (0.0, 0.0, 1.1)),
+            _bone("Lower_Spine", "Hip", (0.0, 0.0, 1.1), (0.0, 0.0, 1.25)),
+            _bone("Upper_Spine", "Lower_Spine", (0.0, 0.0, 1.25), (0.0, 0.0, 1.45)),
+        ]
+        chains = {
+            "spine": [["Lower_Spine", "Upper_Spine"]],
+            "leg": {"left": [], "right": [], "unsided": []},
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        binding = {
+            "armature_object_name": "Rig",
+            "meshes": [
+                {
+                    "mesh_name": "BodyMesh",
+                    "modifiers": [{"type": "ARMATURE", "object": "Rig"}],
+                    "vertex_groups": ["Hip", "Lower_Spine", "Upper_Spine"],
+                }
+            ],
+        }
+        asset_dir = _write_single_armature_asset(
+            "coverage_fields", "Rig", bones, chains, None, binding
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+        summary = report["armatures"][0]["summary"]
+        self.assertIn("vertex_group_coverage", summary)
+        self.assertIn("deform_purity", summary)
+        self.assertEqual(summary["vertex_group_coverage"], 1.0)
+        self.assertEqual(summary["deform_purity"], 1.0)
+        self.assertEqual(summary["deform_evidence"]["vertex_group_count"], 3)
+
 
 class ArmatureScoringHelperTests(unittest.TestCase):
     def test_mesh_bound_term_zero_when_meshes_count_zero(self):
@@ -749,7 +857,12 @@ class ArmatureScoringHelperTests(unittest.TestCase):
         result = _collect_mesh_binding_stats(None, "rig", {"spine"})
         self.assertEqual(
             result,
-            {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0},
+            {
+                "meshes_count": 0,
+                "has_armature_modifier_link": False,
+                "vertex_group_bone_hits": 0,
+                "vertex_group_count": 0,
+            },
         )
 
     def test_collect_mesh_binding_stats_empty_meshes(self):
@@ -775,6 +888,19 @@ class ArmatureScoringHelperTests(unittest.TestCase):
         result = _collect_mesh_binding_stats(binding, "rig", {"spine", "head"})
         self.assertEqual(result["meshes_count"], 1)
         self.assertTrue(result["has_armature_modifier_link"])
+        self.assertEqual(result["vertex_group_bone_hits"], 2)
+
+    def test_collect_mesh_binding_stats_reports_vertex_group_count(self):
+        binding = {
+            "meshes": [
+                {
+                    "modifiers": [{"type": "ARMATURE", "object": "rig"}],
+                    "vertex_groups": ["spine", "head", "extra_mask"],
+                }
+            ]
+        }
+        result = _collect_mesh_binding_stats(binding, "rig", {"spine", "head"})
+        self.assertEqual(result["vertex_group_count"], 3)
         self.assertEqual(result["vertex_group_bone_hits"], 2)
 
     def test_collect_mesh_binding_stats_modifier_to_other_armature(self):
@@ -808,6 +934,26 @@ class ArmatureScoringHelperTests(unittest.TestCase):
         self.assertEqual(_compute_extras_term(extras), 2.0)
 
 
+class SkinWeightSignalTests(unittest.TestCase):
+    def test_coverage_is_hits_over_vertex_group_count(self):
+        self.assertEqual(_compute_vertex_group_coverage(8, 10), 0.8)
+
+    def test_coverage_full_when_all_groups_hit(self):
+        self.assertEqual(_compute_vertex_group_coverage(20, 20), 1.0)
+
+    def test_coverage_zero_guard_when_no_vertex_groups(self):
+        self.assertEqual(_compute_vertex_group_coverage(0, 0), 0.0)
+
+    def test_purity_is_hits_over_bone_count(self):
+        self.assertEqual(_compute_deform_purity(20, 80), 0.25)
+
+    def test_purity_full_for_pure_deform_rig(self):
+        self.assertEqual(_compute_deform_purity(20, 20), 1.0)
+
+    def test_purity_zero_guard_when_no_bones(self):
+        self.assertEqual(_compute_deform_purity(0, 0), 0.0)
+
+
 class ArmatureSelectionCascadeTests(unittest.TestCase):
     def test_lowpoly_selection_tiebreaker_audit_field(self):
         asset_dir = _copy_asset_folder("LowPolyCharacter4")
@@ -815,7 +961,9 @@ class ArmatureSelectionCascadeTests(unittest.TestCase):
 
         ranking = report["asset_summary"]["ranking"]
         self.assertEqual(ranking[0]["armature_name"], "rig")
-        self.assertEqual(ranking[0]["selection_tiebreaker"], "score")
+        # rig is mesh-bound and metarig is not, so the binding step of the cascade
+        # decides the pick (more truthful than the old bundled-"score" audit).
+        self.assertEqual(ranking[0]["selection_tiebreaker"], "mesh_bound_term")
         self.assertNotIn("selection_tiebreaker", ranking[1])
 
     def test_lowpoly_ranking_entries_include_new_terms(self):
@@ -835,61 +983,71 @@ class ArmatureSelectionCascadeTests(unittest.TestCase):
         self.assertEqual(len(ranking), 1)
         self.assertEqual(ranking[0]["selection_tiebreaker"], "sole_candidate")
 
-    def _make_report(self, name, score, mesh_bound, deform_evidence, mapped, avg_conf):
+    def _make_report(self, name, score, mesh_bound, coverage, purity, mapped, avg_conf):
         return {
             "armature_name": name,
             "summary": {
                 "ranking_score": score,
                 "mesh_bound_term": mesh_bound,
-                "deform_evidence_term": deform_evidence,
+                "vertex_group_coverage": coverage,
+                "deform_purity": purity,
                 "mapped_core_targets": mapped,
                 "average_confidence": avg_conf,
             },
         }
 
     def test_tiebreaker_sole_candidate(self):
-        reports = [self._make_report("only", 100.0, 10.0, 6.0, 22, 0.9)]
+        reports = [self._make_report("only", 100.0, 10.0, 1.0, 1.0, 22, 0.9)]
         self.assertEqual(_compute_selection_tiebreaker(reports), "sole_candidate")
 
-    def test_tiebreaker_score_when_scores_differ(self):
+    def test_tiebreaker_mesh_bound_decides_first(self):
         reports = [
-            self._make_report("a", 100.0, 0.0, 0.0, 20, 0.9),
-            self._make_report("b", 90.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("bound", 90.0, 10.0, 0.5, 0.5, 20, 0.9),
+            self._make_report("unbound", 120.0, 0.0, 0.0, 0.0, 28, 0.95),
         ]
-        self.assertEqual(_compute_selection_tiebreaker(reports), "score")
-
-    def test_tiebreaker_mesh_bound_when_scores_tie(self):
-        reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
-            self._make_report("b", 100.0, 0.0, 6.0, 22, 0.9),
-        ]
+        # Even though "unbound" has a higher ranking_score, binding leads the cascade.
         self.assertEqual(_compute_selection_tiebreaker(reports), "mesh_bound_term")
 
-    def test_tiebreaker_deform_evidence_when_score_and_mesh_bound_tie(self):
+    def test_tiebreaker_coverage_when_binding_ties(self):
         reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
-            self._make_report("b", 100.0, 10.0, 4.0, 22, 0.9),
+            self._make_report("deform", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
+            self._make_report("control", 120.0, 10.0, 0.1, 0.1, 28, 0.95),
         ]
-        self.assertEqual(_compute_selection_tiebreaker(reports), "deform_evidence_term")
+        self.assertEqual(_compute_selection_tiebreaker(reports), "vertex_group_coverage")
 
-    def test_tiebreaker_mapped_targets_when_upstream_tie(self):
+    def test_tiebreaker_purity_when_coverage_ties(self):
         reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 24, 0.9),
-            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("deform", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
+            self._make_report("superset", 120.0, 10.0, 1.0, 0.2, 28, 0.95),
+        ]
+        self.assertEqual(_compute_selection_tiebreaker(reports), "deform_purity")
+
+    def test_tiebreaker_score_when_binding_and_skin_signals_tie(self):
+        reports = [
+            self._make_report("a", 110.0, 0.0, 0.0, 0.0, 24, 0.9),
+            self._make_report("b", 100.0, 0.0, 0.0, 0.0, 22, 0.9),
+        ]
+        # No armature bound: cascade falls through to ranking_score (today's behavior).
+        self.assertEqual(_compute_selection_tiebreaker(reports), "score")
+
+    def test_tiebreaker_mapped_targets_when_score_ties(self):
+        reports = [
+            self._make_report("a", 100.0, 10.0, 1.0, 1.0, 24, 0.9),
+            self._make_report("b", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
         ]
         self.assertEqual(_compute_selection_tiebreaker(reports), "mapped_core_targets")
 
     def test_tiebreaker_confidence_when_mapped_ties(self):
         reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.95),
-            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("a", 100.0, 10.0, 1.0, 1.0, 22, 0.95),
+            self._make_report("b", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
         ]
         self.assertEqual(_compute_selection_tiebreaker(reports), "average_confidence")
 
     def test_tiebreaker_armature_name_when_all_numeric_signals_tie(self):
         reports = [
-            self._make_report("a", 100.0, 10.0, 6.0, 22, 0.9),
-            self._make_report("b", 100.0, 10.0, 6.0, 22, 0.9),
+            self._make_report("a", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
+            self._make_report("b", 100.0, 10.0, 1.0, 1.0, 22, 0.9),
         ]
         self.assertEqual(_compute_selection_tiebreaker(reports), "armature_name")
 
@@ -1054,6 +1212,96 @@ class FixtureStabilityTests(unittest.TestCase):
             self.assertNotIn("character_decomposition", report["asset_summary"], asset_name)
             self.assertNotIn("characters", build_plan, asset_name)
             self.assertIn("semantic_mapping", report, asset_name)
+
+
+class MultiArmatureSelectionTests(unittest.TestCase):
+    def test_deform_rig_wins_over_bushier_control_rig_on_binding_tie(self):
+        # DeformRig: mixamo (no toes) -> its bone names ARE the mesh's vertex groups.
+        deform_bones, deform_chains = _mixamo_character_without_toes()
+        deform_vgs = [b["name"] for b in deform_bones]
+        # ControlRig: full biped (incl. toes) -> maps MORE ASAM targets (higher
+        # ranking_score) but its biped names do NOT match the mixamo vertex groups.
+        control_bones, control_chains = _biped_character()
+
+        asset_dir = _write_multi_armature_asset(
+            "deform_vs_control",
+            [
+                ("DeformRig", deform_bones, deform_chains, _mesh_binding_for("DeformRig", deform_vgs)),
+                ("ControlRig", control_bones, control_chains, _mesh_binding_for("ControlRig", deform_vgs)),
+            ],
+        )
+        report, build_plan, _, _ = write_asset_report(asset_dir)
+
+        self.assertEqual(report["recommended_primary_armature"], "DeformRig")
+        self.assertEqual(build_plan["recommended_primary_armature"], "DeformRig")
+
+        ranking = report["asset_summary"]["ranking"]
+        top = ranking[0]
+        self.assertEqual(top["armature_name"], "DeformRig")
+        self.assertEqual(top["selection_tiebreaker"], "vertex_group_coverage")
+        by_name = {entry["armature_name"]: entry for entry in ranking}
+        self.assertEqual(by_name["DeformRig"]["mesh_bound_term"], 10.0)
+        self.assertEqual(by_name["ControlRig"]["mesh_bound_term"], 10.0)
+        self.assertGreater(
+            by_name["DeformRig"]["vertex_group_coverage"],
+            by_name["ControlRig"]["vertex_group_coverage"],
+        )
+        # The deform rig wins DESPITE a lower bundled ranking_score (pre-#32 the
+        # bushier control rig would have been selected).
+        self.assertGreater(
+            by_name["ControlRig"]["ranking_score"],
+            by_name["DeformRig"]["ranking_score"],
+        )
+
+    def test_superset_control_rig_loses_on_deform_purity(self):
+        deform_bones, deform_chains = _mixamo_character()
+        deform_vgs = [b["name"] for b in deform_bones]
+        # ControlRig contains all deform names (coverage ~1.0 too) + 60 scaffolding bones.
+        control_bones, control_chains = _mixamo_with_extra_control_bones(60)
+
+        asset_dir = _write_multi_armature_asset(
+            "superset_control",
+            [
+                ("DeformRig", deform_bones, deform_chains, _mesh_binding_for("DeformRig", deform_vgs)),
+                ("ControlRig", control_bones, control_chains, _mesh_binding_for("ControlRig", deform_vgs)),
+            ],
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+
+        self.assertEqual(report["recommended_primary_armature"], "DeformRig")
+        top = report["asset_summary"]["ranking"][0]
+        self.assertEqual(top["selection_tiebreaker"], "deform_purity")
+        by_name = {e["armature_name"]: e for e in report["asset_summary"]["ranking"]}
+        self.assertEqual(
+            by_name["DeformRig"]["vertex_group_coverage"],
+            by_name["ControlRig"]["vertex_group_coverage"],
+        )
+        self.assertGreater(
+            by_name["DeformRig"]["deform_purity"],
+            by_name["ControlRig"]["deform_purity"],
+        )
+
+    def test_no_binding_falls_back_to_ranking_score(self):
+        full_bones, full_chains = _biped_character()
+        partial_bones, partial_chains = _mixamo_character_without_toes()
+        # Neither armature has a mesh_binding -> both mesh_bound_term == 0.
+        asset_dir = _write_multi_armature_asset(
+            "no_binding",
+            [
+                ("FullRig", full_bones, full_chains, None),
+                ("PartialRig", partial_bones, partial_chains, None),
+            ],
+        )
+        report, _, _, _ = write_asset_report(asset_dir)
+
+        ranking = report["asset_summary"]["ranking"]
+        by_name = {e["armature_name"]: e for e in ranking}
+        self.assertEqual(by_name["FullRig"]["mesh_bound_term"], 0.0)
+        self.assertEqual(by_name["PartialRig"]["mesh_bound_term"], 0.0)
+        # No binding: the better-mapped rig wins on the bundled scalar, as today.
+        winner = report["recommended_primary_armature"]
+        self.assertEqual(winner, max(by_name, key=lambda n: by_name[n]["ranking_score"]))
+        self.assertEqual(ranking[0]["selection_tiebreaker"], "score")
 
 
 if __name__ == "__main__":

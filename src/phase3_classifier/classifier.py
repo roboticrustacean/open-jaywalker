@@ -359,6 +359,25 @@ def discover_armatures(asset_dir: Path) -> List[ArmatureInput]:
     return armatures
 
 
+# Ordered selection cascade. Each entry is (audit_label, summary_field); the sort
+# key negates each field (higher is better) and _compute_selection_tiebreaker walks
+# the same list so the two can never drift. Binding leads, then the skin-weight
+# signals, then today's bundled scalar as the no-binding fallback.
+_SELECTION_CASCADE: Tuple[Tuple[str, str], ...] = (
+    ("mesh_bound_term", "mesh_bound_term"),
+    ("vertex_group_coverage", "vertex_group_coverage"),
+    ("deform_purity", "deform_purity"),
+    ("score", "ranking_score"),
+    ("mapped_core_targets", "mapped_core_targets"),
+    ("average_confidence", "average_confidence"),
+)
+
+
+def _selection_key(report: dict) -> tuple:
+    summary = report["summary"]
+    return tuple(-summary[field] for _, field in _SELECTION_CASCADE) + (report["armature_name"],)
+
+
 def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
     asset_dir = asset_dir.resolve()
     if not asset_dir.is_dir():
@@ -370,18 +389,7 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
 
     armature_reports = [classify_armature(asset_dir.name, armature_input) for armature_input in armature_inputs]
 
-    def _ranking_key(report: dict) -> tuple:
-        summary = report["summary"]
-        return (
-            -summary["ranking_score"],
-            -summary["mesh_bound_term"],
-            -summary["deform_evidence_term"],
-            -summary["mapped_core_targets"],
-            -summary["average_confidence"],
-            report["armature_name"],
-        )
-
-    ranked_reports = sorted(armature_reports, key=_ranking_key)
+    ranked_reports = sorted(armature_reports, key=_selection_key)
     recommended_report = ranked_reports[0]
     selection_tiebreaker = _compute_selection_tiebreaker(ranked_reports)
     mesh_binding = copy.deepcopy(recommended_report.get("mesh_binding"))
@@ -462,6 +470,8 @@ def _build_ranking_entry(report: dict, selection_tiebreaker: Optional[str]) -> d
         "mesh_bound_term": summary["mesh_bound_term"],
         "deform_evidence_term": summary["deform_evidence_term"],
         "extras_term": summary["extras_term"],
+        "vertex_group_coverage": summary["vertex_group_coverage"],
+        "deform_purity": summary["deform_purity"],
         "primary_input": report["selected_inputs"]["primary"],
     }
     if selection_tiebreaker is not None:
@@ -470,12 +480,11 @@ def _build_ranking_entry(report: dict, selection_tiebreaker: Optional[str]) -> d
 
 
 def _compute_selection_tiebreaker(ranked_reports: List[dict]) -> str:
-    """Identify which step of the ranking cascade decided the top pick.
+    """Identify which step of the selection cascade decided the top pick.
 
-    Returns 'sole_candidate' when there is only one armature, 'score' when
-    the primary ranking_score already separated the top two, or the name of
-    the first cascade step on which the top candidate strictly beats the
-    second-place candidate.
+    Returns 'sole_candidate' when there is only one armature, otherwise the audit
+    label of the first cascade step on which the top candidate strictly beats the
+    second-place candidate, or 'armature_name' when every numeric signal ties.
     """
     if len(ranked_reports) <= 1:
         return "sole_candidate"
@@ -483,16 +492,9 @@ def _compute_selection_tiebreaker(ranked_reports: List[dict]) -> str:
     top_summary = ranked_reports[0]["summary"]
     runner_summary = ranked_reports[1]["summary"]
 
-    if top_summary["ranking_score"] != runner_summary["ranking_score"]:
-        return "score"
-    if top_summary["mesh_bound_term"] != runner_summary["mesh_bound_term"]:
-        return "mesh_bound_term"
-    if top_summary["deform_evidence_term"] != runner_summary["deform_evidence_term"]:
-        return "deform_evidence_term"
-    if top_summary["mapped_core_targets"] != runner_summary["mapped_core_targets"]:
-        return "mapped_core_targets"
-    if top_summary["average_confidence"] != runner_summary["average_confidence"]:
-        return "average_confidence"
+    for label, field in _SELECTION_CASCADE:
+        if top_summary[field] != runner_summary[field]:
+            return label
     return "armature_name"
 
 
@@ -1387,11 +1389,17 @@ def _collect_mesh_binding_stats(
     armature_bone_names_lower: Set[str],
 ) -> dict:
     """Walk mesh_binding once and return the raw stats needed by armature scoring."""
+    empty = {
+        "meshes_count": 0,
+        "has_armature_modifier_link": False,
+        "vertex_group_bone_hits": 0,
+        "vertex_group_count": 0,
+    }
     if not mesh_binding:
-        return {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0}
+        return dict(empty)
     meshes = mesh_binding.get("meshes") or []
     if not meshes:
-        return {"meshes_count": 0, "has_armature_modifier_link": False, "vertex_group_bone_hits": 0}
+        return dict(empty)
 
     has_armature_modifier_link = False
     vertex_group_names_lower: Set[str] = set()
@@ -1406,6 +1414,7 @@ def _collect_mesh_binding_stats(
         "meshes_count": len(meshes),
         "has_armature_modifier_link": has_armature_modifier_link,
         "vertex_group_bone_hits": len(armature_bone_names_lower & vertex_group_names_lower),
+        "vertex_group_count": len(vertex_group_names_lower),
     }
 
 
@@ -1440,6 +1449,24 @@ def _compute_extras_term(extras_preserved: List[dict]) -> float:
     return round(min(math.log1p(len(extras_preserved)) * 0.5, 2.0), 3)
 
 
+def _compute_vertex_group_coverage(vertex_group_bone_hits: int, vertex_group_count: int) -> float:
+    """Fraction of the bound mesh's vertex groups this armature's bones cover (0..1).
+
+    Convention-agnostic skin-weight signal: how much of the skin this armature
+    accounts for. A true deform rig approaches 1.0; a pure control rig is low.
+    """
+    return round(vertex_group_bone_hits / max(vertex_group_count, 1), 3)
+
+
+def _compute_deform_purity(vertex_group_bone_hits: int, armature_bone_count: int) -> float:
+    """Fraction of this armature's bones that actually drive skin (0..1).
+
+    Breaks a coverage tie between a clean deform rig (~1.0) and a bushy superset
+    control rig that copies the deform bone names but adds scaffolding bones (low).
+    """
+    return round(vertex_group_bone_hits / max(armature_bone_count, 1), 3)
+
+
 def _build_armature_summary(
     resolved_targets: Dict[str, dict],
     review_flags: List[str],
@@ -1465,6 +1492,14 @@ def _build_armature_summary(
     )
     deform_evidence_term = _compute_deform_evidence_term(mesh_stats["vertex_group_bone_hits"])
     extras_term = _compute_extras_term(extras_preserved)
+    vertex_group_coverage = _compute_vertex_group_coverage(
+        mesh_stats["vertex_group_bone_hits"],
+        mesh_stats["vertex_group_count"],
+    )
+    deform_purity = _compute_deform_purity(
+        mesh_stats["vertex_group_bone_hits"],
+        len(armature_bones),
+    )
 
     ranking_score = round(
         (len(mapped) * 5.0)
@@ -1489,6 +1524,8 @@ def _build_armature_summary(
         "mesh_bound_term": mesh_bound_term,
         "deform_evidence_term": deform_evidence_term,
         "extras_term": extras_term,
+        "vertex_group_coverage": vertex_group_coverage,
+        "deform_purity": deform_purity,
         "deform_evidence": mesh_stats,
         "ranking_score": ranking_score,
     }
