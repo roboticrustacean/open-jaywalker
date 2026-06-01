@@ -136,6 +136,80 @@ def _write_single_armature_asset(
     return asset_dir
 
 
+def _mesh_binding_for(armature_name, vertex_groups):
+    """A mesh-binding where `armature_name` modifier-drives BodyMesh with the
+    given vertex-group names (so meshes_count=1 and has_armature_modifier_link)."""
+    return {
+        "armature_object_name": armature_name,
+        "meshes": [
+            {
+                "mesh_name": "BodyMesh",
+                "armature_link": "modifier",
+                "modifiers": [{"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": armature_name}],
+                "vertex_groups": list(vertex_groups),
+                "vertex_group_stats": {"non_empty_group_count": len(vertex_groups), "per_group": []},
+                "material_slots": [],
+                "warnings": [],
+            }
+        ],
+    }
+
+
+def _write_multi_armature_asset(asset_name, armatures):
+    """Write one asset dir containing several `<armature>_all.json` files.
+
+    `armatures` is a list of (armature_name, bones, chains, mesh_binding|None).
+    """
+    temp_root = Path(tempfile.mkdtemp(prefix="phase3_multi_"))
+    asset_dir = temp_root / asset_name
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    for armature_name, bones, chains, mesh_binding in armatures:
+        hierarchy = {bone["name"]: [] for bone in bones}
+        for bone in bones:
+            parent = bone["parent"]
+            if parent in hierarchy:
+                hierarchy[parent].append(bone["name"])
+        payload = {
+            "armature_name": armature_name,
+            "source_file": f"{asset_name}.blend",
+            "filter": None,
+            "bone_count": len(bones),
+            "hierarchy": hierarchy,
+            "bones": bones,
+            "chains": chains,
+        }
+        if mesh_binding is not None:
+            payload["mesh_binding"] = mesh_binding
+        with (asset_dir / f"{armature_name}_all.json").open("w", encoding="utf-8") as handle:
+            json.dump(payload, handle)
+    return asset_dir
+
+
+def _mixamo_character_without_toes():
+    """Full mixamo skeleton minus the two ToeBase bones (so Full_Toes go unmapped)."""
+    bones, chains = _mixamo_character()
+    drop = {"mixamorig:LeftToeBase", "mixamorig:RightToeBase"}
+    bones = [b for b in bones if b["name"] not in drop]
+    chains = {
+        "spine": chains["spine"],
+        "leg": {side: [[n for n in chain if n not in drop] for chain in chains["leg"][side]] for side in chains["leg"]},
+        "arm": chains["arm"],
+    }
+    return bones, chains
+
+
+def _mixamo_with_extra_control_bones(extra_count=60):
+    """Mixamo deform skeleton PLUS scaffolding bones absent from any vertex group.
+
+    Covers the same vertex groups as the deform rig (so coverage ties) but has far
+    lower deform purity (most bones don't drive skin)."""
+    bones, chains = _mixamo_character()
+    root = bones[0]["name"]
+    for index in range(extra_count):
+        bones.append(_bone(f"mixamorig:CTRL_Twist_{index}", root, (0.5, 0.0, 1.0), (0.5, 0.0, 1.05)))
+    return bones, chains
+
+
 def _biped_character():
     bones = [
         _bone("Bip01 COM", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.95)),
@@ -1136,6 +1210,46 @@ class FixtureStabilityTests(unittest.TestCase):
             self.assertNotIn("character_decomposition", report["asset_summary"], asset_name)
             self.assertNotIn("characters", build_plan, asset_name)
             self.assertIn("semantic_mapping", report, asset_name)
+
+
+class MultiArmatureSelectionTests(unittest.TestCase):
+    def test_deform_rig_wins_over_bushier_control_rig_on_binding_tie(self):
+        # DeformRig: mixamo (no toes) -> its bone names ARE the mesh's vertex groups.
+        deform_bones, deform_chains = _mixamo_character_without_toes()
+        deform_vgs = [b["name"] for b in deform_bones]
+        # ControlRig: full biped (incl. toes) -> maps MORE ASAM targets (higher
+        # ranking_score) but its biped names do NOT match the mixamo vertex groups.
+        control_bones, control_chains = _biped_character()
+
+        asset_dir = _write_multi_armature_asset(
+            "deform_vs_control",
+            [
+                ("DeformRig", deform_bones, deform_chains, _mesh_binding_for("DeformRig", deform_vgs)),
+                ("ControlRig", control_bones, control_chains, _mesh_binding_for("ControlRig", deform_vgs)),
+            ],
+        )
+        report, build_plan, _, _ = write_asset_report(asset_dir)
+
+        self.assertEqual(report["recommended_primary_armature"], "DeformRig")
+        self.assertEqual(build_plan["recommended_primary_armature"], "DeformRig")
+
+        ranking = report["asset_summary"]["ranking"]
+        top = ranking[0]
+        self.assertEqual(top["armature_name"], "DeformRig")
+        self.assertEqual(top["selection_tiebreaker"], "vertex_group_coverage")
+        by_name = {entry["armature_name"]: entry for entry in ranking}
+        self.assertEqual(by_name["DeformRig"]["mesh_bound_term"], 10.0)
+        self.assertEqual(by_name["ControlRig"]["mesh_bound_term"], 10.0)
+        self.assertGreater(
+            by_name["DeformRig"]["vertex_group_coverage"],
+            by_name["ControlRig"]["vertex_group_coverage"],
+        )
+        # The deform rig wins DESPITE a lower bundled ranking_score (pre-#32 the
+        # bushier control rig would have been selected).
+        self.assertGreater(
+            by_name["ControlRig"]["ranking_score"],
+            by_name["DeformRig"]["ranking_score"],
+        )
 
 
 if __name__ == "__main__":
