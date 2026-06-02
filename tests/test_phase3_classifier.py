@@ -27,6 +27,7 @@ from phase3_classifier.classifier import (  # noqa: E402
     _normalize_bone_name,
     _detect_family_tags,
     _family_name_score,
+    compute_name_quality,
     BoneInfo,
 )
 
@@ -1144,6 +1145,40 @@ class ConventionDetectionTests(unittest.TestCase):
         # "wrist" has no alias entry; generic hand rule (0.82) must still apply.
         bone = self._bone_info("wrist", ["wrist"])
         self.assertEqual(_family_name_score("hand", bone, "mixamo"), 0.82)
+
+
+class NameQualityTests(unittest.TestCase):
+    @staticmethod
+    def _bone(compact, tokens, side=None, family_tags=None, origin="primary"):
+        return BoneInfo(
+            name=compact, parent=None, head=(0, 0, 0), tail=(0, 0, 1), length=1.0,
+            origin=origin, normalized_name="_".join(tokens), compact_name=compact,
+            tokens=list(tokens), side=side, midpoint=(0, 0, 0.5), min_point=(0, 0, 0),
+            max_point=(0, 0, 1), role="deform", role_modifier=1.0,
+            family_tags=set(family_tags or ()),
+        )
+
+    def test_junk_names_with_lr_substrings_score_low(self):
+        # Regression: junk names that merely *contain* the letters l/r
+        # (controlnode, qqlrx, lurkblob) must NOT earn side credit. A bare
+        # substring scan wrongly inflated name_quality, flipping junk rigs to
+        # the name-driven weighting branch. They carry no family tags and
+        # BoneInfo.side is None, so quality must stay LOW (< 0.2).
+        bones = {
+            name: self._bone(name, [name])
+            for name in ("controlnode", "qqlrx", "lurkblob", "rrll", "flurb")
+        }
+        quality = compute_name_quality({"bones": bones})
+        self.assertLess(quality, 0.2)
+
+    def test_real_side_tokens_earn_credit(self):
+        # A genuine side token (side set, no family tag) earns partial credit.
+        bones = {"thing_l": self._bone("thingl", ["thing"], side="left")}
+        self.assertAlmostEqual(compute_name_quality({"bones": bones}), 0.3)
+
+    def test_family_named_bones_score_high(self):
+        bones = {"pelvis": self._bone("pelvis", ["pelvis"], family_tags={"hip"})}
+        self.assertEqual(compute_name_quality({"bones": bones}), 1.0)
 
 
 class ConventionReportTests(unittest.TestCase):

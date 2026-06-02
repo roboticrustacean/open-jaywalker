@@ -1993,7 +1993,10 @@ def compute_name_quality(context: dict) -> float:
         valid_bones += 1
         if bone.family_tags:
             score += 1.0
-        elif any(token in bone.compact_name for token in ("left", "right", "l", "r")):
+        elif bone.side is not None:
+            # Credit a real side token (left/right), not a bare l/r substring
+            # match — junk names like "control"/"lower" must stay LOW quality
+            # so structure, not names, drives their mapping.
             score += 0.3
 
     if valid_bones == 0:
