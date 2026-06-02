@@ -52,3 +52,32 @@ def run_combined_workflow(
         "build_plan": build_plan,
         "build_plan_path": str(build_plan_path),
     }
+
+
+def run_full_pipeline(
+    inspect_scene_fn: Callable[[], dict],
+    classify_fn: Callable[[Path], tuple],
+    print_summary_fn: Callable[..., None],
+    confirm_fn: Callable[[Path, dict], bool],
+    build_fn: Callable[[Path], object],
+) -> Optional[dict]:
+    """Run inspect -> classify, then gate on confirm_fn before build_fn.
+
+    confirm_fn receives (asset_dir, build_plan) and returns whether to build.
+    build_fn receives asset_dir and performs the build. Both are injected so the
+    orchestration is unit-testable without Blender. Returns the combined-workflow
+    result dict, augmented with "build_result" when a build was attempted.
+    """
+    result = run_combined_workflow(inspect_scene_fn, classify_fn, print_summary_fn)
+    if not result or result.get("build_plan") is None:
+        # No armatures / diagnostics-only: nothing to build.
+        return result
+
+    asset_dir = Path(result["inspect_result"]["output_dir"]).resolve()
+    build_plan = result["build_plan"]
+
+    if confirm_fn(asset_dir, build_plan):
+        result["build_result"] = build_fn(asset_dir)
+    else:
+        result["build_result"] = None
+    return result
