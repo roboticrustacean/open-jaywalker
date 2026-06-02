@@ -2116,7 +2116,7 @@ def _decision_tag(
         # 'DEF-spine.004' vs 'DEF-spine.005' — both genuine upper-spine deform
         # bones; either is anatomically correct, so the zero-separation tie must
         # not demote a real mapping to review).
-        if runner_up.source_bone.startswith(candidate.source_bone) and len(runner_up.source_bone) > len(candidate.source_bone):
+        if _numbered_stem(runner_up.source_bone) == _numbered_stem(candidate.source_bone):
             separation = 1.0
         elif _is_equivalent_segment_runner_up(candidate, runner_up, context):
             separation = 1.0
