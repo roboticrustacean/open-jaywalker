@@ -2073,31 +2073,6 @@ def _numbered_stem(name: str) -> str:
     return re.sub(r"\.\d+$", "", name)
 
 
-def _is_equivalent_segment_runner_up(
-    candidate: CandidateScore,
-    runner_up: CandidateScore,
-    context: dict,
-) -> bool:
-    """True when the runner-up is an interchangeable adjacent segment.
-
-    Two bones are interchangeable for a target when they share the same numbered
-    stem (``DEF-spine.004`` / ``DEF-spine.005``) AND the structural labeler placed
-    both in the same anatomical family. Such a zero-separation tie reflects two
-    equally valid deform segments of one chain — not a genuine ambiguity — so it
-    must not knock an otherwise-recoverable mapping down to ``review``.
-    """
-    if _numbered_stem(candidate.source_bone) != _numbered_stem(runner_up.source_bone):
-        return False
-    skel: Optional[StructuralSkeleton] = context.get("structural_skeleton")
-    if not skel:
-        return False
-    cand_label = skel.labels.get(candidate.source_bone)
-    run_label = skel.labels.get(runner_up.source_bone)
-    if cand_label is None or run_label is None:
-        return False
-    return cand_label.family == run_label.family
-
-
 def _decision_tag(
     target_name: str,
     candidate: CandidateScore,
@@ -2111,14 +2086,13 @@ def _decision_tag(
 
     separation = 1.0
     if runner_up:
-        # Ignore twist bone runner-ups (e.g. candidate='DEF-arm', runner_up='DEF-arm.001')
-        # and equivalent adjacent segments of the same deform chain (e.g.
-        # 'DEF-spine.004' vs 'DEF-spine.005' — both genuine upper-spine deform
-        # bones; either is anatomically correct, so the zero-separation tie must
-        # not demote a real mapping to review).
-        if runner_up.source_bone.startswith(candidate.source_bone) and len(runner_up.source_bone) > len(candidate.source_bone):
-            separation = 1.0
-        elif _is_equivalent_segment_runner_up(candidate, runner_up, context):
+        # Ignore interchangeable runner-ups that share the candidate's numbered
+        # stem: Blender twist/duplicate twins ('DEF-arm' vs 'DEF-arm.001') and
+        # adjacent segments of one deform chain ('DEF-spine.004' vs 'DEF-spine.005').
+        # Either is anatomically correct, so this zero-separation tie must not
+        # demote a real mapping to review. (Same-chain segments necessarily share
+        # the numbered stem, so the stem check alone covers both cases.)
+        if _numbered_stem(runner_up.source_bone) == _numbered_stem(candidate.source_bone):
             separation = 1.0
         else:
             separation = candidate.selection_score - runner_up.selection_score

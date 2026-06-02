@@ -31,6 +31,43 @@ class StructuralSkeleton:
 
 
 # ---------------------------------------------------------------------------
+# Geometric thresholds
+#
+# Each is a fraction of the rig's overall span on the relevant axis (height or
+# lateral), so they scale with rig size and stay unit-free. Hoisted here (rather
+# than inline) so the labeler's spatial assumptions live in one tunable place.
+# ---------------------------------------------------------------------------
+
+# Trunk walk: a child counts as "ascending" if it sits no lower than the current
+# node minus this fraction of total height (tolerates near-flat pelvis/spine joints).
+TRUNK_ASCENT_TOL_FRAC = 0.02
+# Trunk walk stops when the most-central child is farther off-centerline than this
+# fraction of lateral span — that child is a limb, not a trunk continuation.
+TRUNK_LATERAL_STOP_FRAC = 0.15
+# When several children branch at once, the current node is the trunk's terminal
+# node only if the chosen child is at least this far off-centerline; otherwise it
+# is a central continuation flanked by symmetric branches (e.g. clavicles by a neck).
+TRUNK_BRANCH_LATERAL_FRAC = 0.02
+
+# A bone is "central" (spine/neck/head column) when within this fraction of the
+# centerline. Deliberately SMALLER than LIMB_TIP_LATERAL_FRAC: bones falling in the
+# gap between the two are treated as neither central nor limb tips — a deadband
+# that keeps borderline bones from being double-classified.
+CENTRAL_LATERAL_FRAC = 0.03
+# A childless bone must be at least this far off-centerline to count as a limb tip
+# (hand/foot). See the deadband note on CENTRAL_LATERAL_FRAC.
+LIMB_TIP_LATERAL_FRAC = 0.06
+# A real limb travels outward and/or downward; a candidate limb chain is rejected
+# as a stationary control cluster (IK pivots, heel rolls) when it neither drops nor
+# spreads by at least these fractions of height / lateral span respectively.
+LIMB_MIN_DROP_FRAC = 0.05
+LIMB_MIN_SPREAD_FRAC = 0.05
+# Neck band: central bones within this fraction of height below the topmost (head)
+# bone are labeled neck rather than spine.
+NECK_BAND_FRAC = 0.08
+
+
+# ---------------------------------------------------------------------------
 # A3: find_root
 # ---------------------------------------------------------------------------
 
@@ -99,18 +136,18 @@ def extract_trunk(bones, root_name, axes):
             break
         # central children that ascend (>= current height minus small tolerance)
         cur_h = _height_of(current, axes)
-        tol = 0.02 * axes["height_span"]
+        tol = TRUNK_ASCENT_TOL_FRAC * axes["height_span"]
         ascending = [b for b in candidates if _height_of(b, axes) >= cur_h - tol]
         pool = ascending or candidates
         nxt = min(pool, key=lambda b: (_lateral_offset(b, axes), b.name))
         # Stop if the chosen child is clearly lateral (a limb), not trunk.
-        if _lateral_offset(nxt, axes) > 0.15 * axes["lateral_span"]:
+        if _lateral_offset(nxt, axes) > TRUNK_LATERAL_STOP_FRAC * axes["lateral_span"]:
             break
         # If multiple candidates exist and they branch symmetrically (like eyes),
         # the current node is the terminal trunk node; stop here.
         # Only stop if the chosen child is ITSELF lateral (not a central continuation
         # alongside symmetric branches like clavicles flanking a neck).
-        if len(candidates) > 1 and _lateral_offset(nxt, axes) > 0.02 * axes["lateral_span"]:
+        if len(candidates) > 1 and _lateral_offset(nxt, axes) > TRUNK_BRANCH_LATERAL_FRAC * axes["lateral_span"]:
             sides_seen = set()
             for c in candidates:
                 off = c.midpoint[axes["lateral_axis"]] - axes["centerline"]
@@ -262,7 +299,7 @@ def segment_spine(chain):
 # ---------------------------------------------------------------------------
 
 def _is_central(bones, name, axes):
-    return _lateral_offset(bones[name], axes) <= 0.03 * axes["lateral_span"]
+    return _lateral_offset(bones[name], axes) <= CENTRAL_LATERAL_FRAC * axes["lateral_span"]
 
 
 def _longest_central_chain(bones, axes):
@@ -321,7 +358,7 @@ def _limb_tip_chains(bones, axes):
     for name, bone in bones.items():
         if [c for c in bone.child_names if c in bones]:
             continue  # not a tip
-        if _lateral_offset(bone, axes) <= 0.06 * axes["lateral_span"]:
+        if _lateral_offset(bone, axes) <= LIMB_TIP_LATERAL_FRAC * axes["lateral_span"]:
             continue  # too central to be a limb tip
         chain_up = [name]
         cur = bone.parent
@@ -341,7 +378,7 @@ def _limb_tip_chains(bones, axes):
         spread = _lateral_offset(tip, axes) - _lateral_offset(root, axes)
         # A real limb travels outward and/or downward; reject near-stationary
         # control clusters (heel rolls, IK pivots) that neither drop nor spread.
-        if drop < 0.05 * axes["height_span"] and spread < 0.05 * axes["lateral_span"]:
+        if drop < LIMB_MIN_DROP_FRAC * axes["height_span"] and spread < LIMB_MIN_SPREAD_FRAC * axes["lateral_span"]:
             continue
         kind = "leg" if drop > spread else "arm"
         results.append((kind, side, chain))
@@ -407,7 +444,7 @@ def _reconstruct_geometric(bones, axes):
     # carry several spine segments above the arm branch before the neck begins).
     head_i = len(central) - 1
     top_h = _height_of(bones[central[head_i]], axes)
-    neck_band = 0.08 * axes["height_span"]
+    neck_band = NECK_BAND_FRAC * axes["height_span"]
     neck_lo = head_i
     while neck_lo - 1 > hip_i and \
             top_h - _height_of(bones[central[neck_lo - 1]], axes) <= neck_band:

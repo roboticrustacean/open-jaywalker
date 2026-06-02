@@ -1381,6 +1381,89 @@ class ReconciliationDecisionTests(unittest.TestCase):
             targets = report["characters"][0]["asam_targets"]
         self.assertEqual(targets["Hip"]["decision"], "structure_confirmed_by_name")
 
+    def test_twist_bone_runner_up_guard_stem_equality(self):
+        from phase3_classifier.classifier import CandidateScore, _decision_tag
+
+        # Base candidate
+        cand = CandidateScore(
+            source_bone="DEF-arm",
+            source_origin="primary",
+            role="deform",
+            selection_score=0.9,
+            confidence=0.85,
+            name_evidence=0.8,
+            hierarchy_evidence=0.5,
+            geometry_evidence=0.5,
+            structural_evidence=0.5,
+            notes=[],
+        )
+
+        # 1. Genuine twist-bone runner-up: DEF-arm vs DEF-arm.001
+        ru_twin = CandidateScore(
+            source_bone="DEF-arm.001",
+            source_origin="primary",
+            role="deform",
+            selection_score=0.9,
+            confidence=0.85,
+            name_evidence=0.8,
+            hierarchy_evidence=0.5,
+            geometry_evidence=0.5,
+            structural_evidence=0.5,
+            notes=[],
+        )
+        candidates_by_target = {"Arm_Left": [cand, ru_twin]}
+        decision = _decision_tag("Arm_Left", cand, candidates_by_target, {})
+        # With stem equality, DEF-arm.001 is collapsed -> separation = 1.0 -> direct_map
+        self.assertEqual(decision, "direct_map")
+
+        # 2. Same prefix, distinct bone: DEF-arm vs DEF-arm_helper
+        ru_distinct = CandidateScore(
+            source_bone="DEF-arm_helper",
+            source_origin="primary",
+            role="deform",
+            selection_score=0.9,
+            confidence=0.85,
+            name_evidence=0.8,
+            hierarchy_evidence=0.5,
+            geometry_evidence=0.5,
+            structural_evidence=0.5,
+            notes=[],
+        )
+        candidates_by_target = {"Arm_Left": [cand, ru_distinct]}
+        decision = _decision_tag("Arm_Left", cand, candidates_by_target, {})
+        # With stem equality, DEF-arm_helper is NOT collapsed -> separation = 0.0 -> review
+        self.assertEqual(decision, "review")
+
+        # 3. Suffixes on both: DEF-arm.001 vs DEF-arm.002
+        cand_suffix = CandidateScore(
+            source_bone="DEF-arm.001",
+            source_origin="primary",
+            role="deform",
+            selection_score=0.9,
+            confidence=0.85,
+            name_evidence=0.8,
+            hierarchy_evidence=0.5,
+            geometry_evidence=0.5,
+            structural_evidence=0.5,
+            notes=[],
+        )
+        ru_suffix = CandidateScore(
+            source_bone="DEF-arm.002",
+            source_origin="primary",
+            role="deform",
+            selection_score=0.9,
+            confidence=0.85,
+            name_evidence=0.8,
+            hierarchy_evidence=0.5,
+            geometry_evidence=0.5,
+            structural_evidence=0.5,
+            notes=[],
+        )
+        candidates_by_target = {"Arm_Left": [cand_suffix, ru_suffix]}
+        decision = _decision_tag("Arm_Left", cand_suffix, candidates_by_target, {})
+        # Stems are equal -> separation = 1.0 -> direct_map
+        self.assertEqual(decision, "direct_map")
+
 
 class MappingPreservationTests(unittest.TestCase):
     maxDiff = None
