@@ -1,0 +1,52 @@
+"""
+Pure decision logic for the pre-build checkpoint.
+
+Decides whether the single-entry pipeline should proceed from a written plan to
+building. Kept free of bpy and I/O so it is unit-testable headless. The entry
+point (pipeline/main.py) supplies the real stdin/env/argv and handles printing.
+"""
+
+from __future__ import annotations
+
+from typing import Callable, Mapping, Sequence
+
+ENV_VAR = "OPEN_JAYWALKER_AUTO_BUILD"
+_TRUTHY = {"1", "true", "yes"}
+
+
+def _env_truthy(value) -> bool:
+    if value is None:
+        return False
+    return value.strip().lower() in _TRUTHY
+
+
+def _parse_build_arg(argv: Sequence[str]):
+    """Return True for --build, False for --no-build, None if neither is present."""
+    if "--no-build" in argv:
+        return False
+    if "--build" in argv:
+        return True
+    return None
+
+
+def resolve_build_decision(
+    *,
+    stdin_isatty: bool,
+    env: Mapping[str, str],
+    argv: Sequence[str],
+    input_fn: Callable[[str], str] = input,
+) -> bool:
+    """Decide whether to build after the plan is written.
+
+    - Interactive stdin (TTY): prompt [y/N]; only y/yes (case-insensitive) builds.
+    - No TTY: --build/--no-build arg wins; else the OPEN_JAYWALKER_AUTO_BUILD env
+      toggle; else default False (stop).
+    """
+    if stdin_isatty:
+        answer = input_fn("Continue with build? [y/N] ")
+        return answer.strip().lower() in {"y", "yes"}
+
+    arg_decision = _parse_build_arg(argv)
+    if arg_decision is not None:
+        return arg_decision
+    return _env_truthy(env.get(ENV_VAR))
