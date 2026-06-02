@@ -7,6 +7,9 @@ classification report without modifying Blender data.
 
 from __future__ import annotations
 
+# Late import of structural_skeleton is done at module level to avoid circular deps.
+from phase3_classifier.structural_skeleton import infer_structural_skeleton, StructuralSkeleton
+
 import copy
 import json
 import math
@@ -305,6 +308,7 @@ class CandidateScore:
     name_evidence: float
     hierarchy_evidence: float
     geometry_evidence: float
+    structural_evidence: float
     notes: List[str]
 
 
@@ -560,12 +564,13 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
     convention = _detect_convention(armature_input.primary_data, armature_input.support_data)
     bones = _build_bone_index(armature_input.primary_data, armature_input.support_data, convention)
     context = _build_context(bones, armature_input.primary_data, armature_input.support_data, convention)
+    name_quality = compute_name_quality(context)
 
     target_candidates: Dict[str, List[CandidateScore]] = {}
     for target_name in CORE_TARGETS:
         candidates: List[CandidateScore] = []
         for bone in bones.values():
-            candidate = _score_target_candidate(target_name, bone, context)
+            candidate = _score_target_candidate(target_name, bone, context, name_quality)
             if candidate is not None:
                 candidates.append(candidate)
         candidates.sort(key=lambda item: (-item.selection_score, -item.confidence, item.source_bone))
@@ -596,6 +601,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
     return {
         "armature_name": armature_input.armature_name,
         "detected_convention": convention,
+        "name_quality": round(name_quality, 3),
         "selected_inputs": {
             "primary": armature_input.primary_path.name,
             "support": armature_input.support_path.name if armature_input.support_path else None,
@@ -609,6 +615,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
             extras_preserved,
             bones,
             armature_input.armature_name,
+            name_quality,
         ),
         "asam_targets": resolved_targets,
         "root_resolution": root_resolution,
@@ -672,6 +679,17 @@ def _build_context(bones: Dict[str, BoneInfo], primary_data: dict, support_data:
         "arm_chains": _choose_limb_chains(bones, primary_data, support_data, "arm", lateral_axis, centerline, side_signs),
         "leg_chains": _choose_limb_chains(bones, primary_data, support_data, "leg", lateral_axis, centerline, side_signs),
         "convention": convention,
+        "structural_skeleton": infer_structural_skeleton(
+            bones,
+            height_axis=height_axis,
+            lateral_axis=lateral_axis,
+            forward_axis=forward_axis,
+            height_sign=height_sign,
+            centerline=centerline,
+            side_signs=side_signs,
+            lateral_span=lateral_span,
+            height_span=max(abs(height_bounds_max - height_bounds_min), 1e-6),
+        ),
     }
 
 
@@ -783,13 +801,18 @@ def _build_bone_index(primary_data: dict, support_data: Optional[dict], conventi
         role, role_modifier = _classify_bone_role(name, tokens)
         head = _to_float_triplet(payload.get("head"))
         tail = _to_float_triplet(payload.get("tail"))
+
+        parent = payload.get("parent")
+        if parent and parent not in raw_bones:
+            parent = None
+
         midpoint = tuple((head[index] + tail[index]) / 2.0 for index in range(3))
         min_point = tuple(min(head[index], tail[index]) for index in range(3))
         max_point = tuple(max(head[index], tail[index]) for index in range(3))
 
         bone_index[name] = BoneInfo(
             name=name,
-            parent=payload.get("parent"),
+            parent=parent,
             head=head,
             tail=tail,
             length=float(payload.get("length", 0.0)),
@@ -810,20 +833,34 @@ def _build_bone_index(primary_data: dict, support_data: Optional[dict], conventi
     return bone_index
 
 
-def _score_target_candidate(target_name: str, bone: BoneInfo, context: dict) -> Optional[CandidateScore]:
+def _score_target_candidate(target_name: str, bone: BoneInfo, context: dict, name_quality: float) -> Optional[CandidateScore]:
     family = CORE_FAMILY_BY_TARGET[target_name]
     side = _target_side(target_name)
     name_score = _name_evidence(target_name, bone, context.get("convention", "none"))
     hierarchy_score = _hierarchy_evidence(target_name, bone, context)
     geometry_score = _geometry_evidence(target_name, bone, context)
-    confidence = round(_clamp(0.5 * name_score + 0.3 * hierarchy_score + 0.2 * geometry_score), 3)
+    structural_score = _structural_evidence(target_name, bone, context)
+
+    w_name, w_struct, w_geom = _confidence_weights(name_quality, bone.origin)
+    confidence = round(_clamp((w_name * name_score) + (w_struct * structural_score) + (w_geom * geometry_score)), 3)
 
     if confidence < 0.10 and name_score < 0.20:
         return None
 
     source_modifier = 1.0 if bone.origin == "primary" else 0.90
     family_modifier = 1.0 if family in bone.family_tags else 0.95
-    selection_score = round(confidence * bone.role_modifier * source_modifier * family_modifier, 4)
+    # Structural confirmation: a bone the name-free skeleton labeler actually
+    # places at this target's anatomical position (matching family) is stronger
+    # evidence than a name-only match. This lets a genuine deform segment with
+    # topological confirmation win over a same-position control bone whose only
+    # claim is a high-scoring name (e.g. a Rigify 'chest' control out-naming the
+    # real DEF upper-spine segment). Scaled by the structural confidence, so a
+    # weak/absent structural signal barely moves the score.
+    structural_modifier = 1.0 + (0.06 * structural_score)
+    selection_score = round(
+        confidence * bone.role_modifier * source_modifier * family_modifier * structural_modifier,
+        4,
+    )
 
     notes: List[str] = []
     if bone.origin != "primary":
@@ -844,6 +881,7 @@ def _score_target_candidate(target_name: str, bone: BoneInfo, context: dict) -> 
         name_evidence=round(name_score, 3),
         hierarchy_evidence=round(hierarchy_score, 3),
         geometry_evidence=round(geometry_score, 3),
+        structural_evidence=round(structural_score, 3),
         notes=sorted(set(notes)),
     )
 
@@ -874,20 +912,34 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]], context
     for target_name in CORE_TARGETS:
         candidate = provisional_choices[target_name]
         if candidate is None:
-            resolved[target_name] = _missing_target_payload("no_plausible_candidate")
+            payload = _missing_target_payload("no_plausible_candidate")
+            payload["decision"] = "conflict_review"
+            resolved[target_name] = payload
             continue
 
         if target_name in contested_targets:
             notes = list(candidate.notes)
             notes.append("candidate_conflict")
+            # When the only candidate this target could claim is a weak,
+            # already-owned bone (no real name or confidence of its own), the
+            # target genuinely has no source bone — e.g. a missing intermediate
+            # joint like a thigh+foot leg with no shin. Hand it to the builder to
+            # create rather than flagging an unactionable review.
+            if candidate.confidence < 0.25 and candidate.name_evidence < 0.20:
+                notes.append("contested_low_confidence_no_distinct_bone")
+                action = "create_in_builder"
+            else:
+                action = "review"
             resolved[target_name] = {
                 "source_bone": None,
                 "confidence": round(candidate.confidence, 3),
-                "action": "review",
+                "action": action,
+                "decision": "conflict_review",
                 "evidence": {
                     "name": candidate.name_evidence,
                     "hierarchy": candidate.hierarchy_evidence,
                     "geometry": candidate.geometry_evidence,
+                    "structural": candidate.structural_evidence,
                     "source_origin": candidate.source_origin,
                     "role": candidate.role,
                 },
@@ -895,7 +947,7 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]], context
             }
             continue
 
-        action = _action_for_candidate(candidate)
+        action = _decision_tag(target_name, candidate, target_candidates, context)
         notes = list(candidate.notes)
         if action in {"direct_map", "alias_map"} and _paired_sided_pelvis_requires_centering(
             target_name,
@@ -909,10 +961,12 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]], context
             "source_bone": candidate.source_bone if action != "create_in_builder" else None,
             "confidence": round(candidate.confidence, 3),
             "action": action,
+            "decision": _reconciliation_tag(candidate.name_evidence, candidate.structural_evidence),
             "evidence": {
                 "name": candidate.name_evidence,
                 "hierarchy": candidate.hierarchy_evidence,
                 "geometry": candidate.geometry_evidence,
+                "structural": candidate.structural_evidence,
                 "source_origin": candidate.source_origin,
                 "role": candidate.role,
             },
@@ -991,6 +1045,7 @@ def _reconcile_hip_to_spine_pivot(resolved_targets: Dict[str, dict], context: di
         "source_bone": spine_root_name,
         "confidence": prev_lower.get("confidence", 0.7) if prev_lower.get("source_bone") == spine_root_name else 0.7,
         "action": "alias_map",
+        "decision": "structure_only",
         "evidence": copy.deepcopy(prev_lower.get("evidence", {
             "name": 0.0,
             "hierarchy": 1.0,
@@ -1002,20 +1057,33 @@ def _reconcile_hip_to_spine_pivot(resolved_targets: Dict[str, dict], context: di
         "preserved_pelvis_pair_sources": sorted(pelvis_pair),
     }
 
-    if prev_lower.get("source_bone") == spine_root_name:
+    # Hip now owns the spine root, so Lower_Spine must sit on the next segment up.
+    # This holds whether Lower_Spine had grabbed the spine root (older name-led
+    # path) or already resolved to the next segment (structure-led path, where
+    # the root is recognised as the hip and excluded from lower-spine scoring).
+    if prev_lower.get("source_bone") in {spine_root_name, next_spine_name}:
         action = prev_lower.get("action")
+        moved = prev_lower.get("source_bone") == spine_root_name
+        notes = list(prev_lower.get("notes", []))
+        if moved:
+            notes.append("lower_spine_shifted_above_hip_pivot")
+        prev_evidence = prev_lower.get("evidence", {})
         resolved_targets["Lower_Spine"] = {
             "source_bone": next_spine_name,
             "confidence": prev_lower.get("confidence", 0.7),
             "action": action if action in {"direct_map", "alias_map"} else "alias_map",
+            "decision": _reconciliation_tag(
+                prev_evidence.get("name", 0.0),
+                prev_evidence.get("structural", 0.0),
+            ),
             "evidence": {
-                "name": prev_lower.get("evidence", {}).get("name", 0.0),
+                "name": prev_evidence.get("name", 0.0),
                 "hierarchy": 1.0,
-                "geometry": prev_lower.get("evidence", {}).get("geometry", 0.0),
+                "geometry": prev_evidence.get("geometry", 0.0),
                 "source_origin": next_spine.origin,
                 "role": next_spine.role,
             },
-            "notes": sorted(set(list(prev_lower.get("notes", [])) + ["lower_spine_shifted_above_hip_pivot"])),
+            "notes": sorted(set(notes)),
         }
 
 
@@ -1106,6 +1174,7 @@ def _target_payload_from_candidate(candidate: Optional[CandidateScore], action: 
             "source_bone": None,
             "confidence": 0.0,
             "action": action,
+            "decision": "conflict_review",
             "evidence": {
                 "name": 0.0,
                 "hierarchy": 0.0,
@@ -1120,6 +1189,7 @@ def _target_payload_from_candidate(candidate: Optional[CandidateScore], action: 
         "source_bone": candidate.source_bone,
         "confidence": round(candidate.confidence, 3),
         "action": action,
+        "decision": _reconciliation_tag(candidate.name_evidence, candidate.structural_evidence),
         "evidence": {
             "name": candidate.name_evidence,
             "hierarchy": candidate.hierarchy_evidence,
@@ -1471,9 +1541,10 @@ def _build_armature_summary(
     resolved_targets: Dict[str, dict],
     review_flags: List[str],
     mesh_binding: Optional[dict],
-    extras_preserved: List[dict],
+    extras_preserved: List[str],
     armature_bones: Dict[str, BoneInfo],
     armature_name: str,
+    name_quality: float,
 ) -> dict:
     mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
     average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)
@@ -1528,6 +1599,7 @@ def _build_armature_summary(
         "deform_purity": deform_purity,
         "deform_evidence": mesh_stats,
         "ranking_score": ranking_score,
+        "name_quality": round(name_quality, 3),
     }
 
 
@@ -1560,16 +1632,6 @@ def _missing_target_payload(note: str) -> dict:
         },
         "notes": [note],
     }
-
-
-def _action_for_candidate(candidate: CandidateScore) -> str:
-    if candidate.confidence < 0.25 and candidate.name_evidence < 0.20:
-        return "create_in_builder"
-    if candidate.confidence >= 0.80:
-        return "direct_map"
-    if candidate.confidence >= 0.60:
-        return "alias_map"
-    return "review"
 
 
 def _paired_sided_pelvis_requires_centering(
@@ -1919,6 +1981,180 @@ def _geometry_evidence(target_name: str, bone: BoneInfo, context: dict) -> float
     return _clamp((0.6 * height_score) + (0.4 * side_score))
 
 
+def _structural_evidence(target_name: str, bone: BoneInfo, context: dict) -> float:
+    skel: StructuralSkeleton = context.get("structural_skeleton")
+    if not skel:
+        return 0.0
+
+    family = CORE_FAMILY_BY_TARGET[target_name]
+    side = _target_side(target_name)
+    label = skel.labels.get(bone.name)
+
+    if not label:
+        return 0.0
+
+    score = 0.0
+    if label.family == family:
+        score += label.confidence
+    # Give partial credit if it's in the same broader category (e.g., upper vs lower leg)
+    elif "leg" in label.family and "leg" in family:
+        score += label.confidence * 0.5
+    elif "arm" in label.family and "arm" in family:
+        score += label.confidence * 0.5
+    elif "spine" in label.family and "spine" in family:
+        score += label.confidence * 0.5
+
+    # The structural labeler never emits thumb/finger/toe/eye labels (it only
+    # localises gross limb ends as hand/foot). When the structural family does
+    # not match the target family at all, side agreement alone is NOT evidence
+    # that the bone belongs to this target — e.g. a hand-labeled arm bone must
+    # not earn positive structural credit for a Full_Thumb target just by being
+    # on the same side. Only a matched (or broad-category) family carries a side
+    # bonus; an opposite-side match on a genuine family still penalises.
+    if score <= 0.0:
+        return 0.0
+
+    if side and label.side:
+        if side == label.side:
+            score += 0.2
+        else:
+            score -= 0.5
+
+    return _clamp(score)
+
+
+def compute_name_quality(context: dict) -> float:
+    """Assess overall semantic clarity of the armature's bone names."""
+    bones = context.get("bones", {})
+    if not bones:
+        return 0.0
+
+    score = 0.0
+    valid_bones = 0
+    for bone in bones.values():
+        if bone.origin != "primary":
+            continue
+        valid_bones += 1
+        if bone.family_tags:
+            score += 1.0
+        elif bone.side is not None:
+            # Credit a real side token (left/right), not a bare l/r substring
+            # match — junk names like "control"/"lower" must stay LOW quality
+            # so structure, not names, drives their mapping.
+            score += 0.3
+
+    if valid_bones == 0:
+        return 0.0
+    return score / valid_bones
+
+
+def _confidence_weights(name_quality: float, origin: str) -> tuple[float, float, float]:
+    """Return (w_name, w_struct, w_geom).
+    If name_quality is high, names drive.
+    If names are junk, structural topology drives.
+    Support fallbacks (which only exist because they had valid names) always use high name weights.
+    """
+    if origin == "support":
+        return (0.7, 0.1, 0.2)
+
+    if name_quality >= 0.4:
+        # High quality names: names drive
+        return (0.8, 0.1, 0.1)
+    elif name_quality >= 0.15:
+        # Mediocre names: balanced weighting
+        return (0.3, 0.4, 0.3)
+    else:
+        # Junk names: purely structural/geometry driven
+        return (0.05, 0.6, 0.35)
+
+
+def _numbered_stem(name: str) -> str:
+    """Strip a trailing Blender duplicate suffix (``.001``, ``.012``) from a bone name."""
+    return re.sub(r"\.\d+$", "", name)
+
+
+def _is_equivalent_segment_runner_up(
+    candidate: CandidateScore,
+    runner_up: CandidateScore,
+    context: dict,
+) -> bool:
+    """True when the runner-up is an interchangeable adjacent segment.
+
+    Two bones are interchangeable for a target when they share the same numbered
+    stem (``DEF-spine.004`` / ``DEF-spine.005``) AND the structural labeler placed
+    both in the same anatomical family. Such a zero-separation tie reflects two
+    equally valid deform segments of one chain — not a genuine ambiguity — so it
+    must not knock an otherwise-recoverable mapping down to ``review``.
+    """
+    if _numbered_stem(candidate.source_bone) != _numbered_stem(runner_up.source_bone):
+        return False
+    skel: Optional[StructuralSkeleton] = context.get("structural_skeleton")
+    if not skel:
+        return False
+    cand_label = skel.labels.get(candidate.source_bone)
+    run_label = skel.labels.get(runner_up.source_bone)
+    if cand_label is None or run_label is None:
+        return False
+    return cand_label.family == run_label.family
+
+
+def _decision_tag(
+    target_name: str,
+    candidate: CandidateScore,
+    candidates_by_target: Dict[str, List[CandidateScore]],
+    context: dict,
+) -> str:
+    """Label the reconciliation decision category based on confident separation."""
+    # Check if there is a close runner-up
+    alternates = candidates_by_target.get(target_name, [])
+    runner_up = next((c for c in alternates if c.source_bone != candidate.source_bone), None)
+
+    separation = 1.0
+    if runner_up:
+        # Ignore twist bone runner-ups (e.g. candidate='DEF-arm', runner_up='DEF-arm.001')
+        # and equivalent adjacent segments of the same deform chain (e.g.
+        # 'DEF-spine.004' vs 'DEF-spine.005' — both genuine upper-spine deform
+        # bones; either is anatomically correct, so the zero-separation tie must
+        # not demote a real mapping to review).
+        if runner_up.source_bone.startswith(candidate.source_bone) and len(runner_up.source_bone) > len(candidate.source_bone):
+            separation = 1.0
+        elif _is_equivalent_segment_runner_up(candidate, runner_up, context):
+            separation = 1.0
+        else:
+            separation = candidate.selection_score - runner_up.selection_score
+
+    # A sided pelvis pair deliberately returns two equal Hip candidates.
+    if target_name == "Hip" and runner_up and _paired_sided_pelvis_requires_centering(target_name, candidate, candidates_by_target, context):
+        separation = 1.0
+
+    if candidate.confidence < 0.25 and candidate.name_evidence < 0.20:
+        return "create_in_builder"
+    if candidate.confidence >= 0.80 and separation >= 0.05:
+        return "direct_map"
+    if candidate.confidence >= 0.60 and separation >= 0.02:
+        return "alias_map"
+    return "review"
+
+
+def _reconciliation_tag(name_evidence: float, structural_evidence: float) -> str:
+    """Human-readable reconciliation decision (closes a #29 auditability gap).
+
+    Reports HOW the name vs structural channels agreed for a resolved target —
+    distinct from ``_decision_tag`` (which returns the builder ACTION). The 0.20
+    floor is the same minimum-evidence threshold used elsewhere to treat a
+    channel as "present".
+    """
+    name_present = name_evidence >= 0.20
+    structural_present = structural_evidence >= 0.20
+    if name_present and structural_present:
+        return "structure_confirmed_by_name"
+    if name_present and not structural_present:
+        return "name_override"
+    if structural_present and not name_present:
+        return "structure_only"
+    return "conflict_review"
+
+
 def _score_spine_position(bone_name: str, spine_chain: Sequence[str], prefer_end: bool) -> float:
     if bone_name not in spine_chain:
         return 0.0
@@ -2187,7 +2423,7 @@ def _detect_family_tags(
 
 def _classify_bone_role(name: str, tokens: Sequence[str]) -> Tuple[str, float]:
     lowered = name.lower()
-    prefix_match = re.match(r"^([a-z]+)[\\-_:.]", lowered)
+    prefix_match = re.match(r"^([a-z]+)[-_:.]", lowered)
     prefix = prefix_match.group(1) if prefix_match else None
 
     if prefix in ROLE_PREFIXES:
