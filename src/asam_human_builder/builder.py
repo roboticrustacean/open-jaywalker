@@ -568,6 +568,22 @@ def write_builder_report(asset_dir: Path, build_spec: dict, execution_result: di
     return builder_report, report_path
 
 
+def success_message(builder_report: dict, report_path) -> str:
+    """One-line completion banner for the builder (single or crowd)."""
+    if "characters" in builder_report:
+        built = len(builder_report.get("characters", []))
+        failed = len(builder_report.get("failed_characters", []))
+        return "Crowd built: {0} characters ({1} failed). Report: {2}".format(
+            built, failed, report_path
+        )
+    core = len(builder_report.get("built_core_targets", []))
+    extras = builder_report.get("preserved_extras_count", 0)
+    asset = builder_report.get("asset_name", "")
+    return "ASAM human built: {0} - {1} core targets, {2} extras preserved. Report: {3}".format(
+        asset, core, extras, report_path
+    )
+
+
 def print_builder_summary(builder_report: dict, report_path: Path) -> None:
     """Print a compact builder summary for Blender/VSCode console usage."""
     print("ASAM Human Builder summary")
