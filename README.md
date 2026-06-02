@@ -1,6 +1,48 @@
 ## open-jaywalker
 Rule-Based Pedestrian 3D Asset Pipeline for Traffic Simulations
 
+open-jaywalker takes arbitrary off-the-shelf humanoid rigs — any rigging
+convention (Rigify, 3ds Max Biped, Mixamo, …), single-character or crowd — and
+deterministically converts them into
+[ASAM OpenMATERIAL](https://asam-ev.github.io/OpenMATERIAL-3D/asamopenmaterial/latest/specification/07_geometry/object-human/human-index.html)-compliant
+humans: both the **rig** and the **skinned mesh**, correct and self-consistent.
+
+The pipeline runs in three stages: a Blender **armature inspector** exports
+per-asset JSON, a pure-Python **classifier** maps bones onto the 28 ASAM core
+targets and writes a build plan, and a Blender **ASAM human builder** constructs
+the compliant rig and rebinds the mesh from that plan.
+
+### Documentation
+
+Full design and reference docs live in the
+[project wiki](https://github.com/roboticrustacean/open-jaywalker/wiki) —
+see [Architecture](https://github.com/roboticrustacean/open-jaywalker/wiki/Architecture)
+(data flow, the three reports, extraction schema, add-on/build workflow) and
+[Skeleton Classification Rules](https://github.com/roboticrustacean/open-jaywalker/wiki/Skeleton-Classification-Rules)
+(the 28 core targets, name-free structural inference, decision tags, crowd
+decomposition).
+
+### Blender Add-on (recommended)
+
+The pipeline ships as an installable Blender add-on, **Open Jaywalker**, which is
+the simplest way to run it interactively.
+
+1. Build the add-on zip from the repo root:
+   ```powershell
+   python tools/build_addon.py
+   ```
+   This produces `dist/open_jaywalker-<version>.zip`.
+2. In Blender, go to **Edit ▸ Preferences ▸ Add-ons ▸ Install…** and select that
+   zip, then enable **Open Jaywalker**.
+3. Open your humanoid `.blend`, open the **Open Jaywalker** tab in the 3D Viewport
+   sidebar (press `N`), and use **Run pipeline → (review the plan summary) →
+   Build**.
+
+> **Install the built zip, not the repo `addon/` folder.** The `addon/` sources
+> alone do not contain the bundled pipeline packages — those are assembled in only
+> by `tools/build_addon.py`. Pointing Blender at the repo `addon/` directory yields
+> a non-functional add-on.
+
 ### Blender Armature Inspector
 
 The initial asset analysis tool lives under `src/armature_inspector` and inspects Blender scenes for armatures and bone hierarchies.
@@ -33,6 +75,10 @@ The combined Blender pipeline will:
 - Export the same Phase 2 JSON files under `output/<asset>`
 - Run the Phase 3 classifier on that freshly exported folder
 - Write `classifier_report.json` and `build_plan.json` into the same asset folder
+- Then consult a build gate to decide whether to continue into the builder: a
+  `[y/N]` prompt on an interactive terminal, otherwise the
+  `OPEN_JAYWALKER_AUTO_BUILD` environment toggle or a `-- --build` / `-- --no-build`
+  argument (default: stop after writing the plan and print how to build)
 
 The inspector-only entrypoint will:
 
@@ -46,7 +92,9 @@ The builder entrypoint will:
 - Load `classifier_report.json` and `build_plan.json` from `output/<asset>`
 - Validate that the recommended source armature exists in the currently open `.blend`
 - Create or safely rebuild a generated collection named `ASAM_<AssetName>`
-- Create `Grp_Root` and `Armature_<AssetName>` and build the supported ASAM core skeleton scope inside that new armature
+- Create `Grp_Root` and `Armature_<AssetName>` and build the 28 ASAM core skeleton targets inside that new armature
+- Duplicate the meshes driven by the source armature, rebind them to the generated armature, and rename their vertex groups to the ASAM bone names so the mesh deforms correctly on the new rig
+- For a crowd asset, build one ASAM human per character (fan-out)
 - Leave the original source rig untouched so extra/control bones remain preserved on the source armature
 - Write `builder_report.json` back into the same asset folder for traceability
 
