@@ -1600,16 +1600,6 @@ def _missing_target_payload(note: str) -> dict:
     }
 
 
-def _action_for_candidate(candidate: CandidateScore) -> str:
-    if candidate.confidence < 0.25 and candidate.name_evidence < 0.20:
-        return "create_in_builder"
-    if candidate.confidence >= 0.80:
-        return "direct_map"
-    if candidate.confidence >= 0.60:
-        return "alias_map"
-    return "review"
-
-
 def _paired_sided_pelvis_requires_centering(
     target_name: str,
     candidate: CandidateScore,
