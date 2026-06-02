@@ -25,8 +25,10 @@ class BuildGateTests(unittest.TestCase):
             )
             self.assertFalse(decision, answer)
 
-    def test_no_tty_defaults_to_no_build(self):
-        self.assertFalse(
+    def test_no_tty_no_signal_is_undecided(self):
+        # No TTY, no arg, env var absent -> None (undecided): caller decides
+        # (GUI popup if a window exists, otherwise stop).
+        self.assertIsNone(
             resolve_build_decision(stdin_isatty=False, env={}, argv=[])
         )
 
@@ -41,14 +43,17 @@ class BuildGateTests(unittest.TestCase):
                 value,
             )
 
-    def test_no_tty_env_falsy_does_not_build(self):
+    def test_no_tty_env_present_falsy_is_explicit_false(self):
+        # Env var present but falsy is an explicit "don't build" (not undecided),
+        # so no GUI popup is offered.
         for value in ("0", "false", "no", "", "maybe"):
-            self.assertFalse(
+            self.assertIs(
                 resolve_build_decision(
                     stdin_isatty=False,
                     env={"OPEN_JAYWALKER_AUTO_BUILD": value},
                     argv=[],
                 ),
+                False,
                 value,
             )
 
@@ -62,12 +67,13 @@ class BuildGateTests(unittest.TestCase):
         )
 
     def test_no_build_arg_overrides_env(self):
-        self.assertFalse(
+        self.assertIs(
             resolve_build_decision(
                 stdin_isatty=False,
                 env={"OPEN_JAYWALKER_AUTO_BUILD": "1"},
                 argv=["--no-build"],
-            )
+            ),
+            False,
         )
 
     def test_arg_ignored_when_tty(self):

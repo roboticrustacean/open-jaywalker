@@ -8,7 +8,7 @@ point (pipeline/main.py) supplies the real stdin/env/argv and handles printing.
 
 from __future__ import annotations
 
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Mapping, Optional, Sequence
 
 ENV_VAR = "OPEN_JAYWALKER_AUTO_BUILD"
 _TRUTHY = {"1", "true", "yes"}
@@ -35,12 +35,15 @@ def resolve_build_decision(
     env: Mapping[str, str],
     argv: Sequence[str],
     input_fn: Callable[[str], str] = input,
-) -> bool:
+) -> Optional[bool]:
     """Decide whether to build after the plan is written.
+
+    Returns True (build), False (explicit don't-build), or None (undecided —
+    the caller decides: e.g. a GUI confirm popup if a window exists, else stop).
 
     - Interactive stdin (TTY): prompt [y/N]; only y/yes (case-insensitive) builds.
     - No TTY: --build/--no-build arg wins; else the OPEN_JAYWALKER_AUTO_BUILD env
-      toggle; else default False (stop).
+      toggle if the var is set (truthy -> True, otherwise False); else None.
     """
     if stdin_isatty:
         answer = input_fn("Continue with build? [y/N] ")
@@ -49,4 +52,6 @@ def resolve_build_decision(
     arg_decision = _parse_build_arg(argv)
     if arg_decision is not None:
         return arg_decision
-    return _env_truthy(env.get(ENV_VAR))
+    if ENV_VAR in env:
+        return _env_truthy(env[ENV_VAR])
+    return None
