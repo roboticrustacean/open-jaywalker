@@ -30,16 +30,19 @@ import inspector
 import classifier
 import workflow
 import build_runner
+import blender_confirm
 
 importlib.reload(inspector)
 importlib.reload(classifier)
 importlib.reload(workflow)
 importlib.reload(build_runner)
+importlib.reload(blender_confirm)
 
 from inspector import inspect_scene  # noqa: E402
 from classifier import print_console_summary, write_asset_report  # noqa: E402
 from workflow import run_full_pipeline  # noqa: E402
 from build_runner import run_build  # noqa: E402
+from blender_confirm import offer_build_confirmation  # noqa: E402
 from pipeline.build_gate import resolve_build_decision  # noqa: E402
 
 
@@ -67,15 +70,31 @@ def _stdin_isatty():
         return False
 
 
+def _gui_window_available():
+    """True when Blender has an interactive window (so a confirm popup can show)."""
+    try:
+        return not bpy.app.background and bool(bpy.context.window_manager.windows)
+    except Exception:
+        return False
+
+
 def _confirm_build(asset_dir, build_plan):
     decision = resolve_build_decision(
         stdin_isatty=_stdin_isatty(),
         env=os.environ,
         argv=_script_argv(sys.argv),
     )
-    if not decision:
-        _print_build_skipped(asset_dir, build_plan)
-    return decision
+    if decision is True:
+        return True
+    if decision is None and _gui_window_available():
+        # No inline signal but we have a GUI: offer an async confirm popup.
+        # The popup builds on OK (see blender_confirm); never build inline here.
+        offer_build_confirmation(asset_dir)
+        print("\nPlan written. Confirm the build in the Blender popup (or cancel).")
+        return False
+    # Explicit decline, or undecided with no GUI: stop with guidance.
+    _print_build_skipped(asset_dir, build_plan)
+    return False
 
 
 def main():
