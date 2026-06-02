@@ -1,4 +1,4 @@
-"""Open Jaywalker N-panel: Run pipeline -> plan summary -> Build."""
+"""Open Jaywalker N-panel: status, plan summary (collapsible), build, output."""
 
 import bpy
 
@@ -12,22 +12,62 @@ class OJ_PT_panel(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        settings = context.scene.open_jaywalker
+        s = context.scene.open_jaywalker
+
+        if s.built:
+            status, icon = "Built", 'CHECKMARK'
+        elif s.has_plan:
+            status, icon = "Plan ready", 'INFO'
+        else:
+            status, icon = "Idle", 'RADIOBUT_OFF'
+        layout.label(text="Status: {0}".format(status), icon=icon)
 
         layout.operator("open_jaywalker.run_pipeline", icon='PLAY')
 
-        if not settings.has_plan:
-            layout.label(text="Run the pipeline to generate a plan.")
-            return
+        if s.has_plan:
+            layout.separator()
+            box = layout.box()
+            box.label(text="Plan", icon='PRESET')
+            col = box.column(align=True)
+            col.label(text="Primary rig: {0}".format(s.recommended_armature))
+            mapped_row = col.row()
+            mapped_row.alert = s.mapped < s.total
+            mapped_row.label(
+                text="Mapped: {0}/{1}".format(s.mapped, s.total),
+                icon=('ERROR' if s.mapped < s.total else 'CHECKMARK'),
+            )
+            if s.is_crowd:
+                col.label(text="Crowd: {0} characters".format(s.character_count))
 
-        box = layout.box()
-        box.label(text="Plan ready", icon='CHECKMARK')
-        box.label(text="Primary: {0}".format(settings.recommended_armature))
-        box.label(text="Mapped: {0}/{1}".format(settings.mapped, settings.total))
-        if settings.is_crowd:
-            box.label(text="Crowd: {0} characters".format(settings.character_count))
-        if settings.missing_csv:
-            box.label(text="Missing targets:")
-            for name in settings.missing_csv.split(", "):
-                box.label(text="   - {0}".format(name))
-        layout.operator("open_jaywalker.build", icon='MOD_ARMATURE')
+            box.prop(
+                s, "show_details",
+                text="Details",
+                icon=('TRIA_DOWN' if s.show_details else 'TRIA_RIGHT'),
+                emboss=False,
+            )
+            if s.show_details:
+                det = box.box()
+                if s.missing_csv:
+                    det.label(text="Missing targets:")
+                    for name in s.missing_csv.split(", "):
+                        det.label(text="   - {0}".format(name))
+                if s.review_flags_csv:
+                    det.label(text="Review flags:")
+                    for flag in s.review_flags_csv.split(", "):
+                        det.label(text="   - {0}".format(flag))
+                if s.is_crowd and s.character_ids_csv:
+                    det.label(text="Characters:")
+                    for cid in s.character_ids_csv.split(", "):
+                        det.label(text="   - {0}".format(cid))
+
+            build_row = layout.row()
+            build_row.enabled = s.has_plan and not s.built
+            build_row.operator("open_jaywalker.build", icon='MOD_ARMATURE')
+
+        if s.asset_dir:
+            layout.separator()
+            layout.label(text="Output:")
+            layout.label(text=s.asset_dir)
+            layout.operator("open_jaywalker.open_output", icon='FILE_FOLDER')
+        elif not s.has_plan:
+            layout.label(text="Run the pipeline to generate a plan.")
