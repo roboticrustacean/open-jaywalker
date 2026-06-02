@@ -25,4 +25,6 @@ def summarize_plan(classifier_report: dict, build_plan: dict) -> dict:
         "missing_targets": missing,
         "is_crowd": bool(characters),
         "character_count": len(characters),
+        "review_flags": list(classifier_report.get("review_flags", [])),
+        "character_ids": [c.get("character_id", "") for c in characters],
     }

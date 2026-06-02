@@ -29,6 +29,8 @@ class SummarizePlanTests(unittest.TestCase):
         self.assertIn("Eye_Left", summary["missing_targets"])
         self.assertFalse(summary["is_crowd"])
         self.assertEqual(summary["character_count"], 0)
+        self.assertEqual(summary["review_flags"], ["multiple_roots", "root_noncompliant"])
+        self.assertEqual(summary["character_ids"], [])
 
     def test_crowd_summary_uses_character_count(self):
         report, _plan = self._load()
@@ -36,6 +38,7 @@ class SummarizePlanTests(unittest.TestCase):
         summary = summarize_plan(report, crowd_plan)
         self.assertTrue(summary["is_crowd"])
         self.assertEqual(summary["character_count"], 2)
+        self.assertEqual(summary["character_ids"], ["c0", "c1"])
 
 
 if __name__ == "__main__":
