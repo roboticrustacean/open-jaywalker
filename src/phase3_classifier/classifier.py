@@ -601,6 +601,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
     return {
         "armature_name": armature_input.armature_name,
         "detected_convention": convention,
+        "name_quality": round(name_quality, 3),
         "selected_inputs": {
             "primary": armature_input.primary_path.name,
             "support": armature_input.support_path.name if armature_input.support_path else None,
@@ -900,16 +901,29 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]], context
     for target_name in CORE_TARGETS:
         candidate = provisional_choices[target_name]
         if candidate is None:
-            resolved[target_name] = _missing_target_payload("no_plausible_candidate")
+            payload = _missing_target_payload("no_plausible_candidate")
+            payload["decision"] = "conflict_review"
+            resolved[target_name] = payload
             continue
 
         if target_name in contested_targets:
             notes = list(candidate.notes)
             notes.append("candidate_conflict")
+            # When the only candidate this target could claim is a weak,
+            # already-owned bone (no real name or confidence of its own), the
+            # target genuinely has no source bone — e.g. a missing intermediate
+            # joint like a thigh+foot leg with no shin. Hand it to the builder to
+            # create rather than flagging an unactionable review.
+            if candidate.confidence < 0.25 and candidate.name_evidence < 0.20:
+                notes.append("contested_low_confidence_no_distinct_bone")
+                action = "create_in_builder"
+            else:
+                action = "review"
             resolved[target_name] = {
                 "source_bone": None,
                 "confidence": round(candidate.confidence, 3),
-                "action": "review",
+                "action": action,
+                "decision": "conflict_review",
                 "evidence": {
                     "name": candidate.name_evidence,
                     "hierarchy": candidate.hierarchy_evidence,
@@ -936,6 +950,7 @@ def _resolve_targets(target_candidates: Dict[str, List[CandidateScore]], context
             "source_bone": candidate.source_bone if action != "create_in_builder" else None,
             "confidence": round(candidate.confidence, 3),
             "action": action,
+            "decision": _reconciliation_tag(candidate.name_evidence, candidate.structural_evidence),
             "evidence": {
                 "name": candidate.name_evidence,
                 "hierarchy": candidate.hierarchy_evidence,
@@ -1019,6 +1034,7 @@ def _reconcile_hip_to_spine_pivot(resolved_targets: Dict[str, dict], context: di
         "source_bone": spine_root_name,
         "confidence": prev_lower.get("confidence", 0.7) if prev_lower.get("source_bone") == spine_root_name else 0.7,
         "action": "alias_map",
+        "decision": "structure_only",
         "evidence": copy.deepcopy(prev_lower.get("evidence", {
             "name": 0.0,
             "hierarchy": 1.0,
@@ -1040,14 +1056,19 @@ def _reconcile_hip_to_spine_pivot(resolved_targets: Dict[str, dict], context: di
         notes = list(prev_lower.get("notes", []))
         if moved:
             notes.append("lower_spine_shifted_above_hip_pivot")
+        prev_evidence = prev_lower.get("evidence", {})
         resolved_targets["Lower_Spine"] = {
             "source_bone": next_spine_name,
             "confidence": prev_lower.get("confidence", 0.7),
             "action": action if action in {"direct_map", "alias_map"} else "alias_map",
+            "decision": _reconciliation_tag(
+                prev_evidence.get("name", 0.0),
+                prev_evidence.get("structural", 0.0),
+            ),
             "evidence": {
-                "name": prev_lower.get("evidence", {}).get("name", 0.0),
+                "name": prev_evidence.get("name", 0.0),
                 "hierarchy": 1.0,
-                "geometry": prev_lower.get("evidence", {}).get("geometry", 0.0),
+                "geometry": prev_evidence.get("geometry", 0.0),
                 "source_origin": next_spine.origin,
                 "role": next_spine.role,
             },
@@ -1142,6 +1163,7 @@ def _target_payload_from_candidate(candidate: Optional[CandidateScore], action: 
             "source_bone": None,
             "confidence": 0.0,
             "action": action,
+            "decision": "conflict_review",
             "evidence": {
                 "name": 0.0,
                 "hierarchy": 0.0,
@@ -1156,6 +1178,7 @@ def _target_payload_from_candidate(candidate: Optional[CandidateScore], action: 
         "source_bone": candidate.source_bone,
         "confidence": round(candidate.confidence, 3),
         "action": action,
+        "decision": _reconciliation_tag(candidate.name_evidence, candidate.structural_evidence),
         "evidence": {
             "name": candidate.name_evidence,
             "hierarchy": candidate.hierarchy_evidence,
@@ -2054,6 +2077,25 @@ def _decision_tag(
     if candidate.confidence >= 0.60 and separation >= 0.02:
         return "alias_map"
     return "review"
+
+
+def _reconciliation_tag(name_evidence: float, structural_evidence: float) -> str:
+    """Human-readable reconciliation decision (closes a #29 auditability gap).
+
+    Reports HOW the name vs structural channels agreed for a resolved target —
+    distinct from ``_decision_tag`` (which returns the builder ACTION). The 0.20
+    floor is the same minimum-evidence threshold used elsewhere to treat a
+    channel as "present".
+    """
+    name_present = name_evidence >= 0.20
+    structural_present = structural_evidence >= 0.20
+    if name_present and structural_present:
+        return "structure_confirmed_by_name"
+    if name_present and not structural_present:
+        return "name_override"
+    if structural_present and not name_present:
+        return "structure_only"
+    return "conflict_review"
 
 
 def _score_spine_position(bone_name: str, spine_chain: Sequence[str], prefer_end: bool) -> float:

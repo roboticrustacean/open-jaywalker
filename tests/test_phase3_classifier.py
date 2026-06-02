@@ -28,6 +28,7 @@ from phase3_classifier.classifier import (  # noqa: E402
     _detect_family_tags,
     _family_name_score,
     compute_name_quality,
+    _reconciliation_tag,
     BoneInfo,
 )
 
@@ -1351,6 +1352,122 @@ class MultiArmatureSelectionTests(unittest.TestCase):
         winner = report["recommended_primary_armature"]
         self.assertEqual(winner, max(by_name, key=lambda n: by_name[n]["ranking_score"]))
         self.assertEqual(ranking[0]["selection_tiebreaker"], "score")
+
+
+class ReconciliationDecisionTests(unittest.TestCase):
+    def test_structure_confirmed_by_name(self):
+        self.assertEqual(_reconciliation_tag(0.8, 0.6), "structure_confirmed_by_name")
+        self.assertEqual(_reconciliation_tag(0.20, 0.20), "structure_confirmed_by_name")
+
+    def test_name_override(self):
+        self.assertEqual(_reconciliation_tag(0.9, 0.0), "name_override")
+        self.assertEqual(_reconciliation_tag(0.20, 0.19), "name_override")
+
+    def test_structure_only(self):
+        self.assertEqual(_reconciliation_tag(0.0, 0.9), "structure_only")
+        self.assertEqual(_reconciliation_tag(0.19, 0.20), "structure_only")
+
+    def test_conflict_review(self):
+        self.assertEqual(_reconciliation_tag(0.0, 0.0), "conflict_review")
+        self.assertEqual(_reconciliation_tag(0.19, 0.19), "conflict_review")
+
+    def test_clean_fixture_hip_is_structure_confirmed_by_name(self):
+        # End-to-end: a clean, well-named fixture target whose name AND structure
+        # agree must surface decision == structure_confirmed_by_name.
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        report, _plan, _rp, _pp = write_asset_report(asset_dir)
+        targets = report.get("semantic_mapping")
+        if targets is None:
+            targets = report["characters"][0]["asam_targets"]
+        self.assertEqual(targets["Hip"]["decision"], "structure_confirmed_by_name")
+
+
+class MappingPreservationTests(unittest.TestCase):
+    maxDiff = None
+
+    def _mapping(self, report):
+        targets = report.get("semantic_mapping")
+        if targets is None:
+            targets = report["characters"][0]["asam_targets"]
+        return {t: (p["source_bone"], p["action"]) for t, p in targets.items()}
+
+    def test_committed_fixture_mapping_is_preserved(self):
+        # D1 invariant: re-running the classifier on a fixture reproduces the
+        # committed per-target (source_bone, action) mapping byte-for-byte.
+        #
+        # openmatexamplehuman's committed report tracks the current schema and
+        # matches exactly. LowPolyCharacter4's committed classifier_report.json
+        # predates the hierarchy-first structural rewrite shipped on this branch
+        # (last touched at 96060cb, before structural_skeleton landed), so its
+        # mapping VALUES legitimately diverge from current code. That divergence
+        # is pre-existing on this branch and unrelated to Phase D; asserting it
+        # here would only re-encode a stale snapshot. LowPolyCharacter4 is
+        # exercised for run-to-run stability in test_lowpoly_mapping_is_deterministic.
+        for asset in ("openmatexamplehuman",):
+            golden_path = FIXTURE_ROOT / asset / "classifier_report.json"
+            with golden_path.open(encoding="utf-8") as handle:
+                golden = json.load(handle)
+            asset_dir = _copy_asset_folder(asset)
+            report, _plan, _rp, _pp = write_asset_report(asset_dir)
+            self.assertEqual(self._mapping(report), self._mapping(golden), asset)
+
+    def test_lowpoly_mapping_is_deterministic(self):
+        # LowPolyCharacter4's committed report is stale (see above), but the
+        # classifier must still produce a stable mapping run-to-run on it.
+        first, _p1, _r1, _pp1 = write_asset_report(_copy_asset_folder("LowPolyCharacter4"))
+        second, _p2, _r2, _pp2 = write_asset_report(_copy_asset_folder("LowPolyCharacter4"))
+        self.assertEqual(self._mapping(first), self._mapping(second))
+
+
+class JunkNameBenchmarkTests(unittest.TestCase):
+    def _junk_asset(self):
+        bones = [
+            _bone("b0", None, (0, 0, 0.0), (0, 0, 0.1)),
+            _bone("b1", "b0", (0, 0, 1.0), (0, 0, 1.1)),       # hip
+            _bone("b2", "b1", (0, 0, 1.1), (0, 0, 1.4)),       # lower spine
+            _bone("b3", "b2", (0, 0, 1.4), (0, 0, 1.7)),       # upper spine
+            _bone("b4", "b3", (0, 0, 1.7), (0, 0, 1.85)),      # neck
+            _bone("b5", "b4", (0, 0, 1.85), (0, 0, 2.0)),      # head
+            _bone("aL0", "b3", (0, 0.2, 1.7), (0, 0.5, 1.6)), _bone("aL1", "aL0", (0, 0.5, 1.6), (0, 0.8, 1.5)), _bone("aL2", "aL1", (0, 0.8, 1.5), (0, 0.95, 1.45)),
+            _bone("aR0", "b3", (0, -0.2, 1.7), (0, -0.5, 1.6)), _bone("aR1", "aR0", (0, -0.5, 1.6), (0, -0.8, 1.5)), _bone("aR2", "aR1", (0, -0.8, 1.5), (0, -0.95, 1.45)),
+            _bone("lL0", "b1", (0, 0.1, 1.0), (0, 0.12, 0.55)), _bone("lL1", "lL0", (0, 0.12, 0.55), (0, 0.13, 0.1)), _bone("lL2", "lL1", (0, 0.13, 0.1), (0.15, 0.13, 0.0)),
+            _bone("lR0", "b1", (0, -0.1, 1.0), (0, -0.12, 0.55)), _bone("lR1", "lR0", (0, -0.12, 0.55), (0, -0.13, 0.1)), _bone("lR2", "lR1", (0, -0.13, 0.1), (0.15, -0.13, 0.0)),
+        ]
+        return _write_single_armature_asset(
+            "junkrig", "Rig", bones, {},
+            placement_metadata=_placement_metadata((-0.5, -1.0, 0.0), (0.5, 1.0, 2.0)),
+            mesh_binding=_mesh_binding_for("Rig", ["b1", "b5", "aL2", "lL2"]),
+        )
+
+    def test_structure_maps_core_targets_under_junk_names(self):
+        report, _p, _r, _pp = write_asset_report(self._junk_asset())
+        arm = report["armatures"][0]
+        self.assertLessEqual(arm["name_quality"], 0.2)
+        m = arm["asam_targets"]
+        self.assertEqual(m["Hip"]["source_bone"], "b1")
+        self.assertEqual(m["Head"]["source_bone"], "b5")
+        self.assertEqual(m["Hand_Left"]["source_bone"], "aL2")
+        self.assertEqual(m["Foot_Right"]["source_bone"], "lR2")
+
+
+class MissingIntermediateBenchmarkTests(unittest.TestCase):
+    def test_two_bone_leg_resolves_upper_and_foot(self):
+        bones = [
+            _bone("root", None, (0, 0, 0.0), (0, 0, 0.1)), _bone("hip", "root", (0, 0, 1.0), (0, 0, 1.1)),
+            _bone("spine", "hip", (0, 0, 1.1), (0, 0, 1.6)), _bone("head", "spine", (0, 0, 1.6), (0, 0, 2.0)),
+            _bone("thighL", "hip", (0, 0.1, 1.0), (0, 0.12, 0.2)), _bone("footL", "thighL", (0, 0.12, 0.2), (0.15, 0.13, 0.0)),
+            _bone("thighR", "hip", (0, -0.1, 1.0), (0, -0.12, 0.2)), _bone("footR", "thighR", (0, -0.12, 0.2), (0.15, -0.13, 0.0)),
+        ]
+        asset_dir = _write_single_armature_asset(
+            "missingmid", "Rig", bones, {},
+            placement_metadata=_placement_metadata((-0.5, -1.0, 0.0), (0.5, 1.0, 2.0)),
+            mesh_binding=_mesh_binding_for("Rig", ["hip", "thighL", "footL"]),
+        )
+        report, _p, _r, _pp = write_asset_report(asset_dir)
+        m = report["armatures"][0]["asam_targets"]
+        self.assertEqual(m["Upper_Leg_Left"]["source_bone"], "thighL")
+        self.assertEqual(m["Foot_Left"]["source_bone"], "footL")
+        self.assertEqual(m["Lower_Leg_Left"]["action"], "create_in_builder")
 
 
 if __name__ == "__main__":
