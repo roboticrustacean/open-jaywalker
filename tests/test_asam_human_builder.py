@@ -2357,5 +2357,31 @@ class CrowdBuilderReportTests(unittest.TestCase):
                 self.assertEqual(_json.load(handle), crowd_report)
 
 
+class SuccessMessageTests(unittest.TestCase):
+    def test_single_message(self):
+        from asam_human_builder.builder import success_message
+        report = {
+            "asset_name": "LowPolyCharacter4",
+            "built_core_targets": ["Hip"] * 28,
+            "preserved_extras_count": 153,
+        }
+        msg = success_message(report, "/out/builder_report.json")
+        self.assertIn("LowPolyCharacter4", msg)
+        self.assertIn("28 core targets", msg)
+        self.assertIn("153 extras", msg)
+        self.assertIn("/out/builder_report.json", msg)
+
+    def test_crowd_message(self):
+        from asam_human_builder.builder import success_message
+        report = {
+            "characters": [{"character_id": "c0"}, {"character_id": "c1"}],
+            "failed_characters": [{"character_id": "c2"}],
+        }
+        msg = success_message(report, "/out/builder_report.json")
+        self.assertIn("Crowd built", msg)
+        self.assertIn("2 characters", msg)
+        self.assertIn("1 failed", msg)
+
+
 if __name__ == "__main__":
     unittest.main()

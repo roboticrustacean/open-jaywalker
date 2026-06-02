@@ -13,6 +13,7 @@ from asam_human_builder.builder import (
     build_character_specs_from_asset_dir,
     build_crowd_builder_report,
     print_builder_summary,
+    success_message,
     write_builder_report,
     write_crowd_builder_report,
 )
@@ -38,24 +39,18 @@ def run_build(asset_dir, bpy) -> dict:
             resolved["decomposition"],
             bpy,
         )
-        crowd_report = build_crowd_builder_report(
+        report = build_crowd_builder_report(
             resolved["asset_name"],
             resolved["decomposition"],
             resolved["character_specs"],
             crowd_execution,
         )
-        _, report_path = write_crowd_builder_report(asset_dir, crowd_report)
-        print(
-            "Crowd build: {0} characters built, {1} failed. Report: {2}".format(
-                len(crowd_report["characters"]),
-                len(crowd_report["failed_characters"]),
-                report_path,
-            )
-        )
-        return crowd_report
+        _, report_path = write_crowd_builder_report(asset_dir, report)
+    else:
+        build_spec = resolved["specs"][0]
+        execution_result = build_armature_in_blender(build_spec, bpy)
+        report, report_path = write_builder_report(asset_dir, build_spec, execution_result)
+        print_builder_summary(report, report_path)
 
-    build_spec = resolved["specs"][0]
-    execution_result = build_armature_in_blender(build_spec, bpy)
-    builder_report, report_path = write_builder_report(asset_dir, build_spec, execution_result)
-    print_builder_summary(builder_report, report_path)
-    return builder_report
+    print(success_message(report, report_path))
+    return report
