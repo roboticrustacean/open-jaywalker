@@ -849,7 +849,18 @@ def _score_target_candidate(target_name: str, bone: BoneInfo, context: dict, nam
 
     source_modifier = 1.0 if bone.origin == "primary" else 0.90
     family_modifier = 1.0 if family in bone.family_tags else 0.95
-    selection_score = round(confidence * bone.role_modifier * source_modifier * family_modifier, 4)
+    # Structural confirmation: a bone the name-free skeleton labeler actually
+    # places at this target's anatomical position (matching family) is stronger
+    # evidence than a name-only match. This lets a genuine deform segment with
+    # topological confirmation win over a same-position control bone whose only
+    # claim is a high-scoring name (e.g. a Rigify 'chest' control out-naming the
+    # real DEF upper-spine segment). Scaled by the structural confidence, so a
+    # weak/absent structural signal barely moves the score.
+    structural_modifier = 1.0 + (0.06 * structural_score)
+    selection_score = round(
+        confidence * bone.role_modifier * source_modifier * family_modifier * structural_modifier,
+        4,
+    )
 
     notes: List[str] = []
     if bone.origin != "primary":
@@ -1993,6 +2004,16 @@ def _structural_evidence(target_name: str, bone: BoneInfo, context: dict) -> flo
     elif "spine" in label.family and "spine" in family:
         score += label.confidence * 0.5
 
+    # The structural labeler never emits thumb/finger/toe/eye labels (it only
+    # localises gross limb ends as hand/foot). When the structural family does
+    # not match the target family at all, side agreement alone is NOT evidence
+    # that the bone belongs to this target — e.g. a hand-labeled arm bone must
+    # not earn positive structural credit for a Full_Thumb target just by being
+    # on the same side. Only a matched (or broad-category) family carries a side
+    # bonus; an opposite-side match on a genuine family still penalises.
+    if score <= 0.0:
+        return 0.0
+
     if side and label.side:
         if side == label.side:
             score += 0.2
@@ -2047,6 +2068,36 @@ def _confidence_weights(name_quality: float, origin: str) -> tuple[float, float,
         return (0.05, 0.6, 0.35)
 
 
+def _numbered_stem(name: str) -> str:
+    """Strip a trailing Blender duplicate suffix (``.001``, ``.012``) from a bone name."""
+    return re.sub(r"\.\d+$", "", name)
+
+
+def _is_equivalent_segment_runner_up(
+    candidate: CandidateScore,
+    runner_up: CandidateScore,
+    context: dict,
+) -> bool:
+    """True when the runner-up is an interchangeable adjacent segment.
+
+    Two bones are interchangeable for a target when they share the same numbered
+    stem (``DEF-spine.004`` / ``DEF-spine.005``) AND the structural labeler placed
+    both in the same anatomical family. Such a zero-separation tie reflects two
+    equally valid deform segments of one chain — not a genuine ambiguity — so it
+    must not knock an otherwise-recoverable mapping down to ``review``.
+    """
+    if _numbered_stem(candidate.source_bone) != _numbered_stem(runner_up.source_bone):
+        return False
+    skel: Optional[StructuralSkeleton] = context.get("structural_skeleton")
+    if not skel:
+        return False
+    cand_label = skel.labels.get(candidate.source_bone)
+    run_label = skel.labels.get(runner_up.source_bone)
+    if cand_label is None or run_label is None:
+        return False
+    return cand_label.family == run_label.family
+
+
 def _decision_tag(
     target_name: str,
     candidate: CandidateScore,
@@ -2061,7 +2112,13 @@ def _decision_tag(
     separation = 1.0
     if runner_up:
         # Ignore twist bone runner-ups (e.g. candidate='DEF-arm', runner_up='DEF-arm.001')
+        # and equivalent adjacent segments of the same deform chain (e.g.
+        # 'DEF-spine.004' vs 'DEF-spine.005' — both genuine upper-spine deform
+        # bones; either is anatomically correct, so the zero-separation tie must
+        # not demote a real mapping to review).
         if runner_up.source_bone.startswith(candidate.source_bone) and len(runner_up.source_bone) > len(candidate.source_bone):
+            separation = 1.0
+        elif _is_equivalent_segment_runner_up(candidate, runner_up, context):
             separation = 1.0
         else:
             separation = candidate.selection_score - runner_up.selection_score
