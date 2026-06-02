@@ -1395,15 +1395,12 @@ class MappingPreservationTests(unittest.TestCase):
         # D1 invariant: re-running the classifier on a fixture reproduces the
         # committed per-target (source_bone, action) mapping byte-for-byte.
         #
-        # openmatexamplehuman's committed report tracks the current schema and
-        # matches exactly. LowPolyCharacter4's committed classifier_report.json
-        # predates the hierarchy-first structural rewrite shipped on this branch
-        # (last touched at 96060cb, before structural_skeleton landed), so its
-        # mapping VALUES legitimately diverge from current code. That divergence
-        # is pre-existing on this branch and unrelated to Phase D; asserting it
-        # here would only re-encode a stale snapshot. LowPolyCharacter4 is
-        # exercised for run-to-run stability in test_lowpoly_mapping_is_deterministic.
-        for asset in ("openmatexamplehuman",):
+        # Both goldens now track the hierarchy-first structural behaviour shipped
+        # on this branch: openmatexamplehuman tracks the current schema, and
+        # LowPolyCharacter4 was re-baselined through the real pipeline once the
+        # clean-rig regressions (control 'chest' out-naming the DEF upper-spine
+        # segment; a non-finger arm bone leaking into Full_Thumb_*) were fixed.
+        for asset in ("openmatexamplehuman", "LowPolyCharacter4"):
             golden_path = FIXTURE_ROOT / asset / "classifier_report.json"
             with golden_path.open(encoding="utf-8") as handle:
                 golden = json.load(handle)
@@ -1412,11 +1409,46 @@ class MappingPreservationTests(unittest.TestCase):
             self.assertEqual(self._mapping(report), self._mapping(golden), asset)
 
     def test_lowpoly_mapping_is_deterministic(self):
-        # LowPolyCharacter4's committed report is stale (see above), but the
-        # classifier must still produce a stable mapping run-to-run on it.
+        # The classifier must also produce a stable mapping run-to-run.
         first, _p1, _r1, _pp1 = write_asset_report(_copy_asset_folder("LowPolyCharacter4"))
         second, _p2, _r2, _pp2 = write_asset_report(_copy_asset_folder("LowPolyCharacter4"))
         self.assertEqual(self._mapping(first), self._mapping(second))
+
+
+class CleanRigRegressionTests(unittest.TestCase):
+    """Pin the corrected mapping of the clean Rigify rig LowPolyCharacter4.
+
+    Guards two regressions introduced by the hierarchy-first structural rewrite
+    (a deform upper-spine bone dropping to a control 'chest'/review; a non-finger
+    arm bone leaking into the Full_Thumb_* targets) AND the two accepted
+    improvements from the same rewrite (Neck -> 'neck', Shoulder -> 'DEF-shoulder.*')
+    against re-regression.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        report, _plan, _rp, _pp = write_asset_report(_copy_asset_folder("LowPolyCharacter4"))
+        cls.targets = report["semantic_mapping"]
+
+    def test_upper_spine_is_deform_spine(self):
+        payload = self.targets["Upper_Spine"]
+        self.assertIsNotNone(payload["source_bone"])
+        self.assertTrue(
+            payload["source_bone"].startswith("DEF-spine"),
+            "Upper_Spine must map to a deform spine bone, got {0}".format(payload["source_bone"]),
+        )
+        self.assertIn(payload["action"], {"direct_map", "alias_map"})
+
+    def test_full_thumb_has_no_candidate(self):
+        # This rig carries no real thumb/finger bone; the thumb targets must stay
+        # unmapped rather than grabbing a non-finger arm bone.
+        self.assertIsNone(self.targets["Full_Thumb_Left"]["source_bone"])
+        self.assertIsNone(self.targets["Full_Thumb_Right"]["source_bone"])
+
+    def test_accepted_neck_and_shoulder_improvements(self):
+        self.assertEqual(self.targets["Neck"]["source_bone"], "neck")
+        self.assertEqual(self.targets["Shoulder_Left"]["source_bone"], "DEF-shoulder.L")
+        self.assertEqual(self.targets["Shoulder_Right"]["source_bone"], "DEF-shoulder.R")
 
 
 class JunkNameBenchmarkTests(unittest.TestCase):
