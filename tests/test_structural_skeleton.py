@@ -235,5 +235,56 @@ class DegenerateRigTests(unittest.TestCase):
         self.assertEqual(fams["footL"], ("foot", "end"))
 
 
+class RealRigStructuralTests(unittest.TestCase):
+    """The labeler must find the real body skeleton on a bushy, multi-root,
+    Rigify-generated rig (LowPolyCharacter4 `rig`, 217 bones, 10 parentless
+    bones, DEF/ORG/MCH chains overlapping in space)."""
+
+    @classmethod
+    def setUpClass(cls):
+        from phase3_classifier.classifier import (
+            discover_armatures,
+            _build_bone_index,
+            _build_context,
+            _detect_convention,
+            _structural_evidence,
+        )
+        asset_dir = REPO_ROOT / "tests" / "fixtures" / "LowPolyCharacter4"
+        infos = discover_armatures(asset_dir)
+        info = next(x for x in infos if x.armature_name == "rig")
+        convention = _detect_convention(info.primary_data, info.support_data)
+        bones = _build_bone_index(info.primary_data, info.support_data, convention)
+        context = _build_context(bones, info.primary_data, info.support_data, convention)
+        cls.bones = bones
+        cls.context = context
+        cls.skel = context["structural_skeleton"]
+        cls._structural_evidence = staticmethod(_structural_evidence)
+
+    def test_non_empty_chains(self):
+        self.assertTrue(self.skel.spine_chain, "spine_chain should not be empty")
+        self.assertTrue(self.skel.leg_chains["left"], "left leg chain empty")
+        self.assertTrue(self.skel.leg_chains["right"], "right leg chain empty")
+
+    def test_known_core_bones_get_correct_families(self):
+        labels = self.skel.labels
+        self.assertEqual(labels["DEF-spine"].family, "hip")
+        self.assertEqual(labels["DEF-spine.001"].family, "lower_spine")
+        self.assertEqual(labels["DEF-thigh.L"].family, "upper_leg")
+        self.assertEqual(labels["DEF-thigh.L"].side, "left")
+        self.assertEqual(labels["DEF-hand.L"].family, "hand")
+        self.assertEqual(labels["DEF-hand.L"].side, "left")
+
+    def test_structural_evidence_positive_for_core_targets(self):
+        ev = type(self)._structural_evidence
+        self.assertGreater(ev("Hip", self.bones["DEF-spine"], self.context), 0.0)
+        self.assertGreater(
+            ev("Lower_Spine", self.bones["DEF-spine.001"], self.context), 0.0
+        )
+        self.assertGreater(
+            ev("Upper_Leg_Left", self.bones["DEF-thigh.L"], self.context), 0.0
+        )
+        self.assertGreater(ev("Hand_Left", self.bones["DEF-hand.L"], self.context), 0.0)
+
+
 if __name__ == "__main__":
     unittest.main()
