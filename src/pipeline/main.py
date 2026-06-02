@@ -58,9 +58,18 @@ def _print_build_skipped(asset_dir, build_plan):
     print("  or run the builder entry: src/asam_human_builder/main.py -- --asset-dir {0}".format(asset_dir))
 
 
+def _stdin_isatty():
+    """Best-effort TTY check. Blender's embedded stdin can be None or raise;
+    treat any failure as "no interactive stdin" so we fall back to the toggle."""
+    try:
+        return bool(sys.stdin) and sys.stdin.isatty()
+    except (AttributeError, ValueError, OSError):
+        return False
+
+
 def _confirm_build(asset_dir, build_plan):
     decision = resolve_build_decision(
-        stdin_isatty=sys.stdin.isatty(),
+        stdin_isatty=_stdin_isatty(),
         env=os.environ,
         argv=_script_argv(sys.argv),
     )
