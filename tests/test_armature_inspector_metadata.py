@@ -193,5 +193,59 @@ class ArmatureInspectorMetadataTests(unittest.TestCase):
         self.assertAlmostEqual(result[0]["tail"][2], 40.0 * 0.0254)
 
 
+    def test_collect_armature_mesh_bounds_returns_world_points(self):
+        # FakeVector is a tuple subclass so indexing ([0],[1],[2]) and type(vec)((...))
+        # both work — satisfying FakeMatrix.__matmul__.
+        class FakeVector(tuple):
+            pass
+
+        class FakeMatrix:
+            def __init__(self, s):
+                self.s = s
+
+            def __matmul__(self, vec):
+                return type(vec)((self.s * vec[0], self.s * vec[1], self.s * vec[2]))
+
+            def inverted(self):  # must NOT be called anymore
+                raise AssertionError(
+                    "armature inverse must not be used; bounds are world-space"
+                )
+
+        class V(tuple):
+            pass
+
+        class FakeMesh:
+            type = "MESH"
+            name = "Body"
+            parent = None
+            modifiers = []
+            matrix_world = FakeMatrix(0.0254)
+            bound_box = [V((0.0, 0.0, 0.0)), V((100.0, 0.0, 0.0))]
+
+        fake_mathutils = types.SimpleNamespace(Vector=FakeVector)
+        fake_bpy = types.SimpleNamespace(
+            data=types.SimpleNamespace(filepath="", objects=[], armatures=[]),
+        )
+        # mathutils is imported inside the function body at call time, so it must be
+        # present in sys.modules throughout module import AND the function call.
+        with mock.patch.dict(sys.modules, {"bpy": fake_bpy, "mathutils": fake_mathutils}):
+            if "inspector" in sys.modules:
+                del sys.modules["inspector"]
+            inspector = importlib.import_module("inspector")
+
+            arm = type("Arm", (), {"matrix_world": FakeMatrix(0.0254)})()
+            # Force the driven-mesh detection to return our fake mesh:
+            original = inspector._meshes_driven_by_armature
+            inspector._meshes_driven_by_armature = lambda a: [FakeMesh()]
+            try:
+                points, names = inspector._collect_armature_mesh_bounds(arm)
+            finally:
+                inspector._meshes_driven_by_armature = original
+
+        self.assertEqual(names, ["Body"])
+        # World-space: 100.0 * 0.0254 = 2.54 — NOT armature-local
+        self.assertAlmostEqual(points[1][0], 100.0 * 0.0254)
+
+
 if __name__ == "__main__":
     unittest.main()

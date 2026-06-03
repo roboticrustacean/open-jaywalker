@@ -788,23 +788,17 @@ def _meshes_driven_by_armature(armature_obj):
 
 
 def _collect_armature_mesh_bounds(armature_obj):
-    """
-    Collect mesh bound-box corner points in armature-local coordinates.
-    """
+    """Collect driven-mesh bound-box corners in WORLD coordinates."""
     from mathutils import Vector
 
-    armature_inverse = armature_obj.matrix_world.inverted()
     driven_meshes = []
-    local_points = []
-
+    world_points = []
     for obj in _meshes_driven_by_armature(armature_obj):
         driven_meshes.append(obj.name)
         for corner in obj.bound_box:
             world_point = obj.matrix_world @ Vector(corner)
-            local_point = armature_inverse @ world_point
-            local_points.append([float(local_point[0]), float(local_point[1]), float(local_point[2])])
-
-    return local_points, driven_meshes
+            world_points.append([float(world_point[0]), float(world_point[1]), float(world_point[2])])
+    return world_points, driven_meshes
 
 
 def build_mesh_binding(armature_obj):
