@@ -155,5 +155,43 @@ class ArmatureInspectorMetadataTests(unittest.TestCase):
         )
 
 
+    def test_extract_armature_geometry_returns_world_coordinates(self):
+        fake_bpy = types.SimpleNamespace(
+            data=types.SimpleNamespace(filepath="", objects=[], armatures=[]),
+        )
+        with mock.patch.dict(sys.modules, {"bpy": fake_bpy}):
+            if "inspector" in sys.modules:
+                del sys.modules["inspector"]
+            inspector = importlib.import_module("inspector")
+
+        class FakeMatrix:
+            # 0.0254 uniform scale, no rotation/translation — mirrors 1000idles Object_4.
+            def __matmul__(self, vec):
+                return type(vec)((0.0254 * vec[0], 0.0254 * vec[1], 0.0254 * vec[2]))
+
+        class V(tuple):
+            pass
+
+        class FakeBone:
+            def __init__(self):
+                self.name = "Pelvis"
+                self.parent = None
+                self.head_local = V((0.0, 0.0, 35.0))
+                self.tail_local = V((0.0, 0.0, 40.0))
+                self.length = 5.0
+                self.matrix_local = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+
+        class FakeData:
+            bones = [FakeBone()]
+
+        class FakeArmature:
+            data = FakeData()
+            matrix_world = FakeMatrix()
+
+        result = inspector.extract_armature_geometry(FakeArmature())
+        self.assertAlmostEqual(result[0]["head"][2], 35.0 * 0.0254)
+        self.assertAlmostEqual(result[0]["tail"][2], 40.0 * 0.0254)
+
+
 if __name__ == "__main__":
     unittest.main()

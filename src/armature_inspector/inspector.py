@@ -515,21 +515,33 @@ def print_detected_chains(armature_obj):
 # region BONE GEOMETRY EXTRACTION
 
 
-def extract_bone_geometry(bone):
-    """
-    Extract geometry and basic transform data from a single bone.
+def extract_bone_geometry(bone, matrix_world=None):
+    """Extract geometry/transform for a single bone in WORLD coordinates.
+
+    head/tail are expressed in world space (matrix_world @ head_local). For an
+    identity-transform armature this equals the armature-local value, so existing
+    single-character outputs are unchanged.
 
     Args:
         bone: A Blender bone (bpy.types.Bone)
+        matrix_world: Optional armature world matrix. When provided, bone
+                      head/tail are transformed into world coordinates.
 
     Returns:
         dict: Geometry data for the bone.
     """
+    head_local = bone.head_local
+    tail_local = bone.tail_local
+    if matrix_world is not None:
+        head = matrix_world @ head_local
+        tail = matrix_world @ tail_local
+    else:
+        head, tail = head_local, tail_local
     return {
         "name": bone.name,
         "parent": bone.parent.name if bone.parent else None,
-        "head": tuple(bone.head_local),
-        "tail": tuple(bone.tail_local),
+        "head": (float(head[0]), float(head[1]), float(head[2])),
+        "tail": (float(tail[0]), float(tail[1]), float(tail[2])),
         "length": float(bone.length),
         "matrix_local": [list(row) for row in bone.matrix_local],
     }
@@ -537,21 +549,22 @@ def extract_bone_geometry(bone):
 
 def extract_armature_geometry(armature_obj, prefix_filter=None):
     """
-    Extract geometry data for all bones in an armature.
+    Extract geometry data for all bones in an armature in WORLD coordinates.
 
     Args:
         armature_obj: Blender armature object (bpy.types.Object)
         prefix_filter: Optional prefix to restrict bones (e.g., 'DEF-')
 
     Returns:
-        list[dict]: Geometry data for each bone.
+        list[dict]: Geometry data for each bone with head/tail in world space.
     """
     bones = armature_obj.data.bones
+    matrix_world = getattr(armature_obj, "matrix_world", None)
     result = []
     for bone in bones:
         if prefix_filter is not None and not bone.name.startswith(prefix_filter):
             continue
-        result.append(extract_bone_geometry(bone))
+        result.append(extract_bone_geometry(bone, matrix_world))
     return result
 
 
