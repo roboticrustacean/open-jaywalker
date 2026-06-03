@@ -20,13 +20,17 @@ if _ADDON_DIR not in sys.path:
 import bpy
 
 from . import state
+from . import prefs
 from . import operators
 from . import ui
 
 _CLASSES = (
+    prefs.OJAddonPreferences,
     state.OJSettings,
     operators.OJ_OT_run_pipeline,
     operators.OJ_OT_build,
+    operators.OJ_OT_open_output,
+    operators.OJ_OT_clean,
     ui.OJ_PT_panel,
 )
 

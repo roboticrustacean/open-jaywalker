@@ -1,5 +1,6 @@
-"""Open Jaywalker operators: run the pipeline, then build the ASAM human(s)."""
+"""Open Jaywalker operators: run the pipeline, build, open output folder."""
 
+import os
 from pathlib import Path
 
 import bpy
@@ -12,6 +13,10 @@ from asam_human_builder.build_runner import run_build
 from asam_human_builder.builder import success_message
 
 
+def _addon_prefs(context):
+    return context.preferences.addons[__package__].preferences
+
+
 class OJ_OT_run_pipeline(bpy.types.Operator):
     bl_idname = "open_jaywalker.run_pipeline"
     bl_label = "Run pipeline"
@@ -20,6 +25,11 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
     def execute(self, context):
         settings = context.scene.open_jaywalker
         settings.has_plan = False
+        settings.built = False
+
+        prefs = _addon_prefs(context)
+        if prefs.output_dir:
+            os.environ["OPEN_JAYWALKER_OUTPUT_ROOT"] = bpy.path.abspath(prefs.output_dir)
 
         purge_previous_generated_artifacts(bpy)
 
@@ -37,6 +47,11 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         settings.mapped = summary["mapped"]
         settings.total = summary["total"]
         settings.missing_csv = ", ".join(summary["missing_targets"])
+        settings.missing_by_target_csv = ", ".join(
+            "{0} x{1}".format(entry["target"], entry["count"]) for entry in summary["missing_by_target"]
+        )
+        settings.review_flags_csv = ", ".join(summary["review_flags"])
+        settings.character_ids_csv = ", ".join(summary["character_ids"])
         settings.is_crowd = summary["is_crowd"]
         settings.character_count = summary["character_count"]
         settings.has_plan = True
@@ -57,17 +72,47 @@ class OJ_OT_build(bpy.types.Operator):
 
     @classmethod
     def poll(cls, context):
-        return bool(context.scene.open_jaywalker.has_plan)
+        s = context.scene.open_jaywalker
+        return bool(s.has_plan) and not s.built
 
     def execute(self, context):
         settings = context.scene.open_jaywalker
         asset_dir = Path(settings.asset_dir)
+        context.window.cursor_set('WAIT')
         try:
             report = run_build(asset_dir, bpy)
         except Exception as exc:  # surface as an operator error, never crash
             self.report({'ERROR'}, "Build failed: {0}".format(exc))
             return {'CANCELLED'}
+        finally:
+            context.window.cursor_set('DEFAULT')
         report_path = asset_dir / "builder_report.json"
         self.report({'INFO'}, success_message(report, report_path))
-        settings.has_plan = False
+        settings.built = True
+        return {'FINISHED'}
+
+
+class OJ_OT_open_output(bpy.types.Operator):
+    bl_idname = "open_jaywalker.open_output"
+    bl_label = "Open output folder"
+    bl_description = "Open the asset output folder in the system file browser"
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.scene.open_jaywalker.asset_dir)
+
+    def execute(self, context):
+        bpy.ops.wm.path_open(filepath=context.scene.open_jaywalker.asset_dir)
+        return {'FINISHED'}
+
+
+class OJ_OT_clean(bpy.types.Operator):
+    bl_idname = "open_jaywalker.clean"
+    bl_label = "Clean generated rigs"
+    bl_description = "Remove all previously-generated ASAM rigs/collections from the scene (source is left untouched)"
+
+    def execute(self, context):
+        removed = purge_previous_generated_artifacts(bpy)
+        context.scene.open_jaywalker.built = False
+        self.report({'INFO'}, "Removed {0} generated object(s)/collection(s).".format(removed))
         return {'FINISHED'}

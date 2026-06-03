@@ -101,6 +101,8 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
         character_prefix,
     )
 
+    hidden_source_objects = _hide_source_objects(bpy_module, source_armature, build_spec)
+
     return {
         "generated_collection_name": collection.name,
         "group_root_name": group_root.name,
@@ -109,7 +111,28 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
         "duplicated_meshes": mesh_result["duplicated_meshes"],
         "skipped_meshes": mesh_result["skipped_meshes"],
         "mesh_warnings": mesh_result["mesh_warnings"],
+        "hidden_source_objects": hidden_source_objects,
     }
+
+
+def _hide_source_objects(bpy_module, source_armature, build_spec) -> List[str]:
+    """Hide the source rig + its bound meshes so the generated ASAM result is what shows.
+
+    Reversible (the viewport 'eye'); the build duplicates meshes first, so the
+    originals are only hidden, never altered. Returns the hidden object names.
+    """
+    hidden: List[str] = []
+    targets = []
+    if source_armature is not None:
+        targets.append(source_armature)
+    for record in build_spec.get("mesh_binding", {}).get("meshes", []):
+        mesh = bpy_module.data.objects.get(record.get("mesh_name"))
+        if mesh is not None and mesh not in targets:
+            targets.append(mesh)
+    for obj in targets:
+        obj.hide_set(True)
+        hidden.append(obj.name)
+    return hidden
 
 
 def purge_previous_generated_artifacts(bpy_module) -> int:
@@ -297,6 +320,8 @@ def _create_armature_object(bpy_module, armature_name: str, asset_name: str, col
     armature_object.parent = group_root
     armature_object[GENERATED_MARKER_KEY] = True
     armature_object[GENERATED_ASSET_KEY] = asset_name
+    # Draw the generated rig in front of the mesh so the bones are visible.
+    armature_object.show_in_front = True
     collection.objects.link(armature_object)
     return armature_object
 
