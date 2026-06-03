@@ -702,7 +702,7 @@ def _infer_axis_metadata_from_bones(bones_data):
 
 
 def _build_bbox_metadata(points, axis_metadata):
-    """Build bounding box metadata from local-space points."""
+    """Build bounding box metadata from world-space points."""
     if not points:
         zero = [0.0, 0.0, 0.0]
         return {
@@ -735,7 +735,7 @@ def build_armature_placement_metadata(bones_data, mesh_points=None, driven_meshe
 
     Args:
         bones_data: List of exported bone payloads.
-        mesh_points: Optional list of local-space mesh bound-box corner points.
+        mesh_points: Optional list of world-space mesh bound-box corner points.
         driven_meshes: Optional list of mesh object names contributing to the bounds.
 
     Returns:
