@@ -80,3 +80,6 @@ class OJ_PT_panel(bpy.types.Panel):
             layout.operator("open_jaywalker.open_output", icon='FILE_FOLDER')
         elif not s.has_plan:
             layout.label(text="Run the pipeline to generate a plan.")
+
+        layout.separator()
+        layout.operator("open_jaywalker.clean", icon='TRASH')

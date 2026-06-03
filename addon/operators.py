@@ -104,3 +104,15 @@ class OJ_OT_open_output(bpy.types.Operator):
     def execute(self, context):
         bpy.ops.wm.path_open(filepath=context.scene.open_jaywalker.asset_dir)
         return {'FINISHED'}
+
+
+class OJ_OT_clean(bpy.types.Operator):
+    bl_idname = "open_jaywalker.clean"
+    bl_label = "Clean generated rigs"
+    bl_description = "Remove all previously-generated ASAM rigs/collections from the scene (source is left untouched)"
+
+    def execute(self, context):
+        removed = purge_previous_generated_artifacts(bpy)
+        context.scene.open_jaywalker.built = False
+        self.report({'INFO'}, "Removed {0} generated object(s)/collection(s).".format(removed))
+        return {'FINISHED'}
