@@ -418,6 +418,10 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         "mesh_binding": copy.deepcopy(build_plan["mesh_binding"]),
         "extras_preserved": copy.deepcopy(build_plan.get("extras_preserved", [])),
         "grp_root_local_origin": list(grp_root_local_origin),
+        "grp_root_world_location": [
+            float(v)
+            for v in root_resolution.get("grp_root_world_location", grp_root_local_origin)
+        ],
         "bones": [],
         "preserved_pelvis_pair": [],
         "warnings": [],

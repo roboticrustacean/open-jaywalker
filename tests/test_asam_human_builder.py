@@ -18,8 +18,10 @@ from asam_human_builder.builder import (  # noqa: E402
     build_armature_spec,
     build_armature_spec_from_asset_dir,
     build_builder_report,
+    build_source_bone_index_from_export,
     choose_generated_collection_action,
     compute_vertex_group_remap_plan,
+    load_builder_inputs,
     resolve_default_asset_dir,
     validate_builder_inputs,
 )
@@ -1371,6 +1373,25 @@ class AsamHumanBuilderTests(unittest.TestCase):
                 "ASAM_TestAsset",
                 "TestAsset",
             )
+
+    def test_spec_grp_root_world_location_defaults_to_local_origin(self):
+        # Single-character path: absent -> equals grp_root_local_origin (no behavior change).
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        report, plan = load_builder_inputs(asset_dir)
+        source_bones = build_source_bone_index_from_export(asset_dir, plan["recommended_primary_armature"])
+        spec = build_armature_spec(report, plan, source_bones)
+        self.assertEqual(spec["grp_root_world_location"], spec["grp_root_local_origin"])
+
+    def test_spec_grp_root_world_location_uses_explicit_value(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        report, plan = load_builder_inputs(asset_dir)
+        source_bones = build_source_bone_index_from_export(asset_dir, plan["recommended_primary_armature"])
+        plan["root_resolutions"][0]["grp_root_world_location"] = [32.0, -10.0, 0.0]
+        spec = build_armature_spec(report, plan, source_bones)
+        self.assertEqual(spec["grp_root_world_location"], [32.0, -10.0, 0.0])
+        self.assertEqual(spec["grp_root_local_origin"], [float(v) for v in plan["root_resolutions"][0]["grp_root_local_origin"]])
 
 
 class CrowdNamingTests(unittest.TestCase):
