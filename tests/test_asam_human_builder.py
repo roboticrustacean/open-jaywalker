@@ -303,6 +303,7 @@ class _FakeObject(_FakeProps):
         self.mode = "OBJECT"
         self.selected = False
         self.show_in_front = False
+        self._hidden = False
         self.empty_display_type = None
         self.modifiers = []
         self.vertex_groups = []
@@ -331,6 +332,12 @@ class _FakeObject(_FakeProps):
 
     def select_set(self, value: bool):
         self.selected = bool(value)
+
+    def hide_set(self, value: bool):
+        self._hidden = bool(value)
+
+    def hide_get(self):
+        return self._hidden
 
 
 class _FakeObjectStore:
@@ -605,6 +612,27 @@ class AsamHumanBuilderTests(unittest.TestCase):
         armature_obj = bpy_module.data.objects.get(build_spec["generated_armature_name"])
         self.assertIsNotNone(armature_obj)
         self.assertTrue(armature_obj.show_in_front)
+
+    def test_build_hides_source_rig_and_meshes(self):
+        """After a build, the source armature + its bound meshes are hidden (reversible)."""
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(
+                mesh_record["mesh_name"],
+                bpy_module.data.objects.get("Armature"),
+            )
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        self.assertTrue(bpy_module.data.objects.get("Armature").hide_get())
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            self.assertTrue(bpy_module.data.objects.get(mesh_record["mesh_name"]).hide_get())
+        self.assertIn("Armature", execution_result["hidden_source_objects"])
+        report = build_builder_report(build_spec, execution_result)
+        self.assertIn("Armature", report["hidden_source_objects"])
 
     def test_grp_root_location_set_to_bbox_ground_center(self):
         """Grp_Root empty's location must equal the source-frame bbox_ground_center."""

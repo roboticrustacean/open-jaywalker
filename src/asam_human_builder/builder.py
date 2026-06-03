@@ -552,6 +552,7 @@ def build_builder_report(build_spec: dict, execution_result: dict) -> dict:
         "targets_created_heuristically": created_targets,
         "preserved_extras_count": len(build_spec.get("extras_preserved", [])),
         "preserved_pelvis_pair": copy.deepcopy(build_spec.get("preserved_pelvis_pair", [])),
+        "hidden_source_objects": list(execution_result.get("hidden_source_objects", [])),
         "warnings": list(build_spec.get("warnings", [])),
     }
 
