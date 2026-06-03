@@ -302,6 +302,7 @@ class _FakeObject(_FakeProps):
         self.parent = None
         self.mode = "OBJECT"
         self.selected = False
+        self.show_in_front = False
         self.empty_display_type = None
         self.modifiers = []
         self.vertex_groups = []
@@ -587,6 +588,23 @@ class AsamHumanBuilderTests(unittest.TestCase):
         )
         self.assertEqual(report["root_mode"], "reuse_existing_root")
         self.assertIsNone(report["preserved_source_root"])
+
+    def test_generated_armature_is_shown_in_front(self):
+        """The generated armature object enables 'In Front' so bones draw over the mesh."""
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(
+                mesh_record["mesh_name"],
+                bpy_module.data.objects.get("Armature"),
+            )
+        build_armature_in_blender(build_spec, bpy_module)
+        armature_obj = bpy_module.data.objects.get(build_spec["generated_armature_name"])
+        self.assertIsNotNone(armature_obj)
+        self.assertTrue(armature_obj.show_in_front)
 
     def test_grp_root_location_set_to_bbox_ground_center(self):
         """Grp_Root empty's location must equal the source-frame bbox_ground_center."""

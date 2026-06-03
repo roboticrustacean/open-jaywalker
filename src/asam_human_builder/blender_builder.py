@@ -297,6 +297,8 @@ def _create_armature_object(bpy_module, armature_name: str, asset_name: str, col
     armature_object.parent = group_root
     armature_object[GENERATED_MARKER_KEY] = True
     armature_object[GENERATED_ASSET_KEY] = asset_name
+    # Draw the generated rig in front of the mesh so the bones are visible.
+    armature_object.show_in_front = True
     collection.objects.link(armature_object)
     return armature_object
 
