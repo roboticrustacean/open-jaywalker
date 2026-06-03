@@ -787,6 +787,15 @@ def _meshes_driven_by_armature(armature_obj):
     return list(meshes_by_id.values())
 
 
+def _mesh_world_bbox(obj):
+    """Axis-aligned world bbox of a single mesh object as {'min': [...], 'max': [...]}."""
+    from mathutils import Vector
+    corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+    mins = [min(c[i] for c in corners) for i in range(3)]
+    maxs = [max(c[i] for c in corners) for i in range(3)]
+    return {"min": [float(v) for v in mins], "max": [float(v) for v in maxs]}
+
+
 def _collect_armature_mesh_bounds(armature_obj):
     """Collect driven-mesh bound-box corners in WORLD coordinates."""
     from mathutils import Vector
@@ -902,6 +911,7 @@ def build_mesh_binding(armature_obj):
                     "per_group": per_group_stats,
                 },
                 "material_slots": material_slots,
+                "bbox": _mesh_world_bbox(obj),
                 "warnings": sorted(warnings),
             }
         )
