@@ -554,6 +554,18 @@ def print_console_summary(report: dict, plan: dict, report_path: Path, plan_path
     print("Recommended primary armature: {0}".format(report["recommended_primary_armature"]))
     print("Root resolution: {0}".format(plan["root_resolutions"][0]["mode"]))
     print("Missing targets: {0}".format(", ".join(report["missing_targets"]) or "(none)"))
+    crowd_characters = report.get("characters") or []
+    if crowd_characters:
+        missing_counts = {}
+        for character in crowd_characters:
+            for target in character.get("missing_targets", []):
+                missing_counts[target] = missing_counts.get(target, 0) + 1
+        print("Crowd missing-target counts (of {0} characters):".format(len(crowd_characters)))
+        if missing_counts:
+            for target, count in sorted(missing_counts.items(), key=lambda item: (-item[1], item[0])):
+                print("  {0}: {1}".format(target, count))
+        else:
+            print("  (none)")
     print("Ambiguous targets: {0}".format(", ".join(item["target"] for item in report["ambiguous_targets"]) or "(none)"))
     print("Preserved extras count: {0}".format(len(plan["extras_preserved"])))
     print("Report written to: {0}".format(report_path))

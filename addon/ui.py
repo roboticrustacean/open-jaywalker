@@ -47,7 +47,11 @@ class OJ_PT_panel(bpy.types.Panel):
             )
             if s.show_details:
                 det = box.box()
-                if s.missing_csv:
+                if s.is_crowd and s.missing_by_target_csv:
+                    det.label(text="Missing across {0} characters:".format(s.character_count))
+                    for entry in s.missing_by_target_csv.split(", "):
+                        det.label(text="   - {0}".format(entry))
+                elif not s.is_crowd and s.missing_csv:
                     det.label(text="Missing targets:")
                     for name in s.missing_csv.split(", "):
                         det.label(text="   - {0}".format(name))
@@ -59,7 +63,7 @@ class OJ_PT_panel(bpy.types.Panel):
                     det.label(text="Characters:")
                     for cid in s.character_ids_csv.split(", "):
                         det.label(text="   - {0}".format(cid))
-                if not s.missing_csv and not s.review_flags_csv:
+                if not s.missing_csv and not s.missing_by_target_csv and not s.review_flags_csv:
                     det.label(
                         text="All {0} core targets mapped; no review flags.".format(s.total),
                         icon='CHECKMARK',

@@ -47,6 +47,9 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         settings.mapped = summary["mapped"]
         settings.total = summary["total"]
         settings.missing_csv = ", ".join(summary["missing_targets"])
+        settings.missing_by_target_csv = ", ".join(
+            "{0} x{1}".format(entry["target"], entry["count"]) for entry in summary["missing_by_target"]
+        )
         settings.review_flags_csv = ", ".join(summary["review_flags"])
         settings.character_ids_csv = ", ".join(summary["character_ids"])
         settings.is_crowd = summary["is_crowd"]

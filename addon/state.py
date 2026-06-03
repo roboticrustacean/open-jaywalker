@@ -12,6 +12,7 @@ class OJSettings(bpy.types.PropertyGroup):
     mapped: bpy.props.IntProperty(default=0)
     total: bpy.props.IntProperty(default=28)
     missing_csv: bpy.props.StringProperty(default="")
+    missing_by_target_csv: bpy.props.StringProperty(default="")
     review_flags_csv: bpy.props.StringProperty(default="")
     character_ids_csv: bpy.props.StringProperty(default="")
     is_crowd: bpy.props.BoolProperty(default=False)

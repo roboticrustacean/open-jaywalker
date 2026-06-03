@@ -31,6 +31,27 @@ class SummarizePlanTests(unittest.TestCase):
         self.assertEqual(summary["character_count"], 0)
         self.assertEqual(summary["review_flags"], ["multiple_roots", "root_noncompliant"])
         self.assertEqual(summary["character_ids"], [])
+        self.assertEqual(summary["missing_by_target"], [])
+
+    def test_crowd_missing_by_target_aggregates(self):
+        report = {
+            "recommended_primary_armature": "_rootJoint",
+            "missing_targets": [],
+            "review_flags": [],
+            "characters": [
+                {"character_id": "c0", "missing_targets": ["Eye_Left", "Lower_Spine"]},
+                {"character_id": "c1", "missing_targets": ["Eye_Left"]},
+                {"character_id": "c2", "missing_targets": ["Eye_Left", "Lower_Spine"]},
+            ],
+        }
+        plan = {"characters": [{"character_id": "c0"}, {"character_id": "c1"}, {"character_id": "c2"}]}
+        summary = summarize_plan(report, plan)
+        self.assertTrue(summary["is_crowd"])
+        self.assertEqual(summary["character_count"], 3)
+        self.assertEqual(
+            summary["missing_by_target"],
+            [{"target": "Eye_Left", "count": 3}, {"target": "Lower_Spine", "count": 2}],
+        )
 
     def test_crowd_summary_uses_character_count(self):
         report, _plan = self._load()
