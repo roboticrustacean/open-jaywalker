@@ -59,6 +59,11 @@ class OJ_PT_panel(bpy.types.Panel):
                     det.label(text="Characters:")
                     for cid in s.character_ids_csv.split(", "):
                         det.label(text="   - {0}".format(cid))
+                if not s.missing_csv and not s.review_flags_csv:
+                    det.label(
+                        text="All {0} core targets mapped; no review flags.".format(s.total),
+                        icon='CHECKMARK',
+                    )
 
             build_row = layout.row()
             build_row.enabled = s.has_plan and not s.built
