@@ -94,7 +94,7 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
         bpy_module, group_root_name, asset_name, collection, grp_root_location
     )
     armature_object = _create_armature_object(bpy_module, armature_name, asset_name, collection, group_root)
-    _populate_edit_bones(bpy_module, armature_object, build_spec["bones"])
+    _populate_edit_bones(bpy_module, armature_object, build_spec["bones"], build_spec.get("roll_align_axis"))
     # Force the dependency graph to evaluate the just-placed Grp_Root/armature so the
     # duplicated meshes below are positioned against their parent's CURRENT world
     # transform.
@@ -530,7 +530,18 @@ def _apply_vertex_group_renames(mesh_obj, renames: List[dict]) -> None:
             groups[index] = new_name
 
 
-def _populate_edit_bones(bpy_module, armature_object, bones: List[dict]) -> None:
+def _roll_axis_vector(axis):
+    """Return a value accepted by EditBone.align_roll. In Blender that is a
+    mathutils.Vector; outside Blender (tests) mathutils is unavailable, so the
+    raw sequence is returned and the fake records it directly."""
+    try:
+        from mathutils import Vector  # type: ignore
+    except ImportError:
+        return axis
+    return Vector(axis)
+
+
+def _populate_edit_bones(bpy_module, armature_object, bones: List[dict], roll_align_axis=None) -> None:
     _ensure_object_mode(bpy_module)
     _set_active_object(bpy_module, armature_object)
     bpy_module.ops.object.mode_set(mode="EDIT")
@@ -549,6 +560,11 @@ def _populate_edit_bones(bpy_module, armature_object, bones: List[dict]) -> None
         edit_bone = edit_bones[bone["name"]]
         edit_bone.parent = edit_bones[parent_name]
         edit_bone.use_connect = bool(bone.get("use_connect", False))
+
+    if roll_align_axis is not None:
+        axis_vector = _roll_axis_vector(roll_align_axis)
+        for bone in bones:
+            edit_bones[bone["name"]].align_roll(axis_vector)
 
     bpy_module.ops.object.mode_set(mode="OBJECT")
 

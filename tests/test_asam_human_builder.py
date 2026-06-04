@@ -234,6 +234,13 @@ class _FakeBone:
         self.tail = [0.0, 0.0, 0.0]
         self.parent = None
         self.use_connect = False
+        self.roll = 0.0
+        self.roll_aligned_to = None
+
+    def align_roll(self, vector):
+        # Mirror Blender's EditBone.align_roll just enough for assertions: record
+        # the target axis the bone's local Z was aligned to.
+        self.roll_aligned_to = [float(component) for component in vector]
 
 
 class _FakeEditBones:
@@ -2312,6 +2319,34 @@ class ComputeVertexGroupRemapPlanTests(unittest.TestCase):
 
         self.assertEqual(plan["renames"], [{"source": "DEF-hand.L", "target": "Hand_Left"}])
         self.assertEqual(plan["asam_targets_without_source_group"], [])
+
+
+class AsamHumanBuilderRollTests(unittest.TestCase):
+    """Every generated bone (mapped AND synthesized) is roll-aligned to the ASAM
+    side axis so its local Z points sidewards."""
+
+    def test_every_bone_is_roll_aligned_to_side_axis(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(
+                mesh_record["mesh_name"],
+                bpy_module.data.objects.get("Armature"),
+            )
+        build_armature_in_blender(build_spec, bpy_module)
+
+        expected = build_spec["roll_align_axis"]
+        edit_bones = bpy_module.data.objects.get(
+            build_spec["generated_armature_name"]
+        ).data.edit_bones
+        for bone in build_spec["bones"]:
+            self.assertEqual(
+                edit_bones[bone["name"]].roll_aligned_to, expected,
+                f"{bone['name']} was not roll-aligned to the ASAM side axis",
+            )
 
 
 class CrowdFlatInputsTests(unittest.TestCase):
