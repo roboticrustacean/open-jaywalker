@@ -2570,5 +2570,30 @@ class ExportGeneratedBlendTests(unittest.TestCase):
             export_generated_blend(fake_bpy, "DoesNotExist", "/tmp/x.blend")
 
 
+class PlacementDeltaTests(unittest.TestCase):
+    """The body must travel with its rig: mesh delta == rig relocation delta."""
+
+    def test_placement_delta_is_world_minus_local(self):
+        from asam_human_builder import blender_builder
+        spec = {"grp_root_world_location": [32.0, -10.0, 0.0], "grp_root_local_origin": [0.0, 0.0, 0.0]}
+        self.assertEqual(blender_builder._placement_delta(spec), [32.0, -10.0, 0.0])
+
+    def test_placement_delta_zero_for_single_character(self):
+        from asam_human_builder import blender_builder
+        # Single-character: the two anchors coincide -> no relocation -> mesh unchanged.
+        spec = {"grp_root_world_location": [0.5, 1.0, 0.0], "grp_root_local_origin": [0.5, 1.0, 0.0]}
+        self.assertEqual(blender_builder._placement_delta(spec), [0.0, 0.0, 0.0])
+
+    def test_placement_delta_defaults_when_world_absent(self):
+        from asam_human_builder import blender_builder
+        spec = {"grp_root_local_origin": [2.0, 3.0, 4.0]}
+        self.assertEqual(blender_builder._placement_delta(spec), [0.0, 0.0, 0.0])
+
+    def test_translated_matrix_zero_delta_returns_same_object(self):
+        from asam_human_builder import blender_builder
+        sentinel = object()  # a non-matrix; zero delta must not touch it
+        self.assertIs(blender_builder._translated_matrix(sentinel, [0.0, 0.0, 0.0]), sentinel)
+
+
 if __name__ == "__main__":
     unittest.main()

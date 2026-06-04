@@ -97,10 +97,13 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
     _populate_edit_bones(bpy_module, armature_object, build_spec["bones"])
     # Force the dependency graph to evaluate the just-placed Grp_Root/armature so the
     # duplicated meshes below are positioned against their parent's CURRENT world
-    # transform. Without this, Blender's lazy depsgraph can leave the armature's
-    # matrix_world stale (still at the pre-placement origin) when _copy_mesh_object
-    # sets each mesh's matrix_world, leaving the body behind while the rig moved.
+    # transform.
     _refresh_depsgraph(bpy_module)
+    # The rig was relocated from the source bones (grp_root_local_origin) to the body
+    # anchor (grp_root_world_location). The bound mesh deforms to the source bone frame,
+    # so it must be translated by the SAME delta to travel with its rig. For single
+    # characters the two anchors coincide -> delta is zero -> mesh keeps source world.
+    placement_delta = _placement_delta(build_spec)
     mesh_result = _duplicate_bound_meshes(
         bpy_module,
         build_spec,
@@ -108,6 +111,7 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
         source_armature,
         armature_object,
         character_prefix,
+        placement_delta,
     )
 
     hidden_source_objects = _hide_source_objects(bpy_module, source_armature, build_spec)
@@ -342,6 +346,7 @@ def _duplicate_bound_meshes(
     source_armature,
     generated_armature,
     character_prefix=None,
+    placement_delta=(0.0, 0.0, 0.0),
 ) -> dict:
     duplicated_meshes = []
     skipped_meshes = []
@@ -370,6 +375,7 @@ def _duplicate_bound_meshes(
             build_spec["asset_name"],
             collection,
             generated_armature,
+            placement_delta,
         )
         retargeted = _retarget_armature_modifiers(generated_mesh, source_armature, generated_armature)
         if record.get("armature_link") == "parent" and not retargeted:
@@ -425,12 +431,16 @@ def _copy_mesh_object(
     asset_name: str,
     collection,
     parent_object,
+    placement_delta=(0.0, 0.0, 0.0),
 ):
-    """Duplicate a mesh object and parent it to parent_object.
+    """Duplicate a mesh object, parent it to parent_object, and place it on its rig.
 
-    The source mesh's ``matrix_world`` is preserved on the duplicate; Blender's
-    parent-inverse handles the rebase into Grp_Root-local space when the
-    generated armature (a descendant of Grp_Root) becomes the parent.
+    The duplicate keeps the source mesh's ``matrix_world`` translated by
+    ``placement_delta`` -- the same offset the rig was relocated by
+    (grp_root_world_location - grp_root_local_origin). The bound mesh deforms into the
+    source bone frame, so applying the identical delta makes the body travel with its
+    rig. ``placement_delta`` is zero for single-character builds, so the duplicate keeps
+    the source world transform unchanged.
     """
     generated_mesh = source_mesh.copy()
     generated_mesh.name = _resolve_unique_name(
@@ -450,20 +460,27 @@ def _copy_mesh_object(
     collection.objects.link(generated_mesh)
     # Parent to the generated armature (one level below group_root) to match ASAM hierarchy.
     generated_mesh.parent = parent_object
-    # Pin the parent-inverse to the parent's CURRENT world matrix so the duplicate keeps
-    # its source world transform regardless of where the parent (a relocated armature
-    # under Grp_Root) now sits. Setting matrix_world alone is not enough: Blender derives
-    # matrix_basis from parent.matrix_world @ matrix_parent_inverse, and a stale/identity
-    # parent-inverse against a moved parent shifts the body off its rig.
-    parent_world = getattr(parent_object, "matrix_world", None)
-    if parent_world is not None and hasattr(generated_mesh, "matrix_parent_inverse"):
-        try:
-            generated_mesh.matrix_parent_inverse = parent_world.inverted()
-        except (AttributeError, ValueError):
-            pass
     if world_matrix is not None:
-        generated_mesh.matrix_world = world_matrix
+        generated_mesh.matrix_world = _translated_matrix(world_matrix, placement_delta)
     return generated_mesh
+
+
+def _translated_matrix(matrix, delta):
+    """Return ``matrix`` with ``delta`` added to its translation.
+
+    No-op (returns the matrix unchanged) when delta is zero or when the matrix does not
+    support translation arithmetic (the pure-Python test fake). Only the live Blender
+    path with a real mathutils matrix and a non-zero delta takes the translation branch.
+    """
+    if not any(abs(float(d)) > 1e-9 for d in delta):
+        return matrix
+    try:
+        from mathutils import Vector  # Blender-only; only reached when delta != 0.
+        moved = matrix.copy()
+        moved.translation = moved.translation + Vector((float(delta[0]), float(delta[1]), float(delta[2])))
+        return moved
+    except (ImportError, AttributeError, TypeError):
+        return matrix
 
 
 def _retarget_armature_modifiers(mesh_obj, source_armature, generated_armature) -> List[str]:
@@ -551,6 +568,18 @@ def _ensure_object_mode(bpy_module) -> None:
         return
     if getattr(active_object, "mode", "OBJECT") != "OBJECT":
         bpy_module.ops.object.mode_set(mode="OBJECT")
+
+
+def _placement_delta(build_spec: dict) -> List[float]:
+    """Vector the rig was relocated by: grp_root_world_location - grp_root_local_origin.
+
+    Zero for single-character builds (the two anchors coincide), so the bound mesh keeps
+    its source world transform. Non-zero for relocated crowd characters, moving the body
+    onto its rig.
+    """
+    world = build_spec.get("grp_root_world_location") or build_spec.get("grp_root_local_origin") or [0.0, 0.0, 0.0]
+    local = build_spec.get("grp_root_local_origin") or [0.0, 0.0, 0.0]
+    return [float(world[i]) - float(local[i]) for i in range(3)]
 
 
 def _refresh_depsgraph(bpy_module) -> None:
