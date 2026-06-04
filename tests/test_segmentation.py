@@ -270,5 +270,38 @@ class SegmentRecommendedTests(unittest.TestCase):
         self.assertEqual(result.decomposition["unassigned_meshes"], ["Prop"])
 
 
+class BodyAnchorFromMeshesTests(unittest.TestCase):
+    def test_character_body_anchor_from_owned_mesh_bbox(self):
+        from phase3_classifier import segmentation
+        meshes = [
+            {"mesh_name": "Body", "bbox": {"min": [31.0, -11.0, 0.0], "max": [33.0, -9.0, 1.8]}},
+        ]
+        anchor = segmentation.body_anchor_from_meshes(meshes, up_axis_index=2, up_sign=1)
+        self.assertAlmostEqual(anchor[0], 32.0)   # planar center
+        self.assertAlmostEqual(anchor[1], -10.0)  # planar center
+        self.assertAlmostEqual(anchor[2], 0.0)    # ground = min on up axis (up_sign>=0)
+
+    def test_body_anchor_uses_max_on_up_axis_when_up_sign_negative(self):
+        from phase3_classifier import segmentation
+        meshes = [{"mesh_name": "B", "bbox": {"min": [0.0, 0.0, 0.0], "max": [2.0, 2.0, 2.0]}}]
+        anchor = segmentation.body_anchor_from_meshes(meshes, up_axis_index=2, up_sign=-1)
+        self.assertAlmostEqual(anchor[2], 2.0)    # ground = max when up_sign<0
+
+    def test_body_anchor_unions_multiple_meshes(self):
+        from phase3_classifier import segmentation
+        meshes = [
+            {"mesh_name": "A", "bbox": {"min": [0.0, 0.0, 0.0], "max": [1.0, 1.0, 1.0]}},
+            {"mesh_name": "B", "bbox": {"min": [3.0, 3.0, 0.0], "max": [4.0, 4.0, 2.0]}},
+        ]
+        anchor = segmentation.body_anchor_from_meshes(meshes, up_axis_index=2, up_sign=1)
+        self.assertAlmostEqual(anchor[0], 2.0)    # (min0=0, max4=4) -> center 2.0
+        self.assertAlmostEqual(anchor[1], 2.0)
+
+    def test_body_anchor_none_when_no_bboxes(self):
+        from phase3_classifier import segmentation
+        self.assertIsNone(segmentation.body_anchor_from_meshes([], up_axis_index=2, up_sign=1))
+        self.assertIsNone(segmentation.body_anchor_from_meshes([{"mesh_name": "x"}], up_axis_index=2, up_sign=1))
+
+
 if __name__ == "__main__":
     unittest.main()

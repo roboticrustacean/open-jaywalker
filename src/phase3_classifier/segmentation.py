@@ -257,6 +257,22 @@ def _plan_character(character_id: str, report: dict) -> dict:
     }
 
 
+def body_anchor_from_meshes(meshes, up_axis_index, up_sign):
+    """Ground-center of the union of owned meshes' world bboxes, or None if absent.
+
+    Planar axes use the bbox center; the up axis uses the ground (min when up_sign>=0,
+    else max) so the anchor sits on the floor under the body.
+    """
+    boxes = [m["bbox"] for m in (meshes or []) if isinstance(m.get("bbox"), dict)]
+    if not boxes:
+        return None
+    mins = [min(b["min"][i] for b in boxes) for i in range(3)]
+    maxs = [max(b["max"][i] for b in boxes) for i in range(3)]
+    center = [(mins[i] + maxs[i]) / 2.0 for i in range(3)]
+    center[up_axis_index] = mins[up_axis_index] if up_sign >= 0 else maxs[up_axis_index]
+    return [float(v) for v in center]
+
+
 def segment_recommended(asset_name: str, recommended_input) -> Optional[SegmentationResult]:
     """Return per-character decomposition for a crowd armature, or None if single."""
     bones = recommended_input.primary_data.get("bones", [])
