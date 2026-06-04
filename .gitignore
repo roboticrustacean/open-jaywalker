@@ -83,3 +83,6 @@ dmypy.json
 # Pipeline runtime outputs. Inspector + classifier + builder write here by
 # default; redirected via OPEN_JAYWALKER_OUTPUT_ROOT for tests and runbooks.
 /output/
+
+# Add-on auto-updater runtime state (created in the installed add-on at runtime).
+addon/open_jaywalker_updater/
