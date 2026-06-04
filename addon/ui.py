@@ -69,6 +69,7 @@ class OJ_PT_panel(bpy.types.Panel):
                         icon='CHECKMARK',
                     )
 
+            layout.prop(s, "packaging_mode")
             build_row = layout.row()
             build_row.enabled = s.has_plan and not s.built
             build_row.operator("open_jaywalker.build", icon='MOD_ARMATURE')

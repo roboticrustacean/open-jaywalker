@@ -17,3 +17,16 @@ class OJSettings(bpy.types.PropertyGroup):
     character_ids_csv: bpy.props.StringProperty(default="")
     is_crowd: bpy.props.BoolProperty(default=False)
     character_count: bpy.props.IntProperty(default=0)
+    packaging_mode: bpy.props.EnumProperty(
+        name="Output",
+        description="How to package the generated ASAM human(s)",
+        items=[
+            ("inplace_export", "In-place + export .blend",
+             "Build in this file, then export only the ASAM result to <asset>_asam.blend"),
+            ("inplace_only", "In-place only",
+             "Build in this file; do not export a separate .blend"),
+            ("separate_only", "Separate file only",
+             "Export the ASAM result, then remove generated data from this file"),
+        ],
+        default="inplace_export",
+    )
