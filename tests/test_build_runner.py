@@ -22,7 +22,17 @@ class RunBuildTests(unittest.TestCase):
             report = build_runner.run_build(Path("/x"), bpy="BPY", packaging_mode="inplace_only")
 
         build_one.assert_called_once_with(spec, "BPY")
-        self.assertEqual(report, {"asset_name": "A"})
+        # inplace_only performs no export but still records the packaging mode for a
+        # consistent report shape across modes.
+        self.assertEqual(
+            report,
+            {
+                "asset_name": "A",
+                "packaging_mode": "inplace_only",
+                "exported_blend_path": None,
+                "export_error": None,
+            },
+        )
 
     def test_crowd_dispatch(self):
         resolved = {
