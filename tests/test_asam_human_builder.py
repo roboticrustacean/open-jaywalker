@@ -2595,5 +2595,22 @@ class PlacementDeltaTests(unittest.TestCase):
         self.assertIs(blender_builder._translated_matrix(sentinel, [0.0, 0.0, 0.0]), sentinel)
 
 
+class AsamRollAxisTests(unittest.TestCase):
+    """build_armature_spec exposes the ASAM roll-alignment axis: a unit vector along
+    the world side axis (local bone Z points sidewards per ASAM OpenMATERIAL)."""
+
+    def test_spec_carries_unit_side_axis_roll_vector(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+
+        side = build_plan["placement_metadata"]["side_axis"]
+        index = int(side["index"])
+        expected = [0.0, 0.0, 0.0]
+        expected[index] = 1.0 if float(side.get("sign", 1)) >= 0 else -1.0
+
+        self.assertEqual(build_spec["roll_align_axis"], expected)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -12,6 +12,7 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from phase3_classifier.classifier import CORE_TARGETS
 
 from asam_human_builder.geometry_resolution import (
+    _asam_roll_align_axis,
     _hip_requires_centered_pelvis_pair,
     _opposite_name_candidates,
     _resolve_preserved_source_root_extra,
@@ -415,6 +416,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         "generated_armature_name": "Armature_{0}".format(asset_name),
         "root_resolution": copy.deepcopy(root_resolution),
         "placement_metadata": copy.deepcopy(placement_metadata),
+        "roll_align_axis": _asam_roll_align_axis(placement_metadata),
         "mesh_binding": copy.deepcopy(build_plan["mesh_binding"]),
         "extras_preserved": copy.deepcopy(build_plan.get("extras_preserved", [])),
         "grp_root_local_origin": list(grp_root_local_origin),
