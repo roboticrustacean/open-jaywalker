@@ -20,11 +20,28 @@ from asam_human_builder.builder import (
 from asam_human_builder.blender_builder import (
     build_armature_in_blender,
     build_crowd_in_blender,
+    export_generated_blend,
+    purge_previous_generated_artifacts,
 )
 
+# Output packaging modes. Shared canonical definition so the addon (Task C3) and the
+# builder reference the same literals instead of duplicating magic strings.
+PACKAGING_INPLACE_EXPORT = "inplace_export"
+PACKAGING_INPLACE_ONLY = "inplace_only"
+PACKAGING_SEPARATE_ONLY = "separate_only"
+PACKAGING_MODES = (PACKAGING_INPLACE_EXPORT, PACKAGING_INPLACE_ONLY, PACKAGING_SEPARATE_ONLY)
 
-def run_build(asset_dir, bpy) -> dict:
+
+def run_build(asset_dir, bpy, packaging_mode=PACKAGING_INPLACE_EXPORT) -> dict:
     """Resolve specs for asset_dir and build them (single or crowd).
+
+    packaging_mode controls post-build export:
+      "inplace_export" (default): build in place, then export generated wrapper
+          collection to <asset_dir>/<asset_name>_asam.blend.
+      "inplace_only": build only, no export.
+      "separate_only": export, then purge generated data from the open file.
+
+    Export failures are recorded on the report and never abort the in-place build.
 
     Returns the builder report (single) or crowd builder report (crowd).
     """
@@ -46,11 +63,42 @@ def run_build(asset_dir, bpy) -> dict:
             crowd_execution,
         )
         _, report_path = write_crowd_builder_report(asset_dir, report)
+        wrapper_name = resolved["wrapper_collection_name"]
     else:
         build_spec = resolved["specs"][0]
         execution_result = build_armature_in_blender(build_spec, bpy)
         report, report_path = write_builder_report(asset_dir, build_spec, execution_result)
         print_builder_summary(report, report_path)
+        wrapper_name = build_spec["generated_collection_name"]
+
+    _export_if_requested(asset_dir, resolved["asset_name"], wrapper_name, bpy, packaging_mode, report)
 
     print(success_message(report, report_path))
     return report
+
+
+def _export_if_requested(asset_dir, asset_name, wrapper_name, bpy, packaging_mode, report):
+    """Record packaging outcome on the report and export when requested.
+
+    Modes:
+      - PACKAGING_INPLACE_ONLY: no export, no purge.
+      - PACKAGING_INPLACE_EXPORT: write the generated wrapper to a clean .blend.
+      - PACKAGING_SEPARATE_ONLY: export, then purge generated data from the open file.
+
+    `packaging_mode` is always recorded (even for inplace_only) so the report shape is
+    consistent across modes. Export failures are caught and recorded; they never abort
+    the already-completed in-place build.
+    """
+    report["packaging_mode"] = packaging_mode
+    report["exported_blend_path"] = None
+    report["export_error"] = None
+    if packaging_mode == PACKAGING_INPLACE_ONLY:
+        return
+    out_path = str(Path(asset_dir) / "{0}_asam.blend".format(asset_name))
+    try:
+        report["exported_blend_path"] = export_generated_blend(bpy, wrapper_name, out_path)
+    except Exception as exc:  # never abort the already-completed in-place build
+        report["export_error"] = str(exc)
+        return
+    if packaging_mode == PACKAGING_SEPARATE_ONLY:
+        purge_previous_generated_artifacts(bpy)

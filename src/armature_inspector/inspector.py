@@ -515,21 +515,33 @@ def print_detected_chains(armature_obj):
 # region BONE GEOMETRY EXTRACTION
 
 
-def extract_bone_geometry(bone):
-    """
-    Extract geometry and basic transform data from a single bone.
+def extract_bone_geometry(bone, matrix_world=None):
+    """Extract geometry/transform for a single bone in WORLD coordinates.
+
+    head/tail are expressed in world space (matrix_world @ head_local). For an
+    identity-transform armature this equals the armature-local value, so existing
+    single-character outputs are unchanged.
 
     Args:
         bone: A Blender bone (bpy.types.Bone)
+        matrix_world: Optional armature world matrix. When provided, bone
+                      head/tail are transformed into world coordinates.
 
     Returns:
         dict: Geometry data for the bone.
     """
+    head_local = bone.head_local
+    tail_local = bone.tail_local
+    if matrix_world is not None:
+        head = matrix_world @ head_local
+        tail = matrix_world @ tail_local
+    else:
+        head, tail = head_local, tail_local
     return {
         "name": bone.name,
         "parent": bone.parent.name if bone.parent else None,
-        "head": tuple(bone.head_local),
-        "tail": tuple(bone.tail_local),
+        "head": (float(head[0]), float(head[1]), float(head[2])),
+        "tail": (float(tail[0]), float(tail[1]), float(tail[2])),
         "length": float(bone.length),
         "matrix_local": [list(row) for row in bone.matrix_local],
     }
@@ -537,21 +549,22 @@ def extract_bone_geometry(bone):
 
 def extract_armature_geometry(armature_obj, prefix_filter=None):
     """
-    Extract geometry data for all bones in an armature.
+    Extract geometry data for all bones in an armature in WORLD coordinates.
 
     Args:
         armature_obj: Blender armature object (bpy.types.Object)
         prefix_filter: Optional prefix to restrict bones (e.g., 'DEF-')
 
     Returns:
-        list[dict]: Geometry data for each bone.
+        list[dict]: Geometry data for each bone with head/tail in world space.
     """
     bones = armature_obj.data.bones
+    matrix_world = getattr(armature_obj, "matrix_world", None)
     result = []
     for bone in bones:
         if prefix_filter is not None and not bone.name.startswith(prefix_filter):
             continue
-        result.append(extract_bone_geometry(bone))
+        result.append(extract_bone_geometry(bone, matrix_world))
     return result
 
 
@@ -689,7 +702,7 @@ def _infer_axis_metadata_from_bones(bones_data):
 
 
 def _build_bbox_metadata(points, axis_metadata):
-    """Build bounding box metadata from local-space points."""
+    """Build bounding box metadata from world-space points."""
     if not points:
         zero = [0.0, 0.0, 0.0]
         return {
@@ -722,7 +735,7 @@ def build_armature_placement_metadata(bones_data, mesh_points=None, driven_meshe
 
     Args:
         bones_data: List of exported bone payloads.
-        mesh_points: Optional list of local-space mesh bound-box corner points.
+        mesh_points: Optional list of world-space mesh bound-box corner points.
         driven_meshes: Optional list of mesh object names contributing to the bounds.
 
     Returns:
@@ -774,24 +787,27 @@ def _meshes_driven_by_armature(armature_obj):
     return list(meshes_by_id.values())
 
 
+def _mesh_world_bbox(obj):
+    """Axis-aligned world bbox of a single mesh object as {'min': [...], 'max': [...]}."""
+    from mathutils import Vector
+    corners = [obj.matrix_world @ Vector(c) for c in obj.bound_box]
+    mins = [min(c[i] for c in corners) for i in range(3)]
+    maxs = [max(c[i] for c in corners) for i in range(3)]
+    return {"min": [float(v) for v in mins], "max": [float(v) for v in maxs]}
+
+
 def _collect_armature_mesh_bounds(armature_obj):
-    """
-    Collect mesh bound-box corner points in armature-local coordinates.
-    """
+    """Collect driven-mesh bound-box corners in WORLD coordinates."""
     from mathutils import Vector
 
-    armature_inverse = armature_obj.matrix_world.inverted()
     driven_meshes = []
-    local_points = []
-
+    world_points = []
     for obj in _meshes_driven_by_armature(armature_obj):
         driven_meshes.append(obj.name)
         for corner in obj.bound_box:
             world_point = obj.matrix_world @ Vector(corner)
-            local_point = armature_inverse @ world_point
-            local_points.append([float(local_point[0]), float(local_point[1]), float(local_point[2])])
-
-    return local_points, driven_meshes
+            world_points.append([float(world_point[0]), float(world_point[1]), float(world_point[2])])
+    return world_points, driven_meshes
 
 
 def build_mesh_binding(armature_obj):
@@ -895,6 +911,7 @@ def build_mesh_binding(armature_obj):
                     "per_group": per_group_stats,
                 },
                 "material_slots": material_slots,
+                "bbox": _mesh_world_bbox(obj),
                 "warnings": sorted(warnings),
             }
         )

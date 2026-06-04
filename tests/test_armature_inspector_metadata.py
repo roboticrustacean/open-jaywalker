@@ -155,5 +155,168 @@ class ArmatureInspectorMetadataTests(unittest.TestCase):
         )
 
 
+    def test_extract_armature_geometry_returns_world_coordinates(self):
+        fake_bpy = types.SimpleNamespace(
+            data=types.SimpleNamespace(filepath="", objects=[], armatures=[]),
+        )
+        with mock.patch.dict(sys.modules, {"bpy": fake_bpy}):
+            if "inspector" in sys.modules:
+                del sys.modules["inspector"]
+            inspector = importlib.import_module("inspector")
+
+        class FakeMatrix:
+            # 0.0254 uniform scale, no rotation/translation — mirrors 1000idles Object_4.
+            def __matmul__(self, vec):
+                return type(vec)((0.0254 * vec[0], 0.0254 * vec[1], 0.0254 * vec[2]))
+
+        class V(tuple):
+            pass
+
+        class FakeBone:
+            def __init__(self):
+                self.name = "Pelvis"
+                self.parent = None
+                self.head_local = V((0.0, 0.0, 35.0))
+                self.tail_local = V((0.0, 0.0, 40.0))
+                self.length = 5.0
+                self.matrix_local = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+
+        class FakeData:
+            bones = [FakeBone()]
+
+        class FakeArmature:
+            data = FakeData()
+            matrix_world = FakeMatrix()
+
+        result = inspector.extract_armature_geometry(FakeArmature())
+        self.assertAlmostEqual(result[0]["head"][2], 35.0 * 0.0254)
+        self.assertAlmostEqual(result[0]["tail"][2], 40.0 * 0.0254)
+
+
+    def test_collect_armature_mesh_bounds_returns_world_points(self):
+        # FakeVector is a tuple subclass so indexing ([0],[1],[2]) and type(vec)((...))
+        # both work — satisfying FakeMatrix.__matmul__.
+        class FakeVector(tuple):
+            pass
+
+        class FakeMatrix:
+            def __init__(self, s):
+                self.s = s
+
+            def __matmul__(self, vec):
+                return type(vec)((self.s * vec[0], self.s * vec[1], self.s * vec[2]))
+
+            def inverted(self):  # must NOT be called anymore
+                raise AssertionError(
+                    "armature inverse must not be used; bounds are world-space"
+                )
+
+        class V(tuple):
+            pass
+
+        class FakeMesh:
+            type = "MESH"
+            name = "Body"
+            parent = None
+            modifiers = []
+            matrix_world = FakeMatrix(0.0254)
+            bound_box = [V((0.0, 0.0, 0.0)), V((100.0, 0.0, 0.0))]
+
+        fake_mathutils = types.SimpleNamespace(Vector=FakeVector)
+        fake_bpy = types.SimpleNamespace(
+            data=types.SimpleNamespace(filepath="", objects=[], armatures=[]),
+        )
+        # mathutils is imported inside the function body at call time, so it must be
+        # present in sys.modules throughout module import AND the function call.
+        with mock.patch.dict(sys.modules, {"bpy": fake_bpy, "mathutils": fake_mathutils}):
+            if "inspector" in sys.modules:
+                del sys.modules["inspector"]
+            inspector = importlib.import_module("inspector")
+
+            arm = type("Arm", (), {"matrix_world": FakeMatrix(0.0254)})()
+            # Force the driven-mesh detection to return our fake mesh:
+            original = inspector._meshes_driven_by_armature
+            inspector._meshes_driven_by_armature = lambda a: [FakeMesh()]
+            try:
+                points, names = inspector._collect_armature_mesh_bounds(arm)
+            finally:
+                inspector._meshes_driven_by_armature = original
+
+        self.assertEqual(names, ["Body"])
+        # World-space: 100.0 * 0.0254 = 2.54 — NOT armature-local
+        self.assertAlmostEqual(points[1][0], 100.0 * 0.0254)
+
+
+    def test_build_mesh_binding_includes_world_bbox_per_mesh(self):
+        class FakeVector(tuple):
+            pass
+
+        class FakeMatrix:
+            def __matmul__(self, vec):
+                # translate by (32, -10, 0) — multiply keeps coords then adds offset
+                return type(vec)((vec[0] + 32.0, vec[1] - 10.0, vec[2]))
+
+        class FakeVertexGroup:
+            def __init__(self, name, index):
+                self.name = name
+                self.index = index
+
+        class FakeMeshData:
+            vertices = []
+
+        class FakeMesh:
+            type = "MESH"
+            name = "Body"
+            parent = None  # no parent link; modifier link will be set below
+            modifiers = []
+            vertex_groups = [FakeVertexGroup("Pelvis", 0)]
+            data = FakeMeshData()
+            material_slots = []
+            matrix_world = FakeMatrix()
+            # Unit cube corners (8 corners)
+            bound_box = [
+                FakeVector((0.0, 0.0, 0.0)),
+                FakeVector((1.0, 0.0, 0.0)),
+                FakeVector((1.0, 1.0, 0.0)),
+                FakeVector((0.0, 1.0, 0.0)),
+                FakeVector((0.0, 0.0, 1.0)),
+                FakeVector((1.0, 0.0, 1.0)),
+                FakeVector((1.0, 1.0, 1.0)),
+                FakeVector((0.0, 1.0, 1.0)),
+            ]
+
+        fake_mathutils = types.SimpleNamespace(Vector=FakeVector)
+        fake_bpy = types.SimpleNamespace(
+            data=types.SimpleNamespace(filepath="", objects=[], armatures=[]),
+        )
+
+        with mock.patch.dict(sys.modules, {"bpy": fake_bpy, "mathutils": fake_mathutils}):
+            if "inspector" in sys.modules:
+                del sys.modules["inspector"]
+            inspector = importlib.import_module("inspector")
+
+            arm = types.SimpleNamespace(name="Rig")
+            original = inspector._meshes_driven_by_armature
+            inspector._meshes_driven_by_armature = lambda a: [FakeMesh()]
+            try:
+                binding = inspector.build_mesh_binding(arm)
+            finally:
+                inspector._meshes_driven_by_armature = original
+
+        self.assertEqual(len(binding["meshes"]), 1)
+        mesh = binding["meshes"][0]
+        self.assertIn("bbox", mesh)
+        self.assertEqual(sorted(mesh["bbox"].keys()), ["max", "min"])
+        self.assertEqual(len(mesh["bbox"]["min"]), 3)
+        self.assertEqual(len(mesh["bbox"]["max"]), 3)
+        # The translation adds (32,-10,0) so min=[32,-10,0] max=[33,-9,1]
+        self.assertAlmostEqual(mesh["bbox"]["min"][0], 32.0)
+        self.assertAlmostEqual(mesh["bbox"]["min"][1], -10.0)
+        self.assertAlmostEqual(mesh["bbox"]["min"][2], 0.0)
+        self.assertAlmostEqual(mesh["bbox"]["max"][0], 33.0)
+        self.assertAlmostEqual(mesh["bbox"]["max"][1], -9.0)
+        self.assertAlmostEqual(mesh["bbox"]["max"][2], 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

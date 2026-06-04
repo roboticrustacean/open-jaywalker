@@ -18,13 +18,16 @@ from asam_human_builder.builder import (  # noqa: E402
     build_armature_spec,
     build_armature_spec_from_asset_dir,
     build_builder_report,
+    build_source_bone_index_from_export,
     choose_generated_collection_action,
     compute_vertex_group_remap_plan,
+    load_builder_inputs,
     resolve_default_asset_dir,
     validate_builder_inputs,
 )
 from asam_human_builder.blender_builder import (  # noqa: E402
     build_armature_in_blender,
+    export_generated_blend,
     purge_previous_generated_artifacts,
 )
 from phase3_classifier.classifier import (  # noqa: E402
@@ -512,6 +515,14 @@ class _FakeOps:
         self.object = _FakeObjectOps(context)
 
 
+class _FakeLibraries:
+    def __init__(self):
+        self.write_calls = []
+
+    def write(self, filepath, datablocks, **kwargs):
+        self.write_calls.append({"filepath": filepath, "datablocks": datablocks, "kwargs": kwargs})
+
+
 class _FakeBpy:
     def __init__(self):
         self.context = _FakeContext()
@@ -520,6 +531,7 @@ class _FakeBpy:
         self.data.armatures = _FakeArmatureStore()
         self.data.meshes = _FakeMeshStore()
         self.data.collections = _FakeCollectionStore(self)
+        self.data.libraries = _FakeLibraries()
         self.data.scenes = [self.context.scene]
         # Expose isinstance-able type markers for purge_previous_generated_artifacts
         # to distinguish armature vs mesh data blocks without a parallel type-name
@@ -1372,6 +1384,60 @@ class AsamHumanBuilderTests(unittest.TestCase):
                 "TestAsset",
             )
 
+    def test_spec_grp_root_world_location_defaults_to_local_origin(self):
+        # Single-character path: absent -> equals grp_root_local_origin (no behavior change).
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        report, plan = load_builder_inputs(asset_dir)
+        source_bones = build_source_bone_index_from_export(asset_dir, plan["recommended_primary_armature"])
+        spec = build_armature_spec(report, plan, source_bones)
+        self.assertEqual(spec["grp_root_world_location"], spec["grp_root_local_origin"])
+
+    def test_spec_grp_root_world_location_uses_explicit_value(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        report, plan = load_builder_inputs(asset_dir)
+        source_bones = build_source_bone_index_from_export(asset_dir, plan["recommended_primary_armature"])
+        plan["root_resolutions"][0]["grp_root_world_location"] = [32.0, -10.0, 0.0]
+        spec = build_armature_spec(report, plan, source_bones)
+        self.assertEqual(spec["grp_root_world_location"], [32.0, -10.0, 0.0])
+        self.assertEqual(spec["grp_root_local_origin"], [float(v) for v in plan["root_resolutions"][0]["grp_root_local_origin"]])
+
+    def test_builder_report_records_placement_fields(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        report, plan = load_builder_inputs(asset_dir)
+        source_bones = build_source_bone_index_from_export(asset_dir, plan["recommended_primary_armature"])
+        plan["root_resolutions"][0]["grp_root_world_location"] = [1.0, 2.0, 0.0]
+        plan["root_resolutions"][0]["placement_mode"] = "grid"
+        plan["root_resolutions"][0]["applied_grid_offset"] = [1.0, 2.0, 0.0]
+        spec = build_armature_spec(report, plan, source_bones)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(mesh_record["mesh_name"], bpy_module.data.objects.get("Armature"))
+        execution = build_armature_in_blender(spec, bpy_module)
+        builder_report = build_builder_report(spec, execution)
+        self.assertEqual(builder_report["placement_mode"], "grid")
+        self.assertEqual(builder_report["grp_root_location"], [1.0, 2.0, 0.0])
+        self.assertEqual(builder_report["applied_grid_offset"], [1.0, 2.0, 0.0])
+
+    def test_builder_report_placement_defaults_single_character(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        report, plan = load_builder_inputs(asset_dir)
+        source_bones = build_source_bone_index_from_export(asset_dir, plan["recommended_primary_armature"])
+        spec = build_armature_spec(report, plan, source_bones)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(mesh_record["mesh_name"], bpy_module.data.objects.get("Armature"))
+        execution = build_armature_in_blender(spec, bpy_module)
+        builder_report = build_builder_report(spec, execution)
+        self.assertEqual(builder_report["placement_mode"], "source")
+        self.assertEqual(builder_report["grp_root_location"], spec["grp_root_world_location"])
+        self.assertIsNone(builder_report["applied_grid_offset"])
+
 
 class CrowdNamingTests(unittest.TestCase):
     def test_apply_character_naming_overrides_generated_names(self):
@@ -2072,6 +2138,15 @@ class CrowdBlenderTests(unittest.TestCase):
             )
         self.assertIsNotNone(fake.data.objects.get("UserMesh"))
 
+    def test_grp_root_placed_at_world_location_not_local_origin(self):
+        fake_bpy = _fake_with_source_armature("Object_4")
+        spec = _minimal_crowd_build_spec(source_armature="Object_4")
+        spec["grp_root_local_origin"] = [0.0, 0.0, 0.0]       # bone-bbox (rig base)
+        spec["grp_root_world_location"] = [32.0, -10.0, 0.0]  # body anchor
+        build_armature_in_blender(spec, fake_bpy)
+        grp = fake_bpy.data.objects.get(spec["group_root_name"])
+        self.assertEqual(list(grp.location), [32.0, -10.0, 0.0])
+
 
 class CrowdDetectionTests(unittest.TestCase):
     def test_is_crowd_plan_true_when_characters_present(self):
@@ -2341,6 +2416,45 @@ class CrowdSpecsFromAssetDirTests(unittest.TestCase):
         self.assertFalse(result["crowd"])
         self.assertEqual(len(result["specs"]), 1)
 
+    def test_crowd_character_specs_carry_placement_fields(self):
+        # Regression: per-character specs must carry grp_root_world_location and
+        # placement_mode end-to-end through the crowd fan-out.  The synthetic fixture
+        # has Hero000 at x=0 and Hero001 at x=5 m — spread >> 0.25 m threshold, so
+        # _assign_character_placements sets placement_mode="source" with distinct
+        # per-character anchors.  This test locks that the builder forwards those
+        # fields from each character's root_resolutions[0] onto the resolved spec.
+        from asam_human_builder.builder import build_character_specs_from_asset_dir
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _write_crowd_asset(tmp)
+            resolved = build_character_specs_from_asset_dir(tmp)
+
+        self.assertTrue(resolved["crowd"])
+        self.assertEqual(len(resolved["character_specs"]), 2)
+
+        specs_by_id = {cid: spec for cid, spec in resolved["character_specs"]}
+
+        for cid, spec in resolved["character_specs"]:
+            self.assertIn(
+                spec["placement_mode"],
+                ("source", "grid"),
+                msg="character {0}: placement_mode missing or invalid".format(cid),
+            )
+            self.assertEqual(
+                len(spec["grp_root_world_location"]),
+                3,
+                msg="character {0}: grp_root_world_location must be length-3".format(cid),
+            )
+
+        # Characters are at distinct world x positions (0 vs 5), so their anchors differ.
+        loc_hero000 = specs_by_id["Hero000"]["grp_root_world_location"]
+        loc_hero001 = specs_by_id["Hero001"]["grp_root_world_location"]
+        self.assertNotEqual(
+            loc_hero000,
+            loc_hero001,
+            msg="Hero000 and Hero001 have distinct positions and must get distinct world locations",
+        )
+
 
 class SingleCharacterRegressionTests(unittest.TestCase):
     maxDiff = None
@@ -2427,6 +2541,58 @@ class SuccessMessageTests(unittest.TestCase):
         self.assertIn("Crowd built", msg)
         self.assertIn("2 characters", msg)
         self.assertIn("1 failed", msg)
+
+
+class ExportGeneratedBlendTests(unittest.TestCase):
+    def test_export_generated_blend_writes_wrapper_datablocks(self):
+        import tempfile
+        import os
+        fake_bpy = _FakeBpy()
+        wrapper = fake_bpy.data.collections.new("ASAM_demo")
+        wrapper[GENERATED_MARKER_KEY] = True
+        out = os.path.join(tempfile.mkdtemp(), "demo_asam.blend")
+        path = export_generated_blend(fake_bpy, "ASAM_demo", out)
+        self.assertEqual(path, out)
+        written = fake_bpy.data.libraries.write_calls[0]
+        self.assertIn(wrapper, list(written["datablocks"]))
+        # fake_user=True keeps the exported collection from being dropped as orphan data.
+        self.assertTrue(written["kwargs"].get("fake_user"))
+
+    def test_export_generated_blend_refuses_non_generated_collection(self):
+        fake_bpy = _FakeBpy()
+        fake_bpy.data.collections.new("NotGenerated")  # no generated marker
+        with self.assertRaises(ValueError):
+            export_generated_blend(fake_bpy, "NotGenerated", "/tmp/x.blend")
+
+    def test_export_generated_blend_refuses_missing_collection(self):
+        fake_bpy = _FakeBpy()
+        with self.assertRaises(ValueError):
+            export_generated_blend(fake_bpy, "DoesNotExist", "/tmp/x.blend")
+
+
+class PlacementDeltaTests(unittest.TestCase):
+    """The body must travel with its rig: mesh delta == rig relocation delta."""
+
+    def test_placement_delta_is_world_minus_local(self):
+        from asam_human_builder import blender_builder
+        spec = {"grp_root_world_location": [32.0, -10.0, 0.0], "grp_root_local_origin": [0.0, 0.0, 0.0]}
+        self.assertEqual(blender_builder._placement_delta(spec), [32.0, -10.0, 0.0])
+
+    def test_placement_delta_zero_for_single_character(self):
+        from asam_human_builder import blender_builder
+        # Single-character: the two anchors coincide -> no relocation -> mesh unchanged.
+        spec = {"grp_root_world_location": [0.5, 1.0, 0.0], "grp_root_local_origin": [0.5, 1.0, 0.0]}
+        self.assertEqual(blender_builder._placement_delta(spec), [0.0, 0.0, 0.0])
+
+    def test_placement_delta_defaults_when_world_absent(self):
+        from asam_human_builder import blender_builder
+        spec = {"grp_root_local_origin": [2.0, 3.0, 4.0]}
+        self.assertEqual(blender_builder._placement_delta(spec), [0.0, 0.0, 0.0])
+
+    def test_translated_matrix_zero_delta_returns_same_object(self):
+        from asam_human_builder import blender_builder
+        sentinel = object()  # a non-matrix; zero delta must not touch it
+        self.assertIs(blender_builder._translated_matrix(sentinel, [0.0, 0.0, 0.0]), sentinel)
 
 
 if __name__ == "__main__":

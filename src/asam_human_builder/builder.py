@@ -418,6 +418,12 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         "mesh_binding": copy.deepcopy(build_plan["mesh_binding"]),
         "extras_preserved": copy.deepcopy(build_plan.get("extras_preserved", [])),
         "grp_root_local_origin": list(grp_root_local_origin),
+        "grp_root_world_location": [
+            float(v)
+            for v in root_resolution.get("grp_root_world_location", grp_root_local_origin)
+        ],
+        "placement_mode": root_resolution.get("placement_mode", "source"),
+        "applied_grid_offset": root_resolution.get("applied_grid_offset"),
         "bones": [],
         "preserved_pelvis_pair": [],
         "warnings": [],
@@ -542,6 +548,9 @@ def build_builder_report(build_spec: dict, execution_result: dict) -> dict:
         "generated_armature_name": execution_result["generated_armature_name"],
         "collection_action": execution_result.get("collection_action"),
         "grp_root_local_origin": list(build_spec.get("grp_root_local_origin", [])),
+        "placement_mode": build_spec.get("placement_mode", "source"),
+        "grp_root_location": list(build_spec.get("grp_root_world_location", build_spec.get("grp_root_local_origin", []))),
+        "applied_grid_offset": build_spec.get("applied_grid_offset"),
         "root_mode": build_spec.get("root_resolution", {}).get("mode"),
         "preserved_source_root": preserved_source_root,
         "duplicated_meshes": copy.deepcopy(execution_result.get("duplicated_meshes", [])),

@@ -7,6 +7,7 @@ Pure Python: operates on already-loaded inspector JSON dicts. No bpy.
 from __future__ import annotations
 
 import copy
+import math
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -257,6 +258,98 @@ def _plan_character(character_id: str, report: dict) -> dict:
     }
 
 
+# Planar spread (metres) below which characters are treated as co-located and gridded.
+COLOCATED_SPREAD_THRESHOLD = 0.25
+
+
+def body_anchor_from_meshes(meshes, up_axis_index, up_sign):
+    """Ground-center of the union of owned meshes' world bboxes, or None if absent.
+
+    Planar axes use the bbox center; the up axis uses the ground (min when up_sign>=0,
+    else max) so the anchor sits on the floor under the body.
+    """
+    boxes = [m["bbox"] for m in (meshes or []) if isinstance(m.get("bbox"), dict)]
+    if not boxes:
+        return None
+    mins = [min(b["min"][i] for b in boxes) for i in range(3)]
+    maxs = [max(b["max"][i] for b in boxes) for i in range(3)]
+    center = [(mins[i] + maxs[i]) / 2.0 for i in range(3)]
+    center[up_axis_index] = mins[up_axis_index] if up_sign >= 0 else maxs[up_axis_index]
+    return [float(v) for v in center]
+
+
+def _assign_character_placements(reports):
+    """Set root_resolution['grp_root_world_location'] and ['placement_mode'] per report.
+
+    'source' when bodies are distributed; 'grid' when co-located. Anchors come from
+    each character's owned mesh bboxes (body), falling back to the bone-derived
+    bbox_ground_center when a character has no mesh.
+
+    Mutates the passed report dicts in place.
+    """
+    if not reports:
+        return
+    anchors = []
+    for report in reports:
+        placement = report["placement_metadata"]
+        up = placement["up_axis"]
+        anchor = body_anchor_from_meshes(
+            report["mesh_binding"].get("meshes"),
+            up_axis_index=int(up["index"]),
+            up_sign=int(up["sign"]),
+        )
+        if anchor is None:
+            anchor = [float(v) for v in placement["bbox_ground_center"]]
+            report["review_flags"] = list(report["review_flags"]) + ["character_without_mesh_anchor"]
+        anchors.append((report, anchor, placement))
+
+    forward_idx, side_idx = _planar_axes(anchors[0][2])
+    spread = _planar_spread(anchors, forward_idx, side_idx)
+
+    if spread <= COLOCATED_SPREAD_THRESHOLD:
+        _apply_grid(anchors, forward_idx, side_idx)
+    else:
+        for report, anchor, _placement in anchors:
+            report["root_resolution"]["grp_root_world_location"] = anchor
+            report["root_resolution"]["placement_mode"] = "source"
+
+
+def _planar_axes(placement):
+    up = int(placement["up_axis"]["index"])
+    others = [i for i in range(3) if i != up]
+    return others[0], others[1]
+
+
+def _planar_spread(anchors, a, b):
+    av = [anc[a] for _r, anc, _p in anchors]
+    bv = [anc[b] for _r, anc, _p in anchors]
+    return max(max(av) - min(av), max(bv) - min(bv))
+
+
+def _character_footprint(placement, a, b):
+    bbox_min = placement.get("bbox_min")
+    bbox_max = placement.get("bbox_max")
+    if not bbox_min or not bbox_max:
+        return 1.0
+    return max(abs(bbox_max[a] - bbox_min[a]), abs(bbox_max[b] - bbox_min[b]), 1e-3)
+
+
+def _apply_grid(anchors, a, b):
+    count = len(anchors)
+    columns = max(1, int(math.ceil(math.sqrt(count))))
+    spacing = max(_character_footprint(p, a, b) for _r, _anc, p in anchors) * 1.5
+    for index, (report, anchor, _placement) in enumerate(anchors):
+        row, col = divmod(index, columns)
+        cell = list(anchor)
+        cell[a] = col * spacing
+        cell[b] = row * spacing
+        report["root_resolution"]["grp_root_world_location"] = [float(v) for v in cell]
+        report["root_resolution"]["placement_mode"] = "grid"
+        report["root_resolution"]["applied_grid_offset"] = [
+            float(cell[i] - anchor[i]) for i in range(3)
+        ]
+
+
 def segment_recommended(asset_name: str, recommended_input) -> Optional[SegmentationResult]:
     """Return per-character decomposition for a crowd armature, or None if single."""
     bones = recommended_input.primary_data.get("bones", [])
@@ -274,8 +367,7 @@ def segment_recommended(asset_name: str, recommended_input) -> Optional[Segmenta
         recommended_input.armature_name,
     )
 
-    report_characters: List[dict] = []
-    plan_characters: List[dict] = []
+    raw_reports = []
     for group in groups:
         view = build_character_view(
             recommended_input.primary_data, group, per_char_binding.get(group.character_id)
@@ -283,6 +375,16 @@ def segment_recommended(asset_name: str, recommended_input) -> Optional[Segmenta
         report = classify_armature(asset_name, view)
         if not group.connected:
             report["review_flags"] = list(report["review_flags"]) + ["character_disconnected"]
+        raw_reports.append((group, report))
+
+    # Mutates each report's root_resolution in place (grp_root_world_location +
+    # placement_mode); those dicts are the same objects _report_character/_plan_character
+    # snapshot below, so the placement keys flow into both outputs.
+    _assign_character_placements([report for _g, report in raw_reports])
+
+    report_characters: List[dict] = []
+    plan_characters: List[dict] = []
+    for group, report in raw_reports:
         report_characters.append(_report_character(group.character_id, report))
         plan_characters.append(_plan_character(group.character_id, report))
 
