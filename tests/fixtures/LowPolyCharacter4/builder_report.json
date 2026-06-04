@@ -5,6 +5,13 @@
   "group_root_name": "Grp_Root",
   "generated_armature_name": "Armature_LowPolyCharacter4",
   "collection_action": "rebuild",
+  "placement_mode": "source",
+  "grp_root_location": [
+    5.960464477539063e-08,
+    0.05099785327911377,
+    0.0033478213008493185
+  ],
+  "applied_grid_offset": null,
   "duplicated_meshes": [
     {
       "source_mesh_name": "Cube",

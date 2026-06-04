@@ -1393,6 +1393,41 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(spec["grp_root_world_location"], [32.0, -10.0, 0.0])
         self.assertEqual(spec["grp_root_local_origin"], [float(v) for v in plan["root_resolutions"][0]["grp_root_local_origin"]])
 
+    def test_builder_report_records_placement_fields(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        report, plan = load_builder_inputs(asset_dir)
+        source_bones = build_source_bone_index_from_export(asset_dir, plan["recommended_primary_armature"])
+        plan["root_resolutions"][0]["grp_root_world_location"] = [1.0, 2.0, 0.0]
+        plan["root_resolutions"][0]["placement_mode"] = "grid"
+        plan["root_resolutions"][0]["applied_grid_offset"] = [1.0, 2.0, 0.0]
+        spec = build_armature_spec(report, plan, source_bones)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(mesh_record["mesh_name"], bpy_module.data.objects.get("Armature"))
+        execution = build_armature_in_blender(spec, bpy_module)
+        builder_report = build_builder_report(spec, execution)
+        self.assertEqual(builder_report["placement_mode"], "grid")
+        self.assertEqual(builder_report["grp_root_location"], [1.0, 2.0, 0.0])
+        self.assertEqual(builder_report["applied_grid_offset"], [1.0, 2.0, 0.0])
+
+    def test_builder_report_placement_defaults_single_character(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        report, plan = load_builder_inputs(asset_dir)
+        source_bones = build_source_bone_index_from_export(asset_dir, plan["recommended_primary_armature"])
+        spec = build_armature_spec(report, plan, source_bones)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(mesh_record["mesh_name"], bpy_module.data.objects.get("Armature"))
+        execution = build_armature_in_blender(spec, bpy_module)
+        builder_report = build_builder_report(spec, execution)
+        self.assertEqual(builder_report["placement_mode"], "source")
+        self.assertEqual(builder_report["grp_root_location"], spec["grp_root_world_location"])
+        self.assertIsNone(builder_report["applied_grid_offset"])
+
 
 class CrowdNamingTests(unittest.TestCase):
     def test_apply_character_naming_overrides_generated_names(self):

@@ -5,6 +5,13 @@
   "group_root_name": "Grp_Root_openmatexamplehuman",
   "generated_armature_name": "Armature_openmatexamplehuman",
   "collection_action": "create",
+  "placement_mode": "source",
+  "grp_root_location": [
+    0.08631828427314758,
+    0.009727418422698975,
+    -0.003222084604203701
+  ],
+  "applied_grid_offset": null,
   "duplicated_meshes": [
     {
       "source_mesh_name": "Accessories_Wristband",
