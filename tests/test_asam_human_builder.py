@@ -2093,6 +2093,15 @@ class CrowdBlenderTests(unittest.TestCase):
             )
         self.assertIsNotNone(fake.data.objects.get("UserMesh"))
 
+    def test_grp_root_placed_at_world_location_not_local_origin(self):
+        fake_bpy = _fake_with_source_armature("Object_4")
+        spec = _minimal_crowd_build_spec(source_armature="Object_4")
+        spec["grp_root_local_origin"] = [0.0, 0.0, 0.0]       # bone-bbox (rig base)
+        spec["grp_root_world_location"] = [32.0, -10.0, 0.0]  # body anchor
+        build_armature_in_blender(spec, fake_bpy)
+        grp = fake_bpy.data.objects.get(spec["group_root_name"])
+        self.assertEqual(list(grp.location), [32.0, -10.0, 0.0])
+
 
 class CrowdDetectionTests(unittest.TestCase):
     def test_is_crowd_plan_true_when_characters_present(self):

@@ -86,9 +86,11 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
         armature_name,
     )
     collection = _create_collection(bpy_module, collection_name, asset_name, parent_collection)
-    grp_root_local_origin = build_spec.get("grp_root_local_origin", [0.0, 0.0, 0.0])
+    grp_root_location = build_spec.get(
+        "grp_root_world_location", build_spec.get("grp_root_local_origin", [0.0, 0.0, 0.0])
+    )
     group_root = _create_group_root(
-        bpy_module, group_root_name, asset_name, collection, grp_root_local_origin
+        bpy_module, group_root_name, asset_name, collection, grp_root_location
     )
     armature_object = _create_armature_object(bpy_module, armature_name, asset_name, collection, group_root)
     _populate_edit_bones(bpy_module, armature_object, build_spec["bones"])
