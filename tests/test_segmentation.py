@@ -303,5 +303,111 @@ class BodyAnchorFromMeshesTests(unittest.TestCase):
         self.assertIsNone(segmentation.body_anchor_from_meshes([{"mesh_name": "x"}], up_axis_index=2, up_sign=1))
 
 
+class CharacterPlacementTests(unittest.TestCase):
+    def _crowd_primary_data_distributed(self):
+        """Two characters with bones at different XY positions (Hero001 offset by 3 m on Y)."""
+        bones = []
+        offsets = {"Hero000": [0.0, 0.0], "Hero001": [0.0, 3.0]}
+        for prefix, (ox, oy) in offsets.items():
+            bones += [
+                {"name": f"{prefix}COM_0", "parent": "_rootJoint",
+                 "head": [ox, oy, 0.0], "tail": [ox, oy, 0.1], "length": 0.1},
+                {"name": f"{prefix}Pelvis_1", "parent": f"{prefix}COM_0",
+                 "head": [ox, oy, 1.0], "tail": [ox, oy, 1.1], "length": 0.1},
+                {"name": f"{prefix}Spine0_2", "parent": f"{prefix}Pelvis_1",
+                 "head": [ox, oy, 1.1], "tail": [ox, oy, 1.3], "length": 0.2},
+                {"name": f"{prefix}Spine1_3", "parent": f"{prefix}Spine0_2",
+                 "head": [ox, oy, 1.3], "tail": [ox, oy, 1.5], "length": 0.2},
+                {"name": f"{prefix}Head_4", "parent": f"{prefix}Spine1_3",
+                 "head": [ox, oy, 1.5], "tail": [ox, oy, 1.7], "length": 0.2},
+                {"name": f"{prefix}LThigh_5", "parent": f"{prefix}Pelvis_1",
+                 "head": [ox + 0.1, oy, 1.0], "tail": [ox + 0.1, oy, 0.5], "length": 0.5},
+            ]
+        bones.insert(0, {"name": "_rootJoint", "parent": None,
+                         "head": [0, 0, 0], "tail": [0, 0, 0.1], "length": 0.1})
+        return {
+            "armature_name": "Object_4",
+            "source_file": "crowd.blend",
+            "filter": None,
+            "bone_count": len(bones),
+            "bones": bones,
+            "chains": {
+                "spine": [
+                    [f"Hero000Spine0_2", f"Hero000Spine1_3"],
+                    [f"Hero001Spine0_2", f"Hero001Spine1_3"],
+                ],
+                "leg": {"left": [], "right": [], "unsided": []},
+                "arm": {"left": [], "right": [], "unsided": []},
+            },
+        }
+
+    def _crowd_mesh_binding_distributed(self):
+        """Mesh binding where each character has a bbox at its respective position."""
+        return {
+            "armature_object_name": "Object_4",
+            "meshes": [
+                {
+                    "mesh_name": "Hero000_Body",
+                    "armature_link": "modifier",
+                    "modifiers": [],
+                    "vertex_groups": ["Hero000Pelvis_1", "Hero000LThigh_5"],
+                    "vertex_group_stats": {
+                        "non_empty_group_count": 2,
+                        "per_group": [
+                            {"name": "Hero000Pelvis_1", "weighted_vertex_count": 5},
+                            {"name": "Hero000LThigh_5", "weighted_vertex_count": 3},
+                        ],
+                    },
+                    "material_slots": [],
+                    "warnings": [],
+                    # Hero000 body is centred around (0, 0)
+                    "bbox": {"min": [-0.5, -0.5, 0.0], "max": [0.5, 0.5, 1.8]},
+                },
+                {
+                    "mesh_name": "Hero001_Body",
+                    "armature_link": "modifier",
+                    "modifiers": [],
+                    "vertex_groups": ["Hero001Pelvis_1", "Hero001LThigh_5"],
+                    "vertex_group_stats": {
+                        "non_empty_group_count": 2,
+                        "per_group": [
+                            {"name": "Hero001Pelvis_1", "weighted_vertex_count": 5},
+                            {"name": "Hero001LThigh_5", "weighted_vertex_count": 3},
+                        ],
+                    },
+                    "material_slots": [],
+                    "warnings": [],
+                    # Hero001 body is centred around (0, 3)
+                    "bbox": {"min": [-0.5, 2.5, 0.0], "max": [0.5, 3.5, 1.8]},
+                },
+            ],
+        }
+
+    def _segment_two_character_crowd_distributed(self):
+        from phase3_classifier import segmentation
+        primary = self._crowd_primary_data_distributed()
+        primary["mesh_binding"] = self._crowd_mesh_binding_distributed()
+        inp = ArmatureInput(
+            armature_name="Object_4",
+            all_path=Path("Object_4_all.json"),
+            filtered_path=None,
+            primary_path=Path("Object_4_all.json"),
+            support_path=None,
+            primary_data=primary,
+            support_data=None,
+        )
+        return segmentation.segment_recommended("crowd", inp)
+
+    def test_distributed_characters_preserve_source_positions(self):
+        from phase3_classifier import segmentation
+        result = self._segment_two_character_crowd_distributed()
+        by_id = {c["character_id"]: c for c in result.plan_characters}
+        rr0 = by_id["Hero000"]["root_resolutions"][0]
+        rr1 = by_id["Hero001"]["root_resolutions"][0]
+        self.assertEqual(rr0["placement_mode"], "source")
+        self.assertEqual(rr1["placement_mode"], "source")
+        self.assertNotEqual(rr0["grp_root_world_location"], rr1["grp_root_world_location"])
+
+
 if __name__ == "__main__":
     unittest.main()
