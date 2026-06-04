@@ -2555,6 +2555,8 @@ class ExportGeneratedBlendTests(unittest.TestCase):
         self.assertEqual(path, out)
         written = fake_bpy.data.libraries.write_calls[0]
         self.assertIn(wrapper, list(written["datablocks"]))
+        # fake_user=True keeps the exported collection from being dropped as orphan data.
+        self.assertTrue(written["kwargs"].get("fake_user"))
 
     def test_export_generated_blend_refuses_non_generated_collection(self):
         fake_bpy = _FakeBpy()
