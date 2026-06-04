@@ -95,6 +95,12 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
     )
     armature_object = _create_armature_object(bpy_module, armature_name, asset_name, collection, group_root)
     _populate_edit_bones(bpy_module, armature_object, build_spec["bones"])
+    # Force the dependency graph to evaluate the just-placed Grp_Root/armature so the
+    # duplicated meshes below are positioned against their parent's CURRENT world
+    # transform. Without this, Blender's lazy depsgraph can leave the armature's
+    # matrix_world stale (still at the pre-placement origin) when _copy_mesh_object
+    # sets each mesh's matrix_world, leaving the body behind while the rig moved.
+    _refresh_depsgraph(bpy_module)
     mesh_result = _duplicate_bound_meshes(
         bpy_module,
         build_spec,
@@ -444,6 +450,17 @@ def _copy_mesh_object(
     collection.objects.link(generated_mesh)
     # Parent to the generated armature (one level below group_root) to match ASAM hierarchy.
     generated_mesh.parent = parent_object
+    # Pin the parent-inverse to the parent's CURRENT world matrix so the duplicate keeps
+    # its source world transform regardless of where the parent (a relocated armature
+    # under Grp_Root) now sits. Setting matrix_world alone is not enough: Blender derives
+    # matrix_basis from parent.matrix_world @ matrix_parent_inverse, and a stale/identity
+    # parent-inverse against a moved parent shifts the body off its rig.
+    parent_world = getattr(parent_object, "matrix_world", None)
+    if parent_world is not None and hasattr(generated_mesh, "matrix_parent_inverse"):
+        try:
+            generated_mesh.matrix_parent_inverse = parent_world.inverted()
+        except (AttributeError, ValueError):
+            pass
     if world_matrix is not None:
         generated_mesh.matrix_world = world_matrix
     return generated_mesh
@@ -534,6 +551,25 @@ def _ensure_object_mode(bpy_module) -> None:
         return
     if getattr(active_object, "mode", "OBJECT") != "OBJECT":
         bpy_module.ops.object.mode_set(mode="OBJECT")
+
+
+def _refresh_depsgraph(bpy_module) -> None:
+    """Re-evaluate object world matrices after a transform change.
+
+    Blender's dependency graph is lazy: after setting Grp_Root.location and parenting
+    the armature, the armature's matrix_world may still report its pre-placement value
+    until the view layer is updated. Meshes positioned before this update would be
+    placed against a stale parent transform. No-op (and safely ignored) under the
+    test fake bpy, which has no view_layer.update.
+    """
+    context = getattr(bpy_module, "context", None)
+    view_layer = getattr(context, "view_layer", None) if context is not None else None
+    update = getattr(view_layer, "update", None) if view_layer is not None else None
+    if callable(update):
+        try:
+            update()
+        except (RuntimeError, AttributeError):
+            pass
 
 
 def build_crowd_in_blender(
