@@ -1585,5 +1585,57 @@ class MissingIntermediateBenchmarkTests(unittest.TestCase):
         self.assertEqual(m["Lower_Leg_Left"]["action"], "create_in_builder")
 
 
+class BipedMultiSpinePromotionTests(unittest.TestCase):
+    """A Biped with a 5-segment spine must map BOTH ASAM spine targets from real
+    source bones, not collapse them to `review` (issue #55, the 1000idles2 case)."""
+
+    def _five_spine_biped_asset(self, name):
+        b = _bone
+        bones = [
+            b("Bip01 Pelvis", None, (0.0, 0.0, 0.95), (0.0, 0.0, 1.0)),
+            b("Bip01 Spine0", "Bip01 Pelvis", (0.0, 0.0, 1.0), (0.0, 0.0, 1.1)),
+            b("Bip01 Spine1", "Bip01 Spine0", (0.0, 0.0, 1.1), (0.0, 0.0, 1.2)),
+            b("Bip01 Spine2", "Bip01 Spine1", (0.0, 0.0, 1.2), (0.0, 0.0, 1.3)),
+            b("Bip01 Spine3", "Bip01 Spine2", (0.0, 0.0, 1.3), (0.0, 0.0, 1.4)),
+            b("Bip01 Spine4", "Bip01 Spine3", (0.0, 0.0, 1.4), (0.0, 0.0, 1.5)),
+            b("Bip01 Neck", "Bip01 Spine4", (0.0, 0.0, 1.5), (0.0, 0.0, 1.6)),
+            b("Bip01 Head", "Bip01 Neck", (0.0, 0.0, 1.6), (0.0, 0.0, 1.75)),
+        ]
+        chains = {
+            "spine": [[
+                "Bip01 Spine0", "Bip01 Spine1", "Bip01 Spine2",
+                "Bip01 Spine3", "Bip01 Spine4",
+            ]],
+            "leg": {"left": [], "right": [], "unsided": []},
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        return _write_single_armature_asset(name, "Bip01", bones, chains)
+
+    def test_five_spine_biped_promotes_both_spine_targets(self):
+        asset_dir = self._five_spine_biped_asset("biped5spine")
+        report, _, _, _ = write_asset_report(asset_dir)
+        sm = report["semantic_mapping"]
+        spine_chain = {
+            "Bip01 Spine0", "Bip01 Spine1", "Bip01 Spine2",
+            "Bip01 Spine3", "Bip01 Spine4",
+        }
+        ambiguous = {a["target"] for a in report["ambiguous_targets"]}
+
+        for target in ("Lower_Spine", "Upper_Spine"):
+            self.assertEqual(
+                sm[target]["action"], "direct_map",
+                f"{target} should map directly, not be demoted to review",
+            )
+            self.assertIn(sm[target]["source_bone"], spine_chain)
+            self.assertNotIn(target, ambiguous)
+
+        # Lower spine must sit below upper spine on the up (z) axis.
+        with open(asset_dir / "Bip01_all.json") as f:
+            bones_by_name = {bn["name"]: bn for bn in json.load(f)["bones"]}
+        lower = bones_by_name[sm["Lower_Spine"]["source_bone"]]
+        upper = bones_by_name[sm["Upper_Spine"]["source_bone"]]
+        self.assertLess(lower["head"][2], upper["head"][2])
+
+
 if __name__ == "__main__":
     unittest.main()

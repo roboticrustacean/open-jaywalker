@@ -2085,6 +2085,33 @@ def _numbered_stem(name: str) -> str:
     return re.sub(r"\.\d+$", "", name)
 
 
+def _runner_up_is_interchangeable(
+    candidate: CandidateScore,
+    runner_up: CandidateScore,
+    target_name: str,
+    context: dict,
+) -> bool:
+    """True when the runner-up is anatomically interchangeable with the candidate,
+    so a near-zero separation must NOT demote a real mapping to review.
+
+    Covers two cases:
+    - Blender duplicate/twist twins and same-deform-chain segments that share a
+      numbered stem ('DEF-spine.004' vs 'DEF-spine.005').
+    - Adjacent segments of the same chosen spine chain regardless of digit-naming
+      style ('Spine0' vs 'Spine1', 'mixamorig:Spine' vs 'Spine1'). The stem check
+      above misses these because the digit is concatenated, not a '.NNN' suffix.
+      Chain-position scoring already picks the correct end, so any other segment of
+      the same chain is an interchangeable runner-up.
+    """
+    if _numbered_stem(runner_up.source_bone) == _numbered_stem(candidate.source_bone):
+        return True
+    if target_name in {"Lower_Spine", "Upper_Spine"}:
+        spine_chain = context.get("spine_chain") or []
+        if candidate.source_bone in spine_chain and runner_up.source_bone in spine_chain:
+            return True
+    return False
+
+
 def _decision_tag(
     target_name: str,
     candidate: CandidateScore,
@@ -2098,13 +2125,10 @@ def _decision_tag(
 
     separation = 1.0
     if runner_up:
-        # Ignore interchangeable runner-ups that share the candidate's numbered
-        # stem: Blender twist/duplicate twins ('DEF-arm' vs 'DEF-arm.001') and
-        # adjacent segments of one deform chain ('DEF-spine.004' vs 'DEF-spine.005').
-        # Either is anatomically correct, so this zero-separation tie must not
-        # demote a real mapping to review. (Same-chain segments necessarily share
-        # the numbered stem, so the stem check alone covers both cases.)
-        if _numbered_stem(runner_up.source_bone) == _numbered_stem(candidate.source_bone):
+        # Interchangeable runner-ups (numbered twins, or adjacent segments of the
+        # same chosen chain) must not collapse separation and demote a real mapping
+        # to review. See _runner_up_is_interchangeable for the two covered cases.
+        if _runner_up_is_interchangeable(candidate, runner_up, target_name, context):
             separation = 1.0
         else:
             separation = candidate.selection_score - runner_up.selection_score
