@@ -2098,13 +2098,16 @@ def _runner_up_is_interchangeable(
     - Blender duplicate/twist twins and same-deform-chain segments that share a
       numbered stem ('DEF-spine.004' vs 'DEF-spine.005').
     - Adjacent segments of the same chosen spine chain regardless of digit-naming
-      style ('Spine0' vs 'Spine1', 'mixamorig:Spine' vs 'Spine1'). The stem check
-      above misses these because the digit is concatenated, not a '.NNN' suffix.
-      Chain-position scoring already picks the correct end, so any other segment of
-      the same chain is an interchangeable runner-up.
+      style ('Spine0' vs 'Spine1', 'mixamorig:Spine' vs 'mixamorig:Spine1'). The
+      stem check above misses these because the digit is concatenated, not a '.NNN'
+      suffix. Chain-position scoring already picks the correct end, so any other
+      segment of the same chain is an interchangeable runner-up.
     """
     if _numbered_stem(runner_up.source_bone) == _numbered_stem(candidate.source_bone):
         return True
+    # Only the two spine targets draw candidates from a shared multi-segment chain;
+    # the other 26 core targets map to distinct bones, so the chain-membership relief
+    # is scoped to them. Extend this set if a future target shares a long chain.
     if target_name in {"Lower_Spine", "Upper_Spine"}:
         spine_chain = context.get("spine_chain") or []
         if candidate.source_bone in spine_chain and runner_up.source_bone in spine_chain:
