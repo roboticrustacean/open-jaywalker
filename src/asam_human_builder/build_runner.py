@@ -24,8 +24,15 @@ from asam_human_builder.blender_builder import (
     purge_previous_generated_artifacts,
 )
 
+# Output packaging modes. Shared canonical definition so the addon (Task C3) and the
+# builder reference the same literals instead of duplicating magic strings.
+PACKAGING_INPLACE_EXPORT = "inplace_export"
+PACKAGING_INPLACE_ONLY = "inplace_only"
+PACKAGING_SEPARATE_ONLY = "separate_only"
+PACKAGING_MODES = (PACKAGING_INPLACE_EXPORT, PACKAGING_INPLACE_ONLY, PACKAGING_SEPARATE_ONLY)
 
-def run_build(asset_dir, bpy, packaging_mode="inplace_export") -> dict:
+
+def run_build(asset_dir, bpy, packaging_mode=PACKAGING_INPLACE_EXPORT) -> dict:
     """Resolve specs for asset_dir and build them (single or crowd).
 
     packaging_mode controls post-build export:
@@ -71,20 +78,27 @@ def run_build(asset_dir, bpy, packaging_mode="inplace_export") -> dict:
 
 
 def _export_if_requested(asset_dir, asset_name, wrapper_name, bpy, packaging_mode, report):
-    """inplace_only: no export. inplace_export/separate_only: write clean .blend;
-    separate_only also purges generated data from the open file. Export failures are
-    recorded on the report and never abort the in-place build."""
-    if packaging_mode == "inplace_only":
+    """Record packaging outcome on the report and export when requested.
+
+    Modes:
+      - PACKAGING_INPLACE_ONLY: no export, no purge.
+      - PACKAGING_INPLACE_EXPORT: write the generated wrapper to a clean .blend.
+      - PACKAGING_SEPARATE_ONLY: export, then purge generated data from the open file.
+
+    `packaging_mode` is always recorded (even for inplace_only) so the report shape is
+    consistent across modes. Export failures are caught and recorded; they never abort
+    the already-completed in-place build.
+    """
+    report["packaging_mode"] = packaging_mode
+    report["exported_blend_path"] = None
+    report["export_error"] = None
+    if packaging_mode == PACKAGING_INPLACE_ONLY:
         return
     out_path = str(Path(asset_dir) / "{0}_asam.blend".format(asset_name))
     try:
-        exported = export_generated_blend(bpy, wrapper_name, out_path)
-    except Exception as exc:  # never abort the in-place build
-        report["packaging_mode"] = packaging_mode
-        report["exported_blend_path"] = None
+        report["exported_blend_path"] = export_generated_blend(bpy, wrapper_name, out_path)
+    except Exception as exc:  # never abort the already-completed in-place build
         report["export_error"] = str(exc)
         return
-    report["packaging_mode"] = packaging_mode
-    report["exported_blend_path"] = exported
-    if packaging_mode == "separate_only":
+    if packaging_mode == PACKAGING_SEPARATE_ONLY:
         purge_previous_generated_artifacts(bpy)

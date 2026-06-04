@@ -60,16 +60,22 @@ class RunBuildPackagingTests(unittest.TestCase):
             p.start(); self.addCleanup(p.stop)
         with mock.patch.object(build_runner, "export_generated_blend", return_value="/x/A_asam.blend") as export, \
              mock.patch.object(build_runner, "purge_previous_generated_artifacts") as purge:
-            build_runner.run_build(Path("/x"), bpy="BPY", packaging_mode="inplace_export")
+            report = build_runner.run_build(Path("/x"), bpy="BPY", packaging_mode="inplace_export")
             export.assert_called_once()
             purge.assert_not_called()
+            self.assertEqual(report["packaging_mode"], "inplace_export")
+            self.assertEqual(report["exported_blend_path"], "/x/A_asam.blend")
+            self.assertIsNone(report["export_error"])
 
     def test_inplace_only_skips_export(self):
         for p in self._patch_single():
             p.start(); self.addCleanup(p.stop)
         with mock.patch.object(build_runner, "export_generated_blend") as export:
-            build_runner.run_build(Path("/x"), bpy="BPY", packaging_mode="inplace_only")
+            report = build_runner.run_build(Path("/x"), bpy="BPY", packaging_mode="inplace_only")
             export.assert_not_called()
+            # packaging_mode is recorded even when no export happens (consistent report shape).
+            self.assertEqual(report["packaging_mode"], "inplace_only")
+            self.assertIsNone(report["exported_blend_path"])
 
     def test_separate_only_exports_then_purges(self):
         for p in self._patch_single():
