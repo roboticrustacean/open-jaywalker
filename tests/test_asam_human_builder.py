@@ -2406,6 +2406,45 @@ class CrowdSpecsFromAssetDirTests(unittest.TestCase):
         self.assertFalse(result["crowd"])
         self.assertEqual(len(result["specs"]), 1)
 
+    def test_crowd_character_specs_carry_placement_fields(self):
+        # Regression: per-character specs must carry grp_root_world_location and
+        # placement_mode end-to-end through the crowd fan-out.  The synthetic fixture
+        # has Hero000 at x=0 and Hero001 at x=5 m — spread >> 0.25 m threshold, so
+        # _assign_character_placements sets placement_mode="source" with distinct
+        # per-character anchors.  This test locks that the builder forwards those
+        # fields from each character's root_resolutions[0] onto the resolved spec.
+        from asam_human_builder.builder import build_character_specs_from_asset_dir
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d)
+            _write_crowd_asset(tmp)
+            resolved = build_character_specs_from_asset_dir(tmp)
+
+        self.assertTrue(resolved["crowd"])
+        self.assertEqual(len(resolved["character_specs"]), 2)
+
+        specs_by_id = {cid: spec for cid, spec in resolved["character_specs"]}
+
+        for cid, spec in resolved["character_specs"]:
+            self.assertIn(
+                spec["placement_mode"],
+                ("source", "grid"),
+                msg="character {0}: placement_mode missing or invalid".format(cid),
+            )
+            self.assertEqual(
+                len(spec["grp_root_world_location"]),
+                3,
+                msg="character {0}: grp_root_world_location must be length-3".format(cid),
+            )
+
+        # Characters are at distinct world x positions (0 vs 5), so their anchors differ.
+        loc_hero000 = specs_by_id["Hero000"]["grp_root_world_location"]
+        loc_hero001 = specs_by_id["Hero001"]["grp_root_world_location"]
+        self.assertNotEqual(
+            loc_hero000,
+            loc_hero001,
+            msg="Hero000 and Hero001 have distinct positions and must get distinct world locations",
+        )
+
 
 class SingleCharacterRegressionTests(unittest.TestCase):
     maxDiff = None
