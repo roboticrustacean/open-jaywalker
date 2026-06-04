@@ -2443,6 +2443,12 @@ class CrowdSpecsFromAssetDirTests(unittest.TestCase):
             self.assertEqual(spec["generated_armature_name"], "Armature_crowd_{0}".format(cid))
             # Each character resolves Hip geometry from its OWN bones (no cross-character mixing).
             self.assertTrue(any(b["name"] == "Hip" for b in spec["bones"]))
+            # The ASAM roll-alignment axis must propagate to EVERY character's spec
+            # through the crowd fan-out (build_armature_spec runs per character).
+            side = spec["placement_metadata"]["side_axis"]
+            expected_axis = [0.0, 0.0, 0.0]
+            expected_axis[int(side["index"])] = 1.0 if float(side.get("sign", 1)) >= 0 else -1.0
+            self.assertEqual(spec["roll_align_axis"], expected_axis)
 
     def test_single_character_returns_unchanged_path(self):
         from asam_human_builder.builder import build_character_specs_from_asset_dir
