@@ -7,6 +7,7 @@ Pure Python: operates on already-loaded inspector JSON dicts. No bpy.
 from __future__ import annotations
 
 import copy
+import math
 import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -283,6 +284,8 @@ def _assign_character_placements(reports):
     'source' when bodies are distributed; 'grid' when co-located. Anchors come from
     each character's owned mesh bboxes (body), falling back to the bone-derived
     bbox_ground_center when a character has no mesh.
+
+    Mutates the passed report dicts in place.
     """
     if not reports:
         return
@@ -332,7 +335,6 @@ def _character_footprint(placement, a, b):
 
 
 def _apply_grid(anchors, a, b):
-    import math
     count = len(anchors)
     columns = max(1, int(math.ceil(math.sqrt(count))))
     spacing = max(_character_footprint(p, a, b) for _r, _anc, p in anchors) * 1.5
@@ -375,6 +377,9 @@ def segment_recommended(asset_name: str, recommended_input) -> Optional[Segmenta
             report["review_flags"] = list(report["review_flags"]) + ["character_disconnected"]
         raw_reports.append((group, report))
 
+    # Mutates each report's root_resolution in place (grp_root_world_location +
+    # placement_mode); those dicts are the same objects _report_character/_plan_character
+    # snapshot below, so the placement keys flow into both outputs.
     _assign_character_placements([report for _g, report in raw_reports])
 
     report_characters: List[dict] = []

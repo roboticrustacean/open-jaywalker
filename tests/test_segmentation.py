@@ -408,6 +408,82 @@ class CharacterPlacementTests(unittest.TestCase):
         self.assertEqual(rr1["placement_mode"], "source")
         self.assertNotEqual(rr0["grp_root_world_location"], rr1["grp_root_world_location"])
 
+    # ------------------------------------------------------------------
+    # Co-located variant — both mesh bboxes share the same planar centre
+    # so planar spread <= COLOCATED_SPREAD_THRESHOLD and _apply_grid fires.
+    # ------------------------------------------------------------------
+
+    def _crowd_mesh_binding_colocated(self):
+        """Mesh binding where BOTH characters' body bbox is centred at (0, 0)."""
+        return {
+            "armature_object_name": "Object_4",
+            "meshes": [
+                {
+                    "mesh_name": "Hero000_Body",
+                    "armature_link": "modifier",
+                    "modifiers": [],
+                    "vertex_groups": ["Hero000Pelvis_1", "Hero000LThigh_5"],
+                    "vertex_group_stats": {
+                        "non_empty_group_count": 2,
+                        "per_group": [
+                            {"name": "Hero000Pelvis_1", "weighted_vertex_count": 5},
+                            {"name": "Hero000LThigh_5", "weighted_vertex_count": 3},
+                        ],
+                    },
+                    "material_slots": [],
+                    "warnings": [],
+                    # centred at (0, 0) — same planar position as Hero001
+                    "bbox": {"min": [-0.5, -0.5, 0.0], "max": [0.5, 0.5, 1.8]},
+                },
+                {
+                    "mesh_name": "Hero001_Body",
+                    "armature_link": "modifier",
+                    "modifiers": [],
+                    "vertex_groups": ["Hero001Pelvis_1", "Hero001LThigh_5"],
+                    "vertex_group_stats": {
+                        "non_empty_group_count": 2,
+                        "per_group": [
+                            {"name": "Hero001Pelvis_1", "weighted_vertex_count": 5},
+                            {"name": "Hero001LThigh_5", "weighted_vertex_count": 3},
+                        ],
+                    },
+                    "material_slots": [],
+                    "warnings": [],
+                    # also centred at (0, 0) — co-located with Hero000
+                    "bbox": {"min": [-0.5, -0.5, 0.0], "max": [0.5, 0.5, 1.8]},
+                },
+            ],
+        }
+
+    def _segment_two_character_crowd_colocated(self):
+        from phase3_classifier import segmentation
+        # Reuse the distributed bone data — placement is driven by mesh bboxes,
+        # not bone positions, so bone offsets do not affect placement_mode.
+        primary = self._crowd_primary_data_distributed()
+        primary["mesh_binding"] = self._crowd_mesh_binding_colocated()
+        inp = ArmatureInput(
+            armature_name="Object_4",
+            all_path=Path("Object_4_all.json"),
+            filtered_path=None,
+            primary_path=Path("Object_4_all.json"),
+            support_path=None,
+            primary_data=primary,
+            support_data=None,
+        )
+        return segmentation.segment_recommended("crowd", inp)
+
+    def test_colocated_characters_are_gridded(self):
+        from phase3_classifier import segmentation
+        result = self._segment_two_character_crowd_colocated()
+        by_id = {c["character_id"]: c for c in result.plan_characters}
+        rr0 = by_id["Hero000"]["root_resolutions"][0]
+        rr1 = by_id["Hero001"]["root_resolutions"][0]
+        self.assertEqual(rr0["placement_mode"], "grid")
+        self.assertEqual(rr1["placement_mode"], "grid")
+        self.assertNotEqual(rr0["grp_root_world_location"], rr1["grp_root_world_location"])
+        self.assertIn("applied_grid_offset", rr0)
+        self.assertIn("applied_grid_offset", rr1)
+
 
 if __name__ == "__main__":
     unittest.main()
