@@ -27,6 +27,7 @@ from asam_human_builder.builder import (  # noqa: E402
 )
 from asam_human_builder.blender_builder import (  # noqa: E402
     build_armature_in_blender,
+    export_generated_blend,
     purge_previous_generated_artifacts,
 )
 from phase3_classifier.classifier import (  # noqa: E402
@@ -514,6 +515,14 @@ class _FakeOps:
         self.object = _FakeObjectOps(context)
 
 
+class _FakeLibraries:
+    def __init__(self):
+        self.write_calls = []
+
+    def write(self, filepath, datablocks, **kwargs):
+        self.write_calls.append({"filepath": filepath, "datablocks": datablocks, "kwargs": kwargs})
+
+
 class _FakeBpy:
     def __init__(self):
         self.context = _FakeContext()
@@ -522,6 +531,7 @@ class _FakeBpy:
         self.data.armatures = _FakeArmatureStore()
         self.data.meshes = _FakeMeshStore()
         self.data.collections = _FakeCollectionStore(self)
+        self.data.libraries = _FakeLibraries()
         self.data.scenes = [self.context.scene]
         # Expose isinstance-able type markers for purge_previous_generated_artifacts
         # to distinguish armature vs mesh data blocks without a parallel type-name
@@ -2531,6 +2541,31 @@ class SuccessMessageTests(unittest.TestCase):
         self.assertIn("Crowd built", msg)
         self.assertIn("2 characters", msg)
         self.assertIn("1 failed", msg)
+
+
+class ExportGeneratedBlendTests(unittest.TestCase):
+    def test_export_generated_blend_writes_wrapper_datablocks(self):
+        import tempfile
+        import os
+        fake_bpy = _FakeBpy()
+        wrapper = fake_bpy.data.collections.new("ASAM_demo")
+        wrapper[GENERATED_MARKER_KEY] = True
+        out = os.path.join(tempfile.mkdtemp(), "demo_asam.blend")
+        path = export_generated_blend(fake_bpy, "ASAM_demo", out)
+        self.assertEqual(path, out)
+        written = fake_bpy.data.libraries.write_calls[0]
+        self.assertIn(wrapper, list(written["datablocks"]))
+
+    def test_export_generated_blend_refuses_non_generated_collection(self):
+        fake_bpy = _FakeBpy()
+        fake_bpy.data.collections.new("NotGenerated")  # no generated marker
+        with self.assertRaises(ValueError):
+            export_generated_blend(fake_bpy, "NotGenerated", "/tmp/x.blend")
+
+    def test_export_generated_blend_refuses_missing_collection(self):
+        fake_bpy = _FakeBpy()
+        with self.assertRaises(ValueError):
+            export_generated_blend(fake_bpy, "DoesNotExist", "/tmp/x.blend")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from typing import List, Optional
 
 try:
@@ -609,3 +610,24 @@ def _remove_generated_crowd_wrapper(bpy_module, wrapper_name: str, asset_name: s
         if scene.collection.children.get(wrapper.name) is not None:
             scene.collection.children.unlink(wrapper)
     bpy_module.data.collections.remove(wrapper)
+
+
+def export_generated_blend(bpy_module, wrapper_collection_name: str, filepath: str) -> str:
+    """Write ONLY the generated wrapper collection (and what it references) to a .blend.
+
+    The source rig/meshes are excluded: bpy.data.libraries.write serializes the given
+    datablocks plus their dependencies, not the whole file. Returns the written path.
+    Raises ValueError if the wrapper is absent or not a generated collection.
+    """
+    wrapper = bpy_module.data.collections.get(wrapper_collection_name)
+    if wrapper is None or not bool(wrapper.get(GENERATED_MARKER_KEY)):
+        raise ValueError(
+            "Refusing to export '{0}': not a generated wrapper collection".format(
+                wrapper_collection_name
+            )
+        )
+    directory = os.path.dirname(filepath)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+    bpy_module.data.libraries.write(filepath, {wrapper}, fake_user=True)
+    return filepath
