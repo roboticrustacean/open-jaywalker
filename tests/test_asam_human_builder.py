@@ -2968,6 +2968,52 @@ class SingleSpineSplitBuilderTests(unittest.TestCase):
         self.assertEqual(lower["semantic_action"], "split_in_builder")
         self.assertEqual(upper["semantic_action"], "split_in_builder")
 
+    def test_resolve_split_geometry_bisects_at_true_midpoint(self):
+        # Unit-test the pure resolver in source-world coords, before the builder's
+        # Grp_Root rebase and _span_core_chains run. This pins the 50% split
+        # itself (the spec-level join assertion above is forced equal by spanning
+        # regardless of ratio, so it cannot catch a wrong midpoint).
+        from asam_human_builder.geometry_resolution import _resolve_split_spine_geometry
+
+        source_bones = {
+            "Spine": {"name": "Spine", "parent": "Hips",
+                      "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.4], "length": 0.4},
+        }
+        pm = _placement_metadata()
+        warnings = []
+        lower_geom, lower_src, lower_bone = _resolve_split_spine_geometry(
+            "Lower_Spine",
+            {"action": "split_in_builder", "source_bone": "Spine", "split_half": "lower"},
+            source_bones, pm, warnings,
+        )
+        upper_geom, upper_src, upper_bone = _resolve_split_spine_geometry(
+            "Upper_Spine",
+            {"action": "split_in_builder", "source_bone": "Spine", "split_half": "upper"},
+            source_bones, pm, warnings,
+        )
+        # Lower: source head (1.0) -> midpoint (1.2); Upper: midpoint (1.2) -> tail (1.4).
+        self.assertAlmostEqual(lower_geom["head"][2], 1.0, places=6)
+        self.assertAlmostEqual(lower_geom["tail"][2], 1.2, places=6)
+        self.assertAlmostEqual(upper_geom["head"][2], 1.2, places=6)
+        self.assertAlmostEqual(upper_geom["tail"][2], 1.4, places=6)
+        self.assertEqual((lower_src, lower_bone), ("source_bone", "Spine"))
+        self.assertEqual((upper_src, upper_bone), ("split_spine_upper", None))
+        self.assertEqual(warnings, [])
+
+    def test_resolve_split_geometry_missing_source_returns_none_with_warning(self):
+        from asam_human_builder.geometry_resolution import _resolve_split_spine_geometry
+
+        warnings = []
+        result = _resolve_split_spine_geometry(
+            "Lower_Spine",
+            {"action": "split_in_builder", "source_bone": "Ghost", "split_half": "lower"},
+            {}, _placement_metadata(), warnings,
+        )
+        self.assertIsNone(result)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("missing_split_source_geometry", warnings[0])
+        self.assertIn("Ghost", warnings[0])
+
 
 if __name__ == "__main__":
     unittest.main()
