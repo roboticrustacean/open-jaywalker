@@ -148,6 +148,10 @@ HEIGHT_BANDS: Dict[str, Tuple[float, float]] = {
 
 AXIS_NAMES = ("x", "y", "z")
 RECOVERABLE_ACTIONS = {"direct_map", "alias_map", "repair_in_builder"}
+SPLIT_ACTION = "split_in_builder"
+# Actions whose source bone is consumed by a generated target (so it must not be
+# preserved as an extra) and which count toward an armature's mapped-target total.
+MAPPED_ACTIONS = RECOVERABLE_ACTIONS | {SPLIT_ACTION}
 ROOT_CENTER_TOLERANCE_RATIO = 0.02
 ROOT_GROUND_TOLERANCE_RATIO = 0.01
 ROOT_TAIL_TO_HIP_TOLERANCE_RATIO = 0.05
@@ -453,14 +457,29 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
 
 
 def _build_actions(asam_targets: Dict[str, dict]) -> Dict[str, list]:
-    actions: Dict[str, list] = {"rename": [], "create": []}
+    actions: Dict[str, list] = {"rename": [], "create": [], "split": []}
+    split_pending: Dict[str, dict] = {}
     for target, payload in asam_targets.items():
         if target == "Root":
             continue
         if payload["action"] in {"direct_map", "alias_map"} and payload["source_bone"]:
             actions["rename"].append({"source": payload["source_bone"], "target": target})
+        elif payload["action"] == SPLIT_ACTION:
+            entry = split_pending.setdefault(
+                payload["source_bone"],
+                {"source": payload["source_bone"], "lower_target": None,
+                 "upper_target": None, "ratio": 0.5},
+            )
+            if payload.get("split_half") == "lower":
+                entry["lower_target"] = target
+            else:
+                entry["upper_target"] = target
         elif payload["action"] == "create_in_builder":
             actions["create"].append({"target": target, "parent": TARGET_PARENTS.get(target)})
+    actions["split"] = [
+        entry for entry in split_pending.values()
+        if entry["lower_target"] and entry["upper_target"]
+    ]
     return actions
 
 
@@ -590,11 +609,12 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
 
     resolved_targets = _resolve_targets(target_candidates, context)
     _reconcile_hip_to_spine_pivot(resolved_targets, context)
+    _plan_single_spine_split(resolved_targets, context)
     root_resolution = _resolve_root_compliance(resolved_targets, target_candidates.get("Root", []), context)
     mapped_bones = {
         payload["source_bone"]
         for payload in resolved_targets.values()
-        if payload["source_bone"] is not None and payload["action"] in RECOVERABLE_ACTIONS
+        if payload["source_bone"] is not None and payload["action"] in MAPPED_ACTIONS
     }
 
     extras_preserved, unclassified_bones = _classify_non_mapped_bones(bones, context, mapped_bones)
@@ -1438,6 +1458,34 @@ def _classify_non_mapped_bones(
     return preserved, unclassified
 
 
+def _plan_single_spine_split(resolved_targets: Dict[str, dict], context: dict) -> None:
+    """Plan a geometric midpoint split of a lone spine bone (issue #56).
+
+    Trigger: the chosen spine chain has exactly one usable bone AND Hip and Neck
+    are already classified. By then the in-between bone is unambiguously spine
+    (topology brackets it), so both ASAM spine targets are pointed at it and tagged
+    `split_in_builder`; the builder bisects it at its midpoint. No-op for 0 or >=2
+    spine bones, or when Hip/Neck are not classified (no bracket -> existing
+    fallback). Mutates `resolved_targets` in place."""
+    spine_chain = context.get("spine_chain") or []
+    if len(spine_chain) != 1:
+        return
+    if resolved_targets["Hip"]["action"] not in RECOVERABLE_ACTIONS:
+        return
+    if resolved_targets["Neck"]["action"] not in {"direct_map", "alias_map"}:
+        return
+
+    spine_bone = spine_chain[0]
+    for target, half in (("Lower_Spine", "lower"), ("Upper_Spine", "upper")):
+        payload = resolved_targets[target]
+        payload["action"] = SPLIT_ACTION
+        payload["source_bone"] = spine_bone
+        payload["split_half"] = half
+        payload["confidence"] = 0.7
+        if "single_spine_geometric_split" not in payload["notes"]:
+            payload["notes"].append("single_spine_geometric_split")
+
+
 def _build_review_flags(resolved_targets: Dict[str, dict], root_resolution: dict, context: dict) -> List[str]:
     flags: Set[str] = set()
     actual_roots = [bone for bone in context["bones"].values() if bone.parent is None]
@@ -1558,7 +1606,7 @@ def _build_armature_summary(
     armature_name: str,
     name_quality: float,
 ) -> dict:
-    mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
+    mapped = [payload for payload in resolved_targets.values() if payload["action"] in MAPPED_ACTIONS]
     average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)
     direct_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "direct_map")
     alias_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "alias_map")

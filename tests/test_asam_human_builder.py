@@ -2919,5 +2919,254 @@ class WeightMergePlanTests(unittest.TestCase):
         self.assertEqual(spec["weight_merges"], sorted(spec["weight_merges"], key=lambda m: (m["source"], m["target"])))
 
 
+def _minimal_report_and_plan(extra_mapping: dict):
+    """Return a valid (classifier_report, build_plan) pair with extra_mapping overlaid.
+
+    Starts from the full-baseline helpers (_base_classifier_report / _base_build_plan)
+    which already cover all 28 CORE_TARGETS, then overlays any entries in extra_mapping
+    so callers only need to supply the targets they care about.
+    """
+    report = _base_classifier_report()
+    plan = _base_build_plan()
+    for target, payload in extra_mapping.items():
+        report["semantic_mapping"][target] = payload
+    return report, plan
+
+
+class SingleSpineSplitBuilderTests(unittest.TestCase):
+    """The builder bisects a lone source spine bone: lower half -> Lower_Spine
+    (keeps the source bone's weights), upper half -> Upper_Spine (structural)."""
+
+    def _split_inputs(self):
+        source_bones = {
+            "Spine": {"name": "Spine", "parent": "Hips",
+                      "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.4], "length": 0.4},
+        }
+        def spine_payload(half):
+            return {"action": "split_in_builder", "source_bone": "Spine",
+                    "split_half": half, "confidence": 0.7, "notes": []}
+        report, plan = _minimal_report_and_plan(
+            extra_mapping={
+                "Lower_Spine": spine_payload("lower"),
+                "Upper_Spine": spine_payload("upper"),
+            },
+        )
+        return report, plan, source_bones
+
+    def test_split_creates_two_half_bones_at_midpoint(self):
+        report, plan, source_bones = self._split_inputs()
+        spec = build_armature_spec(report, plan, source_bones)
+        lower = _spec_bone(spec, "Lower_Spine")
+        upper = _spec_bone(spec, "Upper_Spine")
+        self.assertAlmostEqual(lower["tail"][2], upper["head"][2], places=5)
+        self.assertLess(lower["head"][2], lower["tail"][2])
+        self.assertLess(upper["head"][2], upper["tail"][2])
+        self.assertEqual(lower["geometry_source"], "source_bone")
+        self.assertEqual(lower["source_bone"], "Spine")
+        self.assertEqual(upper["geometry_source"], "split_spine_upper")
+        self.assertIsNone(upper["source_bone"])
+        self.assertEqual(lower["semantic_action"], "split_in_builder")
+        self.assertEqual(upper["semantic_action"], "split_in_builder")
+
+    def test_resolve_split_geometry_bisects_at_true_midpoint(self):
+        # Unit-test the pure resolver in source-world coords, before the builder's
+        # Grp_Root rebase and _span_core_chains run. This pins the 50% split
+        # itself (the spec-level join assertion above is forced equal by spanning
+        # regardless of ratio, so it cannot catch a wrong midpoint).
+        from asam_human_builder.geometry_resolution import _resolve_split_spine_geometry
+
+        source_bones = {
+            "Spine": {"name": "Spine", "parent": "Hips",
+                      "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.4], "length": 0.4},
+        }
+        pm = _placement_metadata()
+        warnings = []
+        lower_geom, lower_src, lower_bone = _resolve_split_spine_geometry(
+            "Lower_Spine",
+            {"action": "split_in_builder", "source_bone": "Spine", "split_half": "lower"},
+            source_bones, pm, warnings,
+        )
+        upper_geom, upper_src, upper_bone = _resolve_split_spine_geometry(
+            "Upper_Spine",
+            {"action": "split_in_builder", "source_bone": "Spine", "split_half": "upper"},
+            source_bones, pm, warnings,
+        )
+        # Lower: source head (1.0) -> midpoint (1.2); Upper: midpoint (1.2) -> tail (1.4).
+        self.assertAlmostEqual(lower_geom["head"][2], 1.0, places=6)
+        self.assertAlmostEqual(lower_geom["tail"][2], 1.2, places=6)
+        self.assertAlmostEqual(upper_geom["head"][2], 1.2, places=6)
+        self.assertAlmostEqual(upper_geom["tail"][2], 1.4, places=6)
+        self.assertEqual((lower_src, lower_bone), ("source_bone", "Spine"))
+        self.assertEqual((upper_src, upper_bone), ("split_spine_upper", None))
+        self.assertEqual(warnings, [])
+
+    def test_resolve_split_geometry_missing_source_returns_none_with_warning(self):
+        from asam_human_builder.geometry_resolution import _resolve_split_spine_geometry
+
+        warnings = []
+        result = _resolve_split_spine_geometry(
+            "Lower_Spine",
+            {"action": "split_in_builder", "source_bone": "Ghost", "split_half": "lower"},
+            {}, _placement_metadata(), warnings,
+        )
+        self.assertIsNone(result)
+        self.assertEqual(len(warnings), 1)
+        self.assertIn("missing_split_source_geometry", warnings[0])
+        self.assertIn("Ghost", warnings[0])
+
+    def test_split_consolidates_weights_on_lower_spine(self):
+        report, plan, source_bones = self._split_inputs()
+        spec = build_armature_spec(report, plan, source_bones)
+        plan_remap = compute_vertex_group_remap_plan(spec["bones"], ["Spine"])
+        renames = {entry["source"]: entry["target"] for entry in plan_remap["renames"]}
+        self.assertEqual(renames.get("Spine"), "Lower_Spine")
+        self.assertNotIn("Upper_Spine", renames.values())
+        self.assertEqual(plan_remap["name_collisions"], [])
+
+
+def _write_single_spine_asset_on_disk(asset_name: str = "single_spine_integration") -> Path:
+    """Write a single-spine asset to disk in the inspector-export layout the
+    classifier consumes (mirrors test_phase3_classifier.SingleSpineSplitTests.
+    _single_spine_asset / _write_single_armature_asset).
+
+    The one addition is a `mesh_binding`: the classifier-side helper omits it, but
+    the builder's `validate_builder_inputs` requires `build_plan.mesh_binding` to be
+    a dict whose `armature_object_name` matches `recommended_primary_armature`. Adding
+    it here lets a single asset_dir satisfy BOTH the classifier's write_asset_report
+    and the builder's build_armature_spec_from_asset_dir, so the whole pipeline runs
+    off the same files on disk. The source export stays at `Rig_all.json`, exactly
+    where build_source_bone_index_from_export looks for the primary armature."""
+    bones = [
+        _bone("Hips", None, (0.0, 0.0, 0.95), (0.0, 0.0, 1.0)),
+        _bone("Spine", "Hips", (0.0, 0.0, 1.0), (0.0, 0.0, 1.4)),
+        _bone("LeftUpLeg", "Hips", (0.1, 0.0, 0.95), (0.1, 0.0, 0.5)),
+        _bone("LeftLeg", "LeftUpLeg", (0.1, 0.0, 0.5), (0.1, 0.0, 0.1)),
+        _bone("LeftFoot", "LeftLeg", (0.1, 0.0, 0.1), (0.1, 0.1, 0.05)),
+        _bone("RightUpLeg", "Hips", (-0.1, 0.0, 0.95), (-0.1, 0.0, 0.5)),
+        _bone("RightLeg", "RightUpLeg", (-0.1, 0.0, 0.5), (-0.1, 0.0, 0.1)),
+        _bone("RightFoot", "RightLeg", (-0.1, 0.0, 0.1), (-0.1, 0.1, 0.05)),
+        _bone("Neck", "Spine", (0.0, 0.0, 1.4), (0.0, 0.0, 1.5)),
+        _bone("Head", "Neck", (0.0, 0.0, 1.5), (0.0, 0.0, 1.65)),
+    ]
+    chains = {
+        "spine": [["Spine"]],
+        "leg": {
+            "left": ["LeftUpLeg", "LeftLeg", "LeftFoot"],
+            "right": ["RightUpLeg", "RightLeg", "RightFoot"],
+            "unsided": [],
+        },
+        "arm": {"left": [], "right": [], "unsided": []},
+    }
+    vertex_groups = [bone["name"] for bone in bones]
+    mesh_binding = {
+        "armature_object_name": "Rig",
+        "meshes": [
+            {
+                "mesh_name": "BodyMesh",
+                "armature_link": "modifier",
+                "modifiers": [
+                    {"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": "Rig"}
+                ],
+                "vertex_groups": vertex_groups,
+                "vertex_group_stats": {
+                    "non_empty_group_count": len(vertex_groups),
+                    "per_group": [
+                        {"name": name, "weighted_vertex_count": 8} for name in vertex_groups
+                    ],
+                },
+                "material_slots": [],
+                "warnings": [],
+            }
+        ],
+    }
+
+    hierarchy = {bone["name"]: [] for bone in bones}
+    for bone in bones:
+        parent = bone["parent"]
+        if parent in hierarchy:
+            hierarchy[parent].append(bone["name"])
+
+    asset_dir = Path(tempfile.mkdtemp(prefix="single_spine_integration_")) / asset_name
+    asset_dir.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "armature_name": "Rig",
+        "source_file": "{0}.blend".format(asset_name),
+        "filter": None,
+        "bone_count": len(bones),
+        "hierarchy": hierarchy,
+        "bones": bones,
+        "chains": chains,
+        "mesh_binding": mesh_binding,
+    }
+    (asset_dir / "Rig_all.json").write_text(_json.dumps(payload), encoding="utf-8")
+    return asset_dir
+
+
+class SingleSpineSplitPipelineIntegrationTests(unittest.TestCase):
+    """End-to-end on-disk seam for the single-spine geometric split (#56).
+
+    The classifier-side tests (test_phase3_classifier.SingleSpineSplitTests) stop at
+    the produced report/plan, and the builder-side tests (SingleSpineSplitBuilderTests)
+    feed build_armature_spec hand-built inputs. NOTHING else runs the REAL classifier
+    on a single-spine asset and then loads its classifier_report.json + build_plan.json
+    back through the builder's disk path. This test wires both halves together via
+    build_armature_spec_from_asset_dir to confirm the full pipeline yields two distinct
+    spine bones, parented Hip -> Lower_Spine -> Upper_Spine -> Neck, with the source
+    Spine bone consumed (not leaked as a preserved extra) and its weights consolidated
+    on Lower_Spine."""
+
+    def test_full_pipeline_splits_single_spine_into_two_bones(self):
+        asset_dir = _write_single_spine_asset_on_disk()
+
+        # Phase 3: the REAL classifier writes classifier_report.json + build_plan.json
+        # into asset_dir. Pin that it actually planned the split for this asset.
+        _report, build_plan, _report_path, _plan_path = write_asset_report(asset_dir)
+        self.assertEqual(
+            build_plan["actions"]["split"],
+            [{"source": "Spine", "lower_target": "Lower_Spine",
+              "upper_target": "Upper_Spine", "ratio": 0.5}],
+        )
+
+        # Builder: consume the SAME asset_dir off disk (report + plan + Rig_all.json).
+        loaded_report, loaded_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        self.assertEqual(loaded_plan["recommended_primary_armature"], "Rig")
+        self.assertEqual(loaded_report["recommended_primary_armature"], "Rig")
+
+        lower = _spec_bone(build_spec, "Lower_Spine")
+        upper = _spec_bone(build_spec, "Upper_Spine")
+        neck = _spec_bone(build_spec, "Neck")
+
+        # Two DISTINCT spine bones, not one mapped + one collapsed/synthesized clone.
+        self.assertIsNot(lower, upper)
+        self.assertNotEqual(lower["head"], upper["head"])
+
+        # Parented Hip -> Lower_Spine -> Upper_Spine -> Neck.
+        self.assertEqual(lower["parent_bone"], "Hip")
+        self.assertEqual(upper["parent_bone"], "Lower_Spine")
+        self.assertEqual(neck["parent_bone"], "Upper_Spine")
+
+        # The lower half keeps the source Spine geometry; the upper half is structural.
+        self.assertEqual(lower["source_bone"], "Spine")
+        self.assertEqual(lower["geometry_source"], "source_bone")
+        self.assertIsNone(upper["source_bone"])
+
+        # The source "Spine" bone is consumed by the split, never leaked as an extra.
+        spec_bone_names = [bone["name"] for bone in build_spec["bones"]]
+        self.assertNotIn("Spine", spec_bone_names)
+        extras = build_spec.get("extras_preserved", [])
+        extra_names = {
+            entry.get("name") if isinstance(entry, dict) else entry for entry in extras
+        }
+        self.assertNotIn("Spine", extra_names)
+
+        # Weights consolidate on Lower_Spine: the Spine vertex group renames onto
+        # Lower_Spine only, never onto Upper_Spine.
+        remap = compute_vertex_group_remap_plan(build_spec["bones"], ["Spine"])
+        renames = {entry["source"]: entry["target"] for entry in remap["renames"]}
+        self.assertEqual(renames.get("Spine"), "Lower_Spine")
+        self.assertNotIn("Upper_Spine", renames.values())
+        self.assertEqual(remap["name_collisions"], [])
+
+
 if __name__ == "__main__":
     unittest.main()
