@@ -213,6 +213,10 @@ def _assert_vec_almost_equal(test_case: unittest.TestCase, actual, expected, pla
         test_case.assertAlmostEqual(actual_value, expected_value, places=places)
 
 
+def _distance_for_test(a, b):
+    return sum((b[i] - a[i]) ** 2 for i in range(3)) ** 0.5
+
+
 class _FakeProps:
     def __init__(self):
         self._props = {}
@@ -3198,6 +3202,46 @@ class SingleSpineSplitPipelineIntegrationTests(unittest.TestCase):
         self.assertEqual(renames.get("Spine"), "Lower_Spine")
         self.assertNotIn("Upper_Spine", renames.values())
         self.assertEqual(remap["name_collisions"], [])
+
+
+class FingerPlacementTests(unittest.TestCase):
+    """Synthesized fingers/thumb anchor at the wrist (carpal beginning): fingers
+    continue the hand direction to fingertip length; thumb diverges, shorter."""
+
+    def _hand(self, side_sign=1):
+        wrist = [0.5, 0.1 * side_sign, 1.2]
+        end = [0.5, 0.3 * side_sign, 1.2]
+        return {"name": "Hand", "parent": "Lower_Arm",
+                "head": wrist, "tail": end, "length": _distance_for_test(wrist, end)}
+
+    def test_fingers_anchor_at_wrist_and_extend_along_hand(self):
+        from asam_human_builder.geometry_resolution import _resolve_finger_geometry
+        pm = _placement_metadata()
+        hand = self._hand()
+        fingers, fsrc, fbone = _resolve_finger_geometry("Full_Fingers_Left", hand, pm)
+        self.assertEqual(fingers["head"], [float(v) for v in hand["head"]])  # wrist anchor
+        self.assertGreater(fingers["tail"][1], hand["tail"][1])              # extends past hand end (+y)
+        self.assertGreater(fingers["length"], hand["length"])
+        self.assertEqual((fsrc, fbone), ("finger_anchored", None))
+
+    def test_thumb_diverges_from_fingers_and_is_shorter(self):
+        from asam_human_builder.geometry_resolution import _resolve_finger_geometry
+        pm = _placement_metadata()
+        hand = self._hand()
+        fingers, _, _ = _resolve_finger_geometry("Full_Fingers_Left", hand, pm)
+        thumb, tsrc, tbone = _resolve_finger_geometry("Full_Thumb_Left", hand, pm)
+        self.assertEqual(thumb["head"], [float(v) for v in hand["head"]])    # same wrist anchor
+        self.assertTrue(thumb["tail"][0] != fingers["tail"][0] or thumb["tail"][2] != fingers["tail"][2])  # diverges
+        self.assertLess(thumb["length"], fingers["length"])                  # shorter
+        self.assertEqual((tsrc, tbone), ("finger_anchored", None))
+
+    def test_sides_derive_from_their_own_hand_independently(self):
+        from asam_human_builder.geometry_resolution import _resolve_finger_geometry
+        pm = _placement_metadata()
+        left, _, _ = _resolve_finger_geometry("Full_Fingers_Left", self._hand(1), pm)
+        right, _, _ = _resolve_finger_geometry("Full_Fingers_Right", self._hand(-1), pm)
+        self.assertGreater(left["tail"][1], 0.0)    # left follows +y hand
+        self.assertLess(right["tail"][1], 0.0)      # right follows -y hand
 
 
 if __name__ == "__main__":

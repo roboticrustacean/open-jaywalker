@@ -67,6 +67,12 @@ EYE_FORWARD_RATIO = 0.5   # forward offset onto the face
 EYE_SEP_RATIO = 0.3       # lateral half-separation between the two eyes
 EYE_LEN_RATIO = 0.15      # eye bone length (forward/gaze)
 
+# Finger/thumb placement ratios (fractions of Hand bone length), issue #64.
+FINGERS_LEN_RATIO = 1.4      # finger bone length from the wrist (covers hand + fingers)
+THUMB_LEN_RATIO = 0.6        # thumb bone length from the wrist (shorter)
+THUMB_FORWARD_DIVERGE = 0.6  # thumb divergence toward the palm (forward axis)
+THUMB_DOWN_DIVERGE = 0.4     # thumb divergence downward (away from up axis)
+
 
 def _resolve_target_geometry(
     target_name: str,
@@ -351,6 +357,36 @@ def _resolve_eye_geometry(
     eye_head = _offset_point(center, side, EYE_SEP_RATIO * head_len)
     eye_tail = _offset_point(eye_head, forward, EYE_LEN_RATIO * head_len)
     return _ensure_non_zero_geometry(eye_head, eye_tail, placement_metadata), "eye_anchored", None
+
+
+def _resolve_finger_geometry(
+    target_name: str,
+    hand_geometry: dict,
+    placement_metadata: dict,
+) -> Tuple[dict, str, None]:
+    """Anchor synthesized fingers/thumb at the wrist (carpal beginning, issue #64).
+    Full_Fingers continues the hand direction to fingertip length; Full_Thumb
+    diverges toward the palm and is shorter. Parent is the Hand; X-forward/
+    Z-sideward orientation is applied by the roll pass."""
+    wrist = [float(v) for v in hand_geometry["head"]]
+    hand_end = [float(v) for v in hand_geometry["tail"]]
+    hand_len = _distance(wrist, hand_end)
+    if hand_len <= 1e-6:
+        hand_len = max(float(placement_metadata.get("bbox_height", 0.0)) * 0.05, 1e-3)
+    hand_dir = _normalize([hand_end[i] - wrist[i] for i in range(3)])
+
+    if _family_label(target_name) == "Full_Fingers":
+        tail = _offset_point(wrist, hand_dir, FINGERS_LEN_RATIO * hand_len)
+        return _ensure_non_zero_geometry(wrist, tail, placement_metadata), "finger_anchored", None
+
+    forward = _world_axis_unit(placement_metadata, "forward_axis", 1)
+    down = _world_axis_unit(placement_metadata, "up_axis", -1)
+    thumb_dir = _normalize([
+        hand_dir[i] + (THUMB_FORWARD_DIVERGE * forward[i]) + (THUMB_DOWN_DIVERGE * down[i])
+        for i in range(3)
+    ])
+    tail = _offset_point(wrist, thumb_dir, THUMB_LEN_RATIO * hand_len)
+    return _ensure_non_zero_geometry(wrist, tail, placement_metadata), "finger_anchored", None
 
 
 def _resolve_created_target_geometry(
