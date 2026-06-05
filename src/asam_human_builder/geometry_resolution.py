@@ -399,6 +399,22 @@ def _resolve_created_target_geometry(
     children_map: Dict[str, List[str]],
     resolved_geometry: Dict[str, dict],
 ) -> Tuple[dict, str, Optional[str]]:
+    family = _family_label(target_name)
+    if family in {"Eye", "Full_Fingers", "Full_Thumb"}:
+        parent_name = bone_parents.get(target_name)
+        parent_geometry = (
+            _get_reference_geometry(
+                parent_name, semantic_mapping, root_resolution,
+                source_bones, resolved_geometry, placement_metadata,
+            )
+            if parent_name
+            else None
+        )
+        if parent_geometry is not None:
+            if family == "Eye":
+                return _resolve_eye_geometry(target_name, parent_geometry, placement_metadata)
+            return _resolve_finger_geometry(target_name, parent_geometry, placement_metadata)
+
     opposite_target = _opposite_target_name(target_name)
     opposite_geometry = None
     if opposite_target is not None:

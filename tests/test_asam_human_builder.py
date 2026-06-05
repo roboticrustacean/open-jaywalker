@@ -3244,5 +3244,79 @@ class FingerPlacementTests(unittest.TestCase):
         self.assertLess(right["tail"][1], 0.0)      # right follows -y hand
 
 
+class EyeFingerDispatchTests(unittest.TestCase):
+    """The created-target resolver routes Eye_* to the Head anchor and
+    Full_*_* to the same-side Hand anchor, and falls through when the parent
+    is unavailable."""
+
+    def _bone_parents(self):
+        return {"Eye_Left": "Head", "Eye_Right": "Head",
+                "Full_Fingers_Left": "Hand_Left", "Full_Thumb_Left": "Hand_Left",
+                "Full_Fingers_Right": "Hand_Right", "Full_Thumb_Right": "Hand_Right"}
+
+    def _semantic(self, *targets):
+        # Include both the requested targets plus their opposites (for mirroring logic)
+        all_targets = set(targets)
+        for target in targets:
+            opposite = None
+            if target.endswith("_Left"):
+                opposite = target[:-5] + "_Right"
+            elif target.endswith("_Right"):
+                opposite = target[:-6] + "_Left"
+            if opposite:
+                all_targets.add(opposite)
+        return {t: {"action": "create_in_builder", "source_bone": None, "notes": []} for t in all_targets}
+
+    def test_eye_routes_to_head_anchor(self):
+        from asam_human_builder.geometry_resolution import _resolve_created_target_geometry
+        pm = _placement_metadata()
+        resolved = {"Head": {"name": "Head", "parent": "Neck",
+                             "head": [0.0, 0.0, 1.5], "tail": [0.0, 0.0, 1.7], "length": 0.2}}
+        geometry, source, bone = _resolve_created_target_geometry(
+            "Eye_Left", self._semantic("Eye_Left"), {}, {}, pm,
+            self._bone_parents(), {}, resolved,
+        )
+        self.assertEqual(source, "eye_anchored")
+        self.assertNotEqual(geometry["head"], resolved["Head"]["tail"])  # not chin-collapsed
+
+    def test_fingers_route_to_same_side_hand(self):
+        from asam_human_builder.geometry_resolution import _resolve_created_target_geometry
+        pm = _placement_metadata()
+        resolved = {"Hand_Left": {"name": "Hand_Left", "parent": "Lower_Arm_Left",
+                                  "head": [0.5, 0.1, 1.2], "tail": [0.5, 0.3, 1.2], "length": 0.2}}
+        geometry, source, bone = _resolve_created_target_geometry(
+            "Full_Fingers_Left", self._semantic("Full_Fingers_Left"), {}, {}, pm,
+            self._bone_parents(), {}, resolved,
+        )
+        self.assertEqual(source, "finger_anchored")
+        self.assertEqual(geometry["head"], [0.5, 0.1, 1.2])  # wrist anchor
+
+    def test_falls_through_when_parent_unavailable(self):
+        from asam_human_builder.geometry_resolution import _resolve_created_target_geometry
+        pm = _placement_metadata()
+        # Head present in semantic_mapping (as always in production) but unresolved
+        # (create_in_builder, no source) and absent from resolved_geometry -> the
+        # eye anchor cannot resolve a parent and must fall through to the generic path.
+        semantic = self._semantic("Eye_Left", "Head")
+        geometry, source, bone = _resolve_created_target_geometry(
+            "Eye_Left", semantic, {}, {}, pm,
+            self._bone_parents(), {}, {},
+        )
+        self.assertNotEqual(source, "eye_anchored")  # generic fallback ran instead
+        self.assertIsNotNone(geometry)               # still produced a bone, no crash
+
+    def test_mapped_eye_is_not_anchored(self):
+        from asam_human_builder.geometry_resolution import _resolve_target_geometry
+        pm = _placement_metadata()
+        semantic = {"Eye_Left": {"action": "direct_map", "source_bone": "L_eye", "notes": []}}
+        source_bones = {"L_eye": {"name": "L_eye", "parent": "Head",
+                                  "head": [0.3, 0.1, 1.6], "tail": [0.35, 0.1, 1.6], "length": 0.05}}
+        geometry, source, bone = _resolve_target_geometry(
+            "Eye_Left", semantic, {}, source_bones, pm, {"Eye_Left": "Head"}, {}, {}, [],
+        )
+        self.assertEqual(source, "source_bone")   # direct map, not eye_anchored
+        self.assertEqual(bone, "L_eye")
+
+
 if __name__ == "__main__":
     unittest.main()
