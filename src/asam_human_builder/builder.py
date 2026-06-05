@@ -13,6 +13,8 @@ from phase3_classifier.classifier import CORE_TARGETS
 
 from asam_human_builder.geometry_resolution import (
     _asam_roll_align_axis,
+    _default_length_for_target,
+    _distance,
     _hip_requires_centered_pelvis_pair,
     _opposite_name_candidates,
     _resolve_preserved_source_root_extra,
@@ -390,6 +392,52 @@ def build_armature_spec_from_asset_dir(asset_dir: Path) -> Tuple[dict, dict, dic
     return classifier_report, build_plan, build_armature_spec(classifier_report, build_plan, source_bones)
 
 
+# ASAM central-chain spanning (#57): each of these bones' tail is set to its child's head
+# so the spine renders upright instead of copying short source "link" geometry. Head (no
+# core child) extends along the up axis. Hip is intentionally excluded (already upright and
+# governed by special resolution paths: centered pelvis pair, spine-root pivot reconcile).
+_CENTRAL_CHAIN_CHILD = {
+    "Lower_Spine": "Upper_Spine",
+    "Upper_Spine": "Neck",
+    "Neck": "Head",
+}
+
+
+def _span_central_chain(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin):
+    """Set central-chain bone tails to their child's head so the spine runs upright.
+
+    Heads (joints) never move, which keeps rest-pose deformation unchanged; only tails are
+    rewritten. Head, having no core child, extends along the up axis by its default length.
+    A near-zero-length result (child head coincident with this bone's head) is skipped.
+    """
+    up = placement_metadata["up_axis"]
+    up_index = int(up["index"])
+    up_sign = int(up.get("sign", 1)) or 1
+
+    def _apply(target, new_tail):
+        geom = resolved_geometry[target]
+        if _distance(geom["head"], new_tail) <= 1e-6:
+            return
+        geom["tail"] = [float(v) for v in new_tail]
+        geom["length"] = _distance(geom["head"], geom["tail"])
+        local_tail = _to_grp_root_local(geom["tail"], grp_root_local_origin)
+        for bone in spec_bones:
+            if bone["name"] == target:
+                bone["tail"] = local_tail
+                break
+
+    for target, child in _CENTRAL_CHAIN_CHILD.items():
+        if target in resolved_geometry and child in resolved_geometry:
+            _apply(target, list(resolved_geometry[child]["head"]))
+
+    if "Head" in resolved_geometry:
+        head_geom = resolved_geometry["Head"]
+        length = _default_length_for_target("Head", placement_metadata)
+        new_tail = list(head_geom["head"])
+        new_tail[up_index] = head_geom["head"][up_index] + (up_sign * length)
+        _apply("Head", new_tail)
+
+
 def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones: Dict[str, dict]) -> dict:
     """
     Build a deterministic ASAM armature creation spec from classifier outputs.
@@ -476,6 +524,9 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
                 if bone["name"] == "Root":
                     bone["tail"] = _to_grp_root_local(new_tail, grp_root_local_origin)
                     break
+
+    # Span the central chain so the spine renders upright (see _span_central_chain / #57).
+    _span_central_chain(resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin)
 
     preserved_root = _resolve_preserved_source_root_extra(root_resolution, source_bones)
     if preserved_root is not None:

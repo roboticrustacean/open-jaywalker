@@ -2653,5 +2653,76 @@ class AsamRollAxisTests(unittest.TestCase):
         self.assertEqual(build_spec["roll_align_axis"], expected)
 
 
+class CentralChainSpanningTests(unittest.TestCase):
+    """The central chain (Lower_Spine, Upper_Spine, Neck, Head) spans to child joints so
+    the spine renders upright; heads stay on source joints; Hip is untouched (issue #57)."""
+
+    def _report_with_direct_central_chain(self):
+        report = _base_classifier_report()
+        for target, src in {
+            "Hip": "Hip",
+            "Lower_Spine": "Lower_Spine",
+            "Upper_Spine": "Upper_Spine",
+            "Neck": "Neck",
+            "Head": "Head",
+        }.items():
+            report["semantic_mapping"][target].update(
+                {"source_bone": src, "action": "direct_map", "confidence": 0.95}
+            )
+        return report
+
+    def _short_nub_source_bones(self):
+        # Vertical Hip; short forward-pointing (-Y) nubs for the rest, with vertical gaps.
+        return {
+            "Hip": _bone("Hip", None, (0.0, 0.0, 0.90), (0.0, 0.0, 0.95)),
+            "Lower_Spine": _bone("Lower_Spine", "Hip", (0.0, 0.05, 0.93), (0.0, -0.03, 0.93)),
+            "Upper_Spine": _bone("Upper_Spine", "Lower_Spine", (0.0, 0.05, 1.20), (0.0, -0.05, 1.20)),
+            "Neck": _bone("Neck", "Upper_Spine", (0.0, 0.05, 1.47), (0.0, -0.06, 1.47)),
+            "Head": _bone("Head", "Neck", (0.0, 0.05, 1.57), (0.0, -0.09, 1.57)),
+        }
+
+    def test_central_chain_spans_to_child_heads(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        spec = build_armature_spec(
+            self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
+        )
+        src = self._short_nub_source_bones()
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Lower_Spine")["tail"], src["Upper_Spine"]["head"])
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Upper_Spine")["tail"], src["Neck"]["head"])
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Neck")["tail"], src["Head"]["head"])
+        for target in ("Lower_Spine", "Upper_Spine", "Neck", "Head"):
+            _assert_vec_almost_equal(self, _spec_bone(spec, target)["head"], src[target]["head"])
+
+    def test_head_extends_along_up_axis(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        up_index = int(plan["placement_metadata"]["up_axis"]["index"])
+        spec = build_armature_spec(
+            self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
+        )
+        head = _spec_bone(spec, "Head")
+        self.assertGreater(head["tail"][up_index], head["head"][up_index])
+        for axis in range(3):
+            if axis != up_index:
+                self.assertAlmostEqual(head["tail"][axis], head["head"][axis], places=6)
+
+    def test_hip_is_not_spanned(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        spec = build_armature_spec(
+            self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
+        )
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Hip")["tail"], [0.0, 0.0, 0.95])
+
+    def test_zero_length_guard_keeps_source_tail(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        bones = self._short_nub_source_bones()
+        bones["Head"] = _bone("Head", "Neck", (0.0, 0.05, 1.47), (0.0, -0.09, 1.47))  # same head as Neck
+        spec = build_armature_spec(self._report_with_direct_central_chain(), plan, bones)
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Neck")["tail"], bones["Neck"]["tail"])
+
+
 if __name__ == "__main__":
     unittest.main()
