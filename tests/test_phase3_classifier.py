@@ -1637,5 +1637,56 @@ class BipedMultiSpinePromotionTests(unittest.TestCase):
         self.assertLess(lower["head"][2], upper["head"][2])
 
 
+class SingleSpineSplitTests(unittest.TestCase):
+    """A rig with a single usable spine bone bracketed by a classified Hip and
+    Neck must plan a geometric midpoint split into Lower_Spine + Upper_Spine
+    (issue #56), instead of mapping one and synthesizing/collapsing the other."""
+
+    def _single_spine_asset(self, name, *, include_neck=True):
+        b = _bone
+        bones = [
+            b("Hips", None, (0.0, 0.0, 0.95), (0.0, 0.0, 1.0)),
+            b("Spine", "Hips", (0.0, 0.0, 1.0), (0.0, 0.0, 1.4)),
+            b("LeftUpLeg", "Hips", (0.1, 0.0, 0.95), (0.1, 0.0, 0.5)),
+            b("LeftLeg", "LeftUpLeg", (0.1, 0.0, 0.5), (0.1, 0.0, 0.1)),
+            b("LeftFoot", "LeftLeg", (0.1, 0.0, 0.1), (0.1, 0.1, 0.05)),
+            b("RightUpLeg", "Hips", (-0.1, 0.0, 0.95), (-0.1, 0.0, 0.5)),
+            b("RightLeg", "RightUpLeg", (-0.1, 0.0, 0.5), (-0.1, 0.0, 0.1)),
+            b("RightFoot", "RightLeg", (-0.1, 0.0, 0.1), (-0.1, 0.1, 0.05)),
+        ]
+        if include_neck:
+            bones += [
+                b("Neck", "Spine", (0.0, 0.0, 1.4), (0.0, 0.0, 1.5)),
+                b("Head", "Neck", (0.0, 0.0, 1.5), (0.0, 0.0, 1.65)),
+            ]
+        chains = {
+            "spine": [["Spine"]],
+            "leg": {"left": ["LeftUpLeg", "LeftLeg", "LeftFoot"],
+                    "right": ["RightUpLeg", "RightLeg", "RightFoot"],
+                    "unsided": []},
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        return _write_single_armature_asset(name, "Rig", bones, chains)
+
+    def test_single_spine_plans_split_for_both_targets(self):
+        asset_dir = self._single_spine_asset("single_spine")
+        report, _, _, _ = write_asset_report(asset_dir)
+        sm = report["semantic_mapping"]
+        for target, half in (("Lower_Spine", "lower"), ("Upper_Spine", "upper")):
+            self.assertEqual(sm[target]["action"], "split_in_builder", target)
+            self.assertEqual(sm[target]["source_bone"], "Spine", target)
+            self.assertEqual(sm[target]["split_half"], half, target)
+        self.assertNotIn("Spine", report["unclassified_bones"])
+        self.assertNotIn("Lower_Spine", {a["target"] for a in report["ambiguous_targets"]})
+        self.assertNotIn("Upper_Spine", report["missing_targets"])
+
+    def test_single_spine_without_neck_does_not_split(self):
+        asset_dir = self._single_spine_asset("single_spine_no_neck", include_neck=False)
+        report, _, _, _ = write_asset_report(asset_dir)
+        sm = report["semantic_mapping"]
+        self.assertNotEqual(sm["Lower_Spine"]["action"], "split_in_builder")
+        self.assertNotEqual(sm["Upper_Spine"]["action"], "split_in_builder")
+
+
 if __name__ == "__main__":
     unittest.main()
