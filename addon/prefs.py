@@ -14,6 +14,16 @@ class OJAddonPreferences(bpy.types.AddonPreferences):
         default="",
     )
 
+    dev_reload: bpy.props.BoolProperty(
+        name="Reload pipeline code on each run (dev)",
+        description=(
+            "Developer option: before Run/Build, drop cached pipeline modules so live edits "
+            "to src/ (via the dev-link junction) take effect without restarting Blender. "
+            "Leave OFF for a normal zip install."
+        ),
+        default=False,
+    )
+
     # addon updater preferences
     auto_check_update: bpy.props.BoolProperty(
         name="Auto-check for Update",
@@ -54,5 +64,6 @@ class OJAddonPreferences(bpy.types.AddonPreferences):
             text="Blank = default <repo>/output (or an existing OPEN_JAYWALKER_OUTPUT_ROOT).",
             icon='INFO',
         )
+        layout.prop(self, "dev_reload")
         
         addon_updater_ops.update_settings_ui(self, context)
