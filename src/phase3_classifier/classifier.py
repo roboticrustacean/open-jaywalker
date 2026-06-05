@@ -1591,7 +1591,7 @@ def _build_armature_summary(
     armature_name: str,
     name_quality: float,
 ) -> dict:
-    mapped = [payload for payload in resolved_targets.values() if payload["action"] in RECOVERABLE_ACTIONS]
+    mapped = [payload for payload in resolved_targets.values() if payload["action"] in MAPPED_ACTIONS]
     average_confidence = round(sum(payload["confidence"] for payload in mapped) / max(len(mapped), 1), 3)
     direct_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "direct_map")
     alias_map_targets = sum(1 for payload in resolved_targets.values() if payload["action"] == "alias_map")

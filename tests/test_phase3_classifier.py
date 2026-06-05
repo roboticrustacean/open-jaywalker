@@ -1676,7 +1676,7 @@ class SingleSpineSplitTests(unittest.TestCase):
             self.assertEqual(sm[target]["action"], "split_in_builder", target)
             self.assertEqual(sm[target]["source_bone"], "Spine", target)
             self.assertEqual(sm[target]["split_half"], half, target)
-        self.assertNotIn("Spine", report["unclassified_bones"])
+        self.assertNotIn("Spine", [b["bone_name"] for b in report["unclassified_bones"]])
         self.assertNotIn("Lower_Spine", {a["target"] for a in report["ambiguous_targets"]})
         self.assertNotIn("Upper_Spine", report["missing_targets"])
 
