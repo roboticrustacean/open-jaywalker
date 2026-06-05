@@ -3014,6 +3014,15 @@ class SingleSpineSplitBuilderTests(unittest.TestCase):
         self.assertIn("missing_split_source_geometry", warnings[0])
         self.assertIn("Ghost", warnings[0])
 
+    def test_split_consolidates_weights_on_lower_spine(self):
+        report, plan, source_bones = self._split_inputs()
+        spec = build_armature_spec(report, plan, source_bones)
+        plan_remap = compute_vertex_group_remap_plan(spec["bones"], ["Spine"])
+        renames = {entry["source"]: entry["target"] for entry in plan_remap["renames"]}
+        self.assertEqual(renames.get("Spine"), "Lower_Spine")
+        self.assertNotIn("Upper_Spine", renames.values())
+        self.assertEqual(plan_remap["name_collisions"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
