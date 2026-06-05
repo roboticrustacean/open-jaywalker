@@ -5,12 +5,10 @@ from pathlib import Path
 
 import bpy
 
-from armature_inspector.inspector import inspect_scene
-from phase3_classifier.classifier import write_asset_report
-from pipeline.plan_summary import summarize_plan
+# Pipeline entry points are imported locally inside each operator's execute() so the
+# optional "dev_reload" purge can take effect per run; only the Clean operator needs a
+# module-level import.
 from asam_human_builder.blender_builder import purge_previous_generated_artifacts
-from asam_human_builder.build_runner import run_build
-from asam_human_builder.builder import success_message
 
 
 def _addon_prefs(context):
@@ -30,6 +28,16 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         prefs = _addon_prefs(context)
         if prefs.output_dir:
             os.environ["OPEN_JAYWALKER_OUTPUT_ROOT"] = bpy.path.abspath(prefs.output_dir)
+
+        if getattr(prefs, "dev_reload", False):
+            from . import dev_reload
+            dev_reload.purge_pipeline_modules()
+        # Import fresh so a dev_reload purge above takes effect this run (otherwise these
+        # resolve to the already-cached modules, identical to the module-level imports).
+        from armature_inspector.inspector import inspect_scene
+        from phase3_classifier.classifier import write_asset_report
+        from pipeline.plan_summary import summarize_plan
+        from asam_human_builder.blender_builder import purge_previous_generated_artifacts
 
         purge_previous_generated_artifacts(bpy)
 
@@ -77,6 +85,12 @@ class OJ_OT_build(bpy.types.Operator):
 
     def execute(self, context):
         settings = context.scene.open_jaywalker
+        prefs = _addon_prefs(context)
+        if getattr(prefs, "dev_reload", False):
+            from . import dev_reload
+            dev_reload.purge_pipeline_modules()
+        from asam_human_builder.build_runner import run_build
+        from asam_human_builder.builder import success_message
         asset_dir = Path(settings.asset_dir)
         context.window.cursor_set('WAIT')
         try:
