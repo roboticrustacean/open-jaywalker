@@ -70,6 +70,7 @@ class OJ_PT_panel(bpy.types.Panel):
                     )
 
             layout.prop(s, "packaging_mode")
+            layout.prop(s, "export_gltf")
             build_row = layout.row()
             build_row.enabled = s.has_plan and not s.built
             build_row.operator("open_jaywalker.build", icon='MOD_ARMATURE')

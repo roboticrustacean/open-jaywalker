@@ -775,3 +775,37 @@ def export_generated_blend(bpy_module, wrapper_collection_name: str, filepath: s
         os.makedirs(directory, exist_ok=True)
     bpy_module.data.libraries.write(filepath, {wrapper}, fake_user=True)
     return filepath
+
+
+def export_generated_gltf(bpy_module, wrapper_collection_name: str, filepath: str) -> str:
+    """Write ONLY the generated wrapper collection (and what it references) to a .glb.
+
+    Raises ValueError if the wrapper is absent or not a generated collection.
+    """
+    wrapper = bpy_module.data.collections.get(wrapper_collection_name)
+    if wrapper is None or not bool(wrapper.get(GENERATED_MARKER_KEY)):
+        raise ValueError(
+            "Refusing to export '{0}': not a generated wrapper collection".format(
+                wrapper_collection_name
+            )
+        )
+    import os
+    directory = os.path.dirname(filepath)
+    if directory:
+        os.makedirs(directory, exist_ok=True)
+        
+    try:
+        bpy_module.ops.object.mode_set(mode="OBJECT")
+    except RuntimeError:
+        pass
+    bpy_module.ops.object.select_all(action='DESELECT')
+    
+    for obj in wrapper.all_objects:
+        obj.select_set(True)
+        
+    bpy_module.ops.export_scene.gltf(
+        filepath=filepath,
+        use_selection=True,
+        export_format='GLB',
+    )
+    return filepath

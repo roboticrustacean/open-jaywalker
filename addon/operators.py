@@ -94,7 +94,12 @@ class OJ_OT_build(bpy.types.Operator):
         asset_dir = Path(settings.asset_dir)
         context.window.cursor_set('WAIT')
         try:
-            report = run_build(asset_dir, bpy, packaging_mode=settings.packaging_mode)
+            report = run_build(
+                asset_dir, 
+                bpy, 
+                packaging_mode=settings.packaging_mode,
+                export_gltf=settings.export_gltf
+            )
         except Exception as exc:  # surface as an operator error, never crash
             self.report({'ERROR'}, "Build failed: {0}".format(exc))
             return {'CANCELLED'}

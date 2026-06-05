@@ -21,6 +21,7 @@ from asam_human_builder.blender_builder import (
     build_armature_in_blender,
     build_crowd_in_blender,
     export_generated_blend,
+    export_generated_gltf,
     purge_previous_generated_artifacts,
 )
 
@@ -32,7 +33,7 @@ PACKAGING_SEPARATE_ONLY = "separate_only"
 PACKAGING_MODES = (PACKAGING_INPLACE_EXPORT, PACKAGING_INPLACE_ONLY, PACKAGING_SEPARATE_ONLY)
 
 
-def run_build(asset_dir, bpy, packaging_mode=PACKAGING_INPLACE_EXPORT) -> dict:
+def run_build(asset_dir, bpy, packaging_mode=PACKAGING_INPLACE_EXPORT, export_gltf=False) -> dict:
     """Resolve specs for asset_dir and build them (single or crowd).
 
     packaging_mode controls post-build export:
@@ -71,13 +72,13 @@ def run_build(asset_dir, bpy, packaging_mode=PACKAGING_INPLACE_EXPORT) -> dict:
         print_builder_summary(report, report_path)
         wrapper_name = build_spec["generated_collection_name"]
 
-    _export_if_requested(asset_dir, resolved["asset_name"], wrapper_name, bpy, packaging_mode, report)
+    _export_if_requested(asset_dir, resolved["asset_name"], wrapper_name, bpy, packaging_mode, export_gltf, report)
 
     print(success_message(report, report_path))
     return report
 
 
-def _export_if_requested(asset_dir, asset_name, wrapper_name, bpy, packaging_mode, report):
+def _export_if_requested(asset_dir, asset_name, wrapper_name, bpy, packaging_mode, export_gltf, report):
     """Record packaging outcome on the report and export when requested.
 
     Modes:
@@ -99,6 +100,16 @@ def _export_if_requested(asset_dir, asset_name, wrapper_name, bpy, packaging_mod
         report["exported_blend_path"] = export_generated_blend(bpy, wrapper_name, out_path)
     except Exception as exc:  # never abort the already-completed in-place build
         report["export_error"] = str(exc)
-        return
+        
+    report["export_gltf"] = export_gltf
+    report["exported_gltf_path"] = None
+    report["export_gltf_error"] = None
+    if export_gltf:
+        out_gltf = str(Path(asset_dir) / "{0}_asam.glb".format(asset_name))
+        try:
+            report["exported_gltf_path"] = export_generated_gltf(bpy, wrapper_name, out_gltf)
+        except Exception as exc:
+            report["export_gltf_error"] = str(exc)
+            
     if packaging_mode == PACKAGING_SEPARATE_ONLY:
         purge_previous_generated_artifacts(bpy)

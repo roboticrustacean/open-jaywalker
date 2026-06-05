@@ -33,3 +33,8 @@ class OJSettings(bpy.types.PropertyGroup):
         ],
         default="inplace_export",
     )
+    export_gltf: bpy.props.BoolProperty(
+        default=False, 
+        name="Export glTF / .glb",
+        description="Wrap and export the generated ASAM human to .glb format"
+    )
