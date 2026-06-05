@@ -1679,6 +1679,9 @@ class SingleSpineSplitTests(unittest.TestCase):
         self.assertNotIn("Spine", [b["bone_name"] for b in report["unclassified_bones"]])
         self.assertNotIn("Lower_Spine", {a["target"] for a in report["ambiguous_targets"]})
         self.assertNotIn("Upper_Spine", report["missing_targets"])
+        # The split resolves both spine targets, so the rig is not flagged as
+        # missing its spine chain.
+        self.assertNotIn("missing_spine_chain", report["review_flags"])
 
     def test_single_spine_without_neck_does_not_split(self):
         asset_dir = self._single_spine_asset("single_spine_no_neck", include_neck=False)
