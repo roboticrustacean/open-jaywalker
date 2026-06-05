@@ -1699,6 +1699,28 @@ class SingleSpineSplitTests(unittest.TestCase):
         rename_sources = {entry["source"] for entry in build_plan["actions"]["rename"]}
         self.assertNotIn("Spine", rename_sources)
 
+    def test_multi_spine_does_not_split(self):
+        b = _bone
+        bones = [
+            b("Bip01 Pelvis", None, (0.0, 0.0, 0.95), (0.0, 0.0, 1.0)),
+            b("Bip01 Spine0", "Bip01 Pelvis", (0.0, 0.0, 1.0), (0.0, 0.0, 1.1)),
+            b("Bip01 Spine1", "Bip01 Spine0", (0.0, 0.0, 1.1), (0.0, 0.0, 1.2)),
+            b("Bip01 Spine2", "Bip01 Spine1", (0.0, 0.0, 1.2), (0.0, 0.0, 1.3)),
+            b("Bip01 Neck", "Bip01 Spine2", (0.0, 0.0, 1.3), (0.0, 0.0, 1.4)),
+            b("Bip01 Head", "Bip01 Neck", (0.0, 0.0, 1.4), (0.0, 0.0, 1.55)),
+        ]
+        chains = {
+            "spine": [["Bip01 Spine0", "Bip01 Spine1", "Bip01 Spine2"]],
+            "leg": {"left": [], "right": [], "unsided": []},
+            "arm": {"left": [], "right": [], "unsided": []},
+        }
+        asset_dir = _write_single_armature_asset("multispine_nosplit", "Bip01", bones, chains)
+        report, build_plan, _r, _pp = write_asset_report(asset_dir)
+        sm = report["semantic_mapping"]
+        self.assertNotEqual(sm["Lower_Spine"]["action"], "split_in_builder")
+        self.assertNotEqual(sm["Upper_Spine"]["action"], "split_in_builder")
+        self.assertEqual(build_plan["actions"]["split"], [])
+
 
 if __name__ == "__main__":
     unittest.main()
