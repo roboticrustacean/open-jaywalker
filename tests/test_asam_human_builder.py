@@ -2789,5 +2789,41 @@ class CentralChainSpanningTests(unittest.TestCase):
         _assert_vec_almost_equal(self, _spec_bone(spec, "Lower_Spine")["tail"], expected)
 
 
+class WeightMergePlanTests(unittest.TestCase):
+    """Orphaned source deform bones merge into their nearest mapped ASAM ancestor (#58)."""
+
+    def _report(self):
+        report = _base_classifier_report()
+        report["semantic_mapping"]["Lower_Spine"].update(
+            {"source_bone": "Spine0", "action": "direct_map", "confidence": 0.95})
+        report["semantic_mapping"]["Upper_Spine"].update(
+            {"source_bone": "Spine3", "action": "direct_map", "confidence": 0.95})
+        return report
+
+    def _source_bones(self):
+        b = _bone
+        return {
+            "Pelvis": b("Pelvis", None, (0, 0, 0.9), (0, 0, 1.0)),
+            "Spine0": b("Spine0", "Pelvis", (0, 0, 1.0), (0, 0, 1.1)),
+            "Spine1": b("Spine1", "Spine0", (0, 0, 1.1), (0, 0, 1.2)),
+            "Spine2": b("Spine2", "Spine1", (0, 0, 1.2), (0, 0, 1.3)),
+            "Spine3": b("Spine3", "Spine2", (0, 0, 1.3), (0, 0, 1.4)),
+            "Spine4": b("Spine4", "Spine3", (0, 0, 1.4), (0, 0, 1.5)),
+            "Floating": b("Floating", None, (5, 5, 5), (5, 5, 5.1)),  # no mapped ancestor
+        }
+
+    def test_weight_merges_resolve_to_nearest_mapped_ancestor(self):
+        plan = _base_build_plan()
+        spec = build_armature_spec(self._report(), plan, self._source_bones())
+        merges = {m["source"]: m["target"] for m in spec["weight_merges"]}
+        self.assertEqual(merges.get("Spine1"), "Lower_Spine")  # ancestor Spine0
+        self.assertEqual(merges.get("Spine2"), "Lower_Spine")  # ancestor Spine0
+        self.assertEqual(merges.get("Spine4"), "Upper_Spine")  # ancestor Spine3
+        self.assertNotIn("Spine0", merges)
+        self.assertNotIn("Spine3", merges)
+        self.assertNotIn("Floating", merges)
+        self.assertEqual(spec["weight_merges"], sorted(spec["weight_merges"], key=lambda m: (m["source"], m["target"])))
+
+
 if __name__ == "__main__":
     unittest.main()

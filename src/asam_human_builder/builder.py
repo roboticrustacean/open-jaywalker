@@ -417,6 +417,41 @@ _SPAN_CHILD = {
 }
 
 
+def _compute_weight_merges(spec_bones, source_bones):
+    """Map each orphaned source deform bone to the nearest ancestor that maps to an ASAM
+    target (#58), so the builder can merge their vertex weights instead of orphaning them.
+
+    Walks up the source-bone hierarchy (source_bones[...]["parent"]). A source bone that is
+    itself a mapped ASAM source, or has no mapped ancestor, produces no entry. Returns a
+    sorted list of {"source", "target"}.
+    """
+    source_to_target = {}
+    for bone in spec_bones:
+        source_name = bone.get("source_bone")
+        target_name = bone.get("name")
+        if (
+            source_name
+            and target_name
+            and bone.get("geometry_source") in SOURCE_NAMED_GEOMETRY_SOURCES
+            and source_name != target_name
+        ):
+            source_to_target.setdefault(source_name, target_name)
+
+    merges = []
+    for name, info in source_bones.items():
+        if name in source_to_target:
+            continue
+        parent = info.get("parent")
+        seen = set()
+        while parent and parent not in seen:
+            seen.add(parent)
+            if parent in source_to_target:
+                merges.append({"source": name, "target": source_to_target[parent]})
+                break
+            parent = (source_bones.get(parent) or {}).get("parent")
+    return sorted(merges, key=lambda m: (m["source"], m["target"]))
+
+
 def _span_core_chains(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin):
     """Set core-chain bone tails to their child's head so the spine and limbs run upright.
 
@@ -543,6 +578,8 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
 
     # Span the central chain so the spine renders upright (see _span_core_chains / #57).
     _span_core_chains(resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin)
+
+    spec["weight_merges"] = _compute_weight_merges(spec["bones"], source_bones)
 
     preserved_root = _resolve_preserved_source_root_extra(root_resolution, source_bones)
     if preserved_root is not None:
