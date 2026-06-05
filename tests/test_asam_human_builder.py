@@ -2657,6 +2657,50 @@ class AsamRollAxisTests(unittest.TestCase):
         self.assertEqual(build_spec["roll_align_axis"], expected)
 
 
+class LimbChainSpanningTests(unittest.TestCase):
+    """Arm/leg chains span tail->child-head like the spine (issue #59)."""
+
+    def _report_with_direct_limbs(self):
+        report = _base_classifier_report()
+        for target, src in {
+            "Shoulder_Left": "LClavicle", "Upper_Arm_Left": "LUpperArm",
+            "Lower_Arm_Left": "LForeArm", "Hand_Left": "LHand",
+            "Upper_Leg_Left": "LThigh", "Lower_Leg_Left": "LCalf",
+            "Foot_Left": "LFoot", "Full_Toes_Left": "LToe",
+        }.items():
+            report["semantic_mapping"][target].update(
+                {"source_bone": src, "action": "direct_map", "confidence": 0.95}
+            )
+        return report
+
+    def _gapped_limb_source_bones(self):
+        b = _bone
+        return {
+            "LClavicle": b("LClavicle", None, (0.05, 0.0, 1.45), (0.10, 0.0, 1.45)),
+            "LUpperArm": b("LUpperArm", "LClavicle", (0.18, 0.0, 1.45), (0.22, 0.0, 1.45)),
+            "LForeArm": b("LForeArm", "LUpperArm", (0.45, 0.0, 1.45), (0.50, 0.0, 1.45)),
+            "LHand": b("LHand", "LForeArm", (0.70, 0.0, 1.45), (0.75, 0.0, 1.45)),
+            "LThigh": b("LThigh", None, (0.10, 0.0, 0.95), (0.10, 0.0, 0.90)),
+            "LCalf": b("LCalf", "LThigh", (0.10, 0.0, 0.55), (0.10, 0.0, 0.50)),
+            "LFoot": b("LFoot", "LCalf", (0.10, 0.0, 0.10), (0.15, 0.0, 0.10)),
+            "LToe": b("LToe", "LFoot", (0.20, 0.0, 0.05), (0.25, 0.0, 0.05)),
+        }
+
+    def test_limb_chains_span_to_child_heads(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        spec = build_armature_spec(
+            self._report_with_direct_limbs(), plan, self._gapped_limb_source_bones()
+        )
+        def head(t): return _spec_bone(spec, t)["head"]
+        for parent, child in [
+            ("Shoulder_Left", "Upper_Arm_Left"), ("Upper_Arm_Left", "Lower_Arm_Left"),
+            ("Lower_Arm_Left", "Hand_Left"), ("Upper_Leg_Left", "Lower_Leg_Left"),
+            ("Lower_Leg_Left", "Foot_Left"), ("Foot_Left", "Full_Toes_Left"),
+        ]:
+            _assert_vec_almost_equal(self, _spec_bone(spec, parent)["tail"], head(child))
+
+
 class CentralChainSpanningTests(unittest.TestCase):
     """The central chain (Lower_Spine, Upper_Spine, Neck, Head) spans to child joints so
     the spine renders upright; heads stay on source joints; Hip is untouched (issue #57)."""

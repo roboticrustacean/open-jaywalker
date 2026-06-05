@@ -392,22 +392,33 @@ def build_armature_spec_from_asset_dir(asset_dir: Path) -> Tuple[dict, dict, dic
     return classifier_report, build_plan, build_armature_spec(classifier_report, build_plan, source_bones)
 
 
-# ASAM central-chain spanning (#57): each of these bones' tail is set to its child's head
-# so the spine renders upright instead of copying short source "link" geometry. Head (no
-# core child) extends along the up axis. Hip is included for full Root->Hip->Lower_Spine
-# continuity; this is a no-op for the centered-pelvis path (which already sets Hip's tail to
-# Lower_Spine's head) and only moves the tail, never the head, so the pelvis/leg joints and
-# the special resolution paths (centered pelvis pair, spine-root pivot reconcile) are intact.
-_CENTRAL_CHAIN_CHILD = {
+# ASAM core-chain spanning (#57, #59): each bone's tail is set to its single core child's
+# head so the spine AND limbs render as connected, upright/extended chains instead of copying
+# short source "link" geometry. Head (no core child) extends along the up axis. Each listed
+# bone has exactly one core child, so there is no multi-child ambiguity. Heads (joints) never
+# move, so rest-pose deformation is unchanged.
+_SPAN_CHILD = {
     "Hip": "Lower_Spine",
     "Lower_Spine": "Upper_Spine",
     "Upper_Spine": "Neck",
     "Neck": "Head",
+    "Shoulder_Left": "Upper_Arm_Left",
+    "Upper_Arm_Left": "Lower_Arm_Left",
+    "Lower_Arm_Left": "Hand_Left",
+    "Shoulder_Right": "Upper_Arm_Right",
+    "Upper_Arm_Right": "Lower_Arm_Right",
+    "Lower_Arm_Right": "Hand_Right",
+    "Upper_Leg_Left": "Lower_Leg_Left",
+    "Lower_Leg_Left": "Foot_Left",
+    "Foot_Left": "Full_Toes_Left",
+    "Upper_Leg_Right": "Lower_Leg_Right",
+    "Lower_Leg_Right": "Foot_Right",
+    "Foot_Right": "Full_Toes_Right",
 }
 
 
-def _span_central_chain(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin):
-    """Set central-chain bone tails to their child's head so the spine runs upright.
+def _span_core_chains(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin):
+    """Set core-chain bone tails to their child's head so the spine and limbs run upright.
 
     Heads (joints) never move, which keeps rest-pose deformation unchanged; only tails are
     rewritten. Head, having no core child, extends along the up axis by its default length.
@@ -431,7 +442,7 @@ def _span_central_chain(resolved_geometry, spec_bones, placement_metadata, grp_r
                 bone["tail"] = local_tail
                 break
 
-    for target, child in _CENTRAL_CHAIN_CHILD.items():
+    for target, child in _SPAN_CHILD.items():
         if target in resolved_geometry and child in resolved_geometry:
             _apply(target, list(resolved_geometry[child]["head"]))
 
@@ -530,8 +541,8 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
                     bone["tail"] = _to_grp_root_local(new_tail, grp_root_local_origin)
                     break
 
-    # Span the central chain so the spine renders upright (see _span_central_chain / #57).
-    _span_central_chain(resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin)
+    # Span the central chain so the spine renders upright (see _span_core_chains / #57).
+    _span_core_chains(resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin)
 
     preserved_root = _resolve_preserved_source_root_extra(root_resolution, source_bones)
     if preserved_root is not None:
