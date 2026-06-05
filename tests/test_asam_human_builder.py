@@ -1318,20 +1318,24 @@ class AsamHumanBuilderTests(unittest.TestCase):
             "source_bone": "Root",
             "grp_root_local_origin": [0.0, 0.0, 0.0],
         })
-        report["semantic_mapping"]["Hip"].update({
-            "source_bone": "Hip",
-            "action": "direct_map",
-            "confidence": 1.0,
-        })
+        for target, src in (("Hip", "Hip"), ("Lower_Spine", "Lower_Spine")):
+            report["semantic_mapping"][target].update({
+                "source_bone": src,
+                "action": "direct_map",
+                "confidence": 1.0,
+            })
         source_bones = {
             "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
             "Hip": _bone("Hip", "Root", (0.0, 0.0, 0.9), (0.0, 0.0, 1.0)),
+            "Lower_Spine": _bone("Lower_Spine", "Hip", (0.0, 0.0, 1.0), (0.0, 0.0, 1.1)),
         }
 
         spec = build_armature_spec(report, plan, source_bones)
 
+        # Zero origin -> spec coords are identical to source coords (pass-through).
         hip_bone = _spec_bone(spec, "Hip")
         self.assertEqual(hip_bone["head"], [0.0, 0.0, 0.9])
+        # Hip now spans to Lower_Spine's head (both pass through unchanged at zero origin).
         self.assertEqual(hip_bone["tail"], [0.0, 0.0, 1.0])
 
     def test_reuse_existing_root_keeps_source_position_in_grp_root_local(self):
@@ -2707,13 +2711,17 @@ class CentralChainSpanningTests(unittest.TestCase):
             if axis != up_index:
                 self.assertAlmostEqual(head["tail"][axis], head["head"][axis], places=6)
 
-    def test_hip_is_not_spanned(self):
+    def test_hip_spans_to_lower_spine(self):
         plan = _base_build_plan()
         plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
         spec = build_armature_spec(
             self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
         )
-        _assert_vec_almost_equal(self, _spec_bone(spec, "Hip")["tail"], [0.0, 0.0, 0.95])
+        src = self._short_nub_source_bones()
+        # Hip tail snaps to Lower_Spine's head (perfect Root->Hip->Lower_Spine continuity)...
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Hip")["tail"], src["Lower_Spine"]["head"])
+        # ...while its head (joint) is unchanged.
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Hip")["head"], src["Hip"]["head"])
 
     def test_zero_length_guard_keeps_source_tail(self):
         plan = _base_build_plan()

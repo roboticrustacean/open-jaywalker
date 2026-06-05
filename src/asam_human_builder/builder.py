@@ -394,9 +394,12 @@ def build_armature_spec_from_asset_dir(asset_dir: Path) -> Tuple[dict, dict, dic
 
 # ASAM central-chain spanning (#57): each of these bones' tail is set to its child's head
 # so the spine renders upright instead of copying short source "link" geometry. Head (no
-# core child) extends along the up axis. Hip is intentionally excluded (already upright and
-# governed by special resolution paths: centered pelvis pair, spine-root pivot reconcile).
+# core child) extends along the up axis. Hip is included for full Root->Hip->Lower_Spine
+# continuity; this is a no-op for the centered-pelvis path (which already sets Hip's tail to
+# Lower_Spine's head) and only moves the tail, never the head, so the pelvis/leg joints and
+# the special resolution paths (centered pelvis pair, spine-root pivot reconcile) are intact.
 _CENTRAL_CHAIN_CHILD = {
+    "Hip": "Lower_Spine",
     "Lower_Spine": "Upper_Spine",
     "Upper_Spine": "Neck",
     "Neck": "Head",
