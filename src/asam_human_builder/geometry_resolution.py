@@ -62,7 +62,9 @@ DEFAULT_LENGTH_RATIOS = {
 }
 
 # Eye placement ratios (fractions of Head bone length), issue #64.
-EYE_LEVEL_RATIO = 0.5     # fraction along the Head bone (base->crown) for eye level
+EYE_DROP_FROM_CROWN = 0.22  # eye level as a drop below the crown (Head.tail); the head
+                            # bone's base often sits at the neck, so a base-relative
+                            # midpoint lands on the lower face (#64). Anchor from the crown.
 EYE_FORWARD_RATIO = 0.5   # forward offset onto the face
 EYE_SEP_RATIO = 0.3       # lateral half-separation between the two eyes
 EYE_LEN_RATIO = 0.15      # eye bone length (forward/gaze)
@@ -349,7 +351,7 @@ def _resolve_eye_geometry(
         head_len = max(float(placement_metadata.get("bbox_height", 0.0)) * 0.05, 1e-3)
 
     forward = _world_axis_unit(placement_metadata, "forward_axis", 1)
-    center = [head_pt[i] + EYE_LEVEL_RATIO * (head_tail[i] - head_pt[i]) for i in range(3)]
+    center = [head_tail[i] - EYE_DROP_FROM_CROWN * (head_tail[i] - head_pt[i]) for i in range(3)]
     center = _offset_point(center, forward, EYE_FORWARD_RATIO * head_len)
 
     side_sign = 1 if target_name.endswith("_Left") else -1

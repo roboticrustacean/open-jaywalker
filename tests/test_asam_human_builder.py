@@ -3137,6 +3137,20 @@ class EyePlacementTests(unittest.TestCase):
         self.assertEqual((lsrc, lbone), ("eye_anchored", None))
         self.assertEqual((rsrc, rbone), ("eye_anchored", None))
 
+    def test_eyes_sit_in_upper_head_near_crown(self):
+        # Regression for the "eyes at mouth level" bug (#64): a Head bone whose
+        # base sits at the neck means a mid-bone eye level lands on the lower face.
+        # Eyes must anchor near the crown (Head.tail), in the upper part of the head.
+        from asam_human_builder.geometry_resolution import _resolve_eye_geometry
+        pm = _placement_metadata()
+        head = self._head()  # base z=1.5 (neck), crown z=1.7
+        base_z, crown_z = head["head"][2], head["tail"][2]
+        upper_threshold = base_z + 0.65 * (crown_z - base_z)  # 1.63
+        left, _, _ = _resolve_eye_geometry("Eye_Left", head, pm)
+        # Eye sits in the upper head, but still below the crown (not floating above).
+        self.assertGreater(left["head"][2], upper_threshold)
+        self.assertLessEqual(left["head"][2], crown_z)
+
 
 class SingleSpineSplitPipelineIntegrationTests(unittest.TestCase):
     """End-to-end on-disk seam for the single-spine geometric split (#56).
