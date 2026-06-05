@@ -3102,6 +3102,38 @@ def _write_single_spine_asset_on_disk(asset_name: str = "single_spine_integratio
     return asset_dir
 
 
+class EyePlacementTests(unittest.TestCase):
+    """Synthesized eyes anchor to the Head bone: two distinct bones on the
+    front-upper face, symmetric about the head, never collapsed to Head.tail."""
+
+    def _head(self):
+        return {"name": "Head", "parent": "Neck",
+                "head": [0.0, 0.0, 1.5], "tail": [0.0, 0.0, 1.7], "length": 0.2}
+
+    def test_eyes_are_distinct_front_upper_and_symmetric(self):
+        from asam_human_builder.geometry_resolution import _resolve_eye_geometry
+        pm = _placement_metadata()  # forward=+x, side=+y, up=+z
+        head = self._head()
+        left, lsrc, lbone = _resolve_eye_geometry("Eye_Left", head, pm)
+        right, rsrc, rbone = _resolve_eye_geometry("Eye_Right", head, pm)
+
+        self.assertGreater(left["head"][1], 0.0)    # Left -> +side (+y)
+        self.assertLess(right["head"][1], 0.0)      # Right -> -side (-y)
+        self.assertAlmostEqual(left["head"][1], -right["head"][1], places=6)  # symmetric
+
+        self.assertGreater(left["head"][0], 0.0)                 # in front (forward +x)
+        self.assertGreater(left["head"][2], head["head"][2])     # above head base
+
+        self.assertNotEqual(left["head"], head["tail"])          # NOT chin-collapsed
+        self.assertNotEqual(right["head"], head["tail"])
+
+        self.assertGreater(left["tail"][0], left["head"][0])     # points forward (gaze)
+        self.assertGreater(left["length"], 0.0)
+
+        self.assertEqual((lsrc, lbone), ("eye_anchored", None))
+        self.assertEqual((rsrc, rbone), ("eye_anchored", None))
+
+
 class SingleSpineSplitPipelineIntegrationTests(unittest.TestCase):
     """End-to-end on-disk seam for the single-spine geometric split (#56).
 

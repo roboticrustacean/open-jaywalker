@@ -61,6 +61,12 @@ DEFAULT_LENGTH_RATIOS = {
     "Full_Toes_Right": 0.05,
 }
 
+# Eye placement ratios (fractions of Head bone length), issue #64.
+EYE_LEVEL_RATIO = 0.5     # fraction along the Head bone (base->crown) for eye level
+EYE_FORWARD_RATIO = 0.5   # forward offset onto the face
+EYE_SEP_RATIO = 0.3       # lateral half-separation between the two eyes
+EYE_LEN_RATIO = 0.15      # eye bone length (forward/gaze)
+
 
 def _resolve_target_geometry(
     target_name: str,
@@ -322,6 +328,31 @@ def _resolve_split_spine_geometry(
     return geometry, "split_spine_upper", None
 
 
+def _resolve_eye_geometry(
+    target_name: str,
+    head_geometry: dict,
+    placement_metadata: dict,
+) -> Tuple[dict, str, None]:
+    """Anchor a synthesized eye to the Head bone (issue #64): eye level along the
+    Head bone, offset forward onto the face, split laterally so Eye_Left/Eye_Right
+    are distinct. Bone points forward (gaze); X resolves up via the roll pass."""
+    head_pt = [float(v) for v in head_geometry["head"]]
+    head_tail = [float(v) for v in head_geometry["tail"]]
+    head_len = _distance(head_pt, head_tail)
+    if head_len <= 1e-6:
+        head_len = max(float(placement_metadata.get("bbox_height", 0.0)) * 0.05, 1e-3)
+
+    forward = _world_axis_unit(placement_metadata, "forward_axis", 1)
+    center = [head_pt[i] + EYE_LEVEL_RATIO * (head_tail[i] - head_pt[i]) for i in range(3)]
+    center = _offset_point(center, forward, EYE_FORWARD_RATIO * head_len)
+
+    side_sign = 1 if target_name.endswith("_Left") else -1
+    side = _world_axis_unit(placement_metadata, "side_axis", side_sign)
+    eye_head = _offset_point(center, side, EYE_SEP_RATIO * head_len)
+    eye_tail = _offset_point(eye_head, forward, EYE_LEN_RATIO * head_len)
+    return _ensure_non_zero_geometry(eye_head, eye_tail, placement_metadata), "eye_anchored", None
+
+
 def _resolve_created_target_geometry(
     target_name: str,
     semantic_mapping: dict,
@@ -551,6 +582,16 @@ def _normalize(vector: Sequence[float]) -> List[float]:
 
 def _offset_point(point: Sequence[float], direction: Sequence[float], distance: float) -> List[float]:
     return [float(point[index] + (direction[index] * distance)) for index in range(3)]
+
+
+def _world_axis_unit(placement_metadata: dict, axis_key: str, sign: int) -> List[float]:
+    """Unit vector along a placement axis in world coords. `sign` selects the
+    direction relative to the axis's own world sign (e.g. side_axis with sign=+1
+    is the Left direction, sign=-1 the Right)."""
+    axis = placement_metadata[axis_key]
+    vector = [0.0, 0.0, 0.0]
+    vector[int(axis["index"])] = float(sign) * float(axis["sign"])
+    return vector
 
 
 def _ensure_non_zero_geometry(head: Sequence[float], tail: Sequence[float], placement_metadata: dict) -> dict:
