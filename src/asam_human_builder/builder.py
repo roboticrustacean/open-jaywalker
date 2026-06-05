@@ -14,8 +14,10 @@ from phase3_classifier.classifier import CORE_TARGETS
 from asam_human_builder.geometry_resolution import (
     _asam_roll_align_axis,
     _default_length_for_target,
+    _direction_vector,
     _distance,
     _hip_requires_centered_pelvis_pair,
+    _offset_point,
     _opposite_name_candidates,
     _resolve_preserved_source_root_extra,
     _resolve_target_geometry,
@@ -452,6 +454,21 @@ def _compute_weight_merges(spec_bones, source_bones):
     return sorted(merges, key=lambda m: (m["source"], m["target"]))
 
 
+def _retarget_tail(resolved_geometry, spec_bones, target, new_tail, grp_root_local_origin):
+    """Rewrite one bone's tail (and the rebased spec tail), leaving its head/joint fixed.
+    Skips a near-zero-length result. Shared by the spanning and terminal-orientation passes."""
+    geom = resolved_geometry[target]
+    if _distance(geom["head"], new_tail) <= 1e-6:
+        return
+    geom["tail"] = [float(v) for v in new_tail]
+    geom["length"] = _distance(geom["head"], geom["tail"])
+    local_tail = _to_grp_root_local(geom["tail"], grp_root_local_origin)
+    for bone in spec_bones:
+        if bone["name"] == target:
+            bone["tail"] = local_tail
+            break
+
+
 def _span_core_chains(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin):
     """Set core-chain bone tails to their child's head so the spine and limbs run upright.
 
@@ -465,28 +482,44 @@ def _span_core_chains(resolved_geometry, spec_bones, placement_metadata, grp_roo
     # degenerate 0 yields a no-op Head extension caught by the zero-length guard.
     up_sign = int(up.get("sign", 1))
 
-    def _apply(target, new_tail):
-        geom = resolved_geometry[target]
-        if _distance(geom["head"], new_tail) <= 1e-6:
-            return
-        geom["tail"] = [float(v) for v in new_tail]
-        geom["length"] = _distance(geom["head"], geom["tail"])
-        local_tail = _to_grp_root_local(geom["tail"], grp_root_local_origin)
-        for bone in spec_bones:
-            if bone["name"] == target:
-                bone["tail"] = local_tail
-                break
-
     for target, child in _SPAN_CHILD.items():
         if target in resolved_geometry and child in resolved_geometry:
-            _apply(target, list(resolved_geometry[child]["head"]))
+            _retarget_tail(resolved_geometry, spec_bones, target, list(resolved_geometry[child]["head"]), grp_root_local_origin)
 
     if "Head" in resolved_geometry:
         head_geom = resolved_geometry["Head"]
         length = _default_length_for_target("Head", placement_metadata)
         new_tail = list(head_geom["head"])
         new_tail[up_index] = head_geom["head"][up_index] + (up_sign * length)
-        _apply("Head", new_tail)
+        _retarget_tail(resolved_geometry, spec_bones, "Head", new_tail, grp_root_local_origin)
+
+
+# Terminal extremities have no spanned child; orient each one along its (post-spanning)
+# parent's direction at a default length so hands/fingers/thumbs/toes flow out of the limb
+# chain (#60). Ordered so hands are oriented before fingers/thumb (which then follow the
+# oriented hand). Eye_* (forward gaze) and Head (up-extension) are intentionally excluded.
+_TERMINAL_EXTREMITIES = [
+    "Hand_Left", "Hand_Right",
+    "Full_Fingers_Left", "Full_Fingers_Right",
+    "Full_Thumb_Left", "Full_Thumb_Right",
+    "Full_Toes_Left", "Full_Toes_Right",
+]
+
+
+def _orient_terminal_extremities(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin, bone_parents):
+    """Point each terminal extremity along its parent's direction; head/joint unchanged."""
+    for target in _TERMINAL_EXTREMITIES:
+        if target not in resolved_geometry:
+            continue
+        parent_geom = resolved_geometry.get(bone_parents.get(target))
+        if parent_geom is None:
+            continue
+        direction = _direction_vector(parent_geom["head"], parent_geom["tail"])
+        if _distance([0.0, 0.0, 0.0], direction) <= 1e-6:
+            continue
+        length = _default_length_for_target(target, placement_metadata)
+        new_tail = _offset_point(resolved_geometry[target]["head"], direction, length)
+        _retarget_tail(resolved_geometry, spec_bones, target, new_tail, grp_root_local_origin)
 
 
 def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones: Dict[str, dict]) -> dict:
@@ -578,6 +611,10 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
 
     # Span the central chain so the spine renders upright (see _span_core_chains / #57).
     _span_core_chains(resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin)
+
+    _orient_terminal_extremities(
+        resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin, bone_parents
+    )
 
     spec["weight_merges"] = _compute_weight_merges(spec["bones"], source_bones)
 

@@ -2789,6 +2789,60 @@ class CentralChainSpanningTests(unittest.TestCase):
         _assert_vec_almost_equal(self, _spec_bone(spec, "Lower_Spine")["tail"], expected)
 
 
+class TerminalExtremityOrientationTests(unittest.TestCase):
+    """Hands/fingers/thumbs/toes point along their (spanned) parent's direction (#60)."""
+
+    def _report(self):
+        report = _base_classifier_report()
+        for target, src in {
+            "Upper_Arm_Left": "LUpperArm", "Lower_Arm_Left": "LForeArm", "Hand_Left": "LHand",
+            "Lower_Leg_Left": "LCalf", "Foot_Left": "LFoot", "Full_Toes_Left": "LToe",
+        }.items():
+            report["semantic_mapping"][target].update(
+                {"source_bone": src, "action": "direct_map", "confidence": 0.95})
+        return report
+
+    def _source_bones(self):
+        b = _bone
+        return {
+            "LUpperArm": b("LUpperArm", None, (0.18, 0, 1.45), (0.22, 0, 1.45)),
+            "LForeArm": b("LForeArm", "LUpperArm", (0.45, 0, 1.45), (0.50, 0, 1.45)),
+            "LHand": b("LHand", "LForeArm", (0.70, 0, 1.45), (0.70, 0, 1.20)),  # source: DOWN
+            "LCalf": b("LCalf", None, (0.10, 0, 0.55), (0.10, 0, 0.50)),
+            "LFoot": b("LFoot", "LCalf", (0.10, 0, 0.10), (0.15, 0, 0.10)),
+            "LToe": b("LToe", "LFoot", (0.20, 0, 0.05), (0.20, 0, 0.20)),       # source: UP
+        }
+
+    def _unit_dir_and_len(self, spec, target):
+        import math
+        bone = _spec_bone(spec, target)
+        v = [bone["tail"][i] - bone["head"][i] for i in range(3)]
+        length = math.sqrt(sum(x * x for x in v)) or 1.0
+        return [x / length for x in v], length
+
+    def test_terminals_follow_parent_direction(self):
+        from asam_human_builder.geometry_resolution import _default_length_for_target
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        spec = build_armature_spec(self._report(), plan, self._source_bones())
+
+        hand_dir, hand_len = self._unit_dir_and_len(spec, "Hand_Left")
+        forearm_dir, _ = self._unit_dir_and_len(spec, "Lower_Arm_Left")
+        for i in range(3):
+            self.assertAlmostEqual(hand_dir[i], forearm_dir[i], places=5)
+        self.assertAlmostEqual(
+            hand_len, _default_length_for_target("Hand_Left", plan["placement_metadata"]), places=5)
+
+        toe_dir, _ = self._unit_dir_and_len(spec, "Full_Toes_Left")
+        foot_dir, _ = self._unit_dir_and_len(spec, "Foot_Left")
+        for i in range(3):
+            self.assertAlmostEqual(toe_dir[i], foot_dir[i], places=5)
+
+        fingers_dir, _ = self._unit_dir_and_len(spec, "Full_Fingers_Left")
+        for i in range(3):
+            self.assertAlmostEqual(fingers_dir[i], hand_dir[i], places=5)
+
+
 class WeightMergeAndPurgeExecutionTests(unittest.TestCase):
     """Test weight merge and purge execution during mesh duplication (#58 execution)."""
 
