@@ -12,7 +12,12 @@ from typing import Dict, List, Optional, Sequence, Tuple
 from phase3_classifier.classifier import CORE_TARGETS
 
 from asam_human_builder.geometry_resolution import (
+    _asam_roll_align_axis,
+    _default_length_for_target,
+    _direction_vector,
+    _distance,
     _hip_requires_centered_pelvis_pair,
+    _offset_point,
     _opposite_name_candidates,
     _resolve_preserved_source_root_extra,
     _resolve_target_geometry,
@@ -389,6 +394,134 @@ def build_armature_spec_from_asset_dir(asset_dir: Path) -> Tuple[dict, dict, dic
     return classifier_report, build_plan, build_armature_spec(classifier_report, build_plan, source_bones)
 
 
+# ASAM core-chain spanning (#57, #59): each bone's tail is set to its single core child's
+# head so the spine AND limbs render as connected, upright/extended chains instead of copying
+# short source "link" geometry. Head (no core child) extends along the up axis. Each listed
+# bone has exactly one core child, so there is no multi-child ambiguity. Heads (joints) never
+# move, so rest-pose deformation is unchanged.
+_SPAN_CHILD = {
+    "Hip": "Lower_Spine",
+    "Lower_Spine": "Upper_Spine",
+    "Upper_Spine": "Neck",
+    "Neck": "Head",
+    "Shoulder_Left": "Upper_Arm_Left",
+    "Upper_Arm_Left": "Lower_Arm_Left",
+    "Lower_Arm_Left": "Hand_Left",
+    "Shoulder_Right": "Upper_Arm_Right",
+    "Upper_Arm_Right": "Lower_Arm_Right",
+    "Lower_Arm_Right": "Hand_Right",
+    "Upper_Leg_Left": "Lower_Leg_Left",
+    "Lower_Leg_Left": "Foot_Left",
+    "Foot_Left": "Full_Toes_Left",
+    "Upper_Leg_Right": "Lower_Leg_Right",
+    "Lower_Leg_Right": "Foot_Right",
+    "Foot_Right": "Full_Toes_Right",
+}
+
+
+def _compute_weight_merges(spec_bones, source_bones):
+    """Map each orphaned source deform bone to the nearest ancestor that maps to an ASAM
+    target (#58), so the builder can merge their vertex weights instead of orphaning them.
+
+    Walks up the source-bone hierarchy (source_bones[...]["parent"]). A source bone that is
+    itself a mapped ASAM source, or has no mapped ancestor, produces no entry. Returns a
+    sorted list of {"source", "target"}.
+    """
+    source_to_target = {}
+    for bone in spec_bones:
+        source_name = bone.get("source_bone")
+        target_name = bone.get("name")
+        if (
+            source_name
+            and target_name
+            and bone.get("geometry_source") in SOURCE_NAMED_GEOMETRY_SOURCES
+            and source_name != target_name
+        ):
+            source_to_target.setdefault(source_name, target_name)
+
+    merges = []
+    for name, info in source_bones.items():
+        if name in source_to_target:
+            continue
+        parent = info.get("parent")
+        seen = set()
+        while parent and parent not in seen:
+            seen.add(parent)
+            if parent in source_to_target:
+                merges.append({"source": name, "target": source_to_target[parent]})
+                break
+            parent = (source_bones.get(parent) or {}).get("parent")
+    return sorted(merges, key=lambda m: (m["source"], m["target"]))
+
+
+def _retarget_tail(resolved_geometry, spec_bones, target, new_tail, grp_root_local_origin):
+    """Rewrite one bone's tail (and the rebased spec tail), leaving its head/joint fixed.
+    Skips a near-zero-length result. Shared by the spanning and terminal-orientation passes."""
+    geom = resolved_geometry[target]
+    if _distance(geom["head"], new_tail) <= 1e-6:
+        return
+    geom["tail"] = [float(v) for v in new_tail]
+    geom["length"] = _distance(geom["head"], geom["tail"])
+    local_tail = _to_grp_root_local(geom["tail"], grp_root_local_origin)
+    for bone in spec_bones:
+        if bone["name"] == target:
+            bone["tail"] = local_tail
+            break
+
+
+def _span_core_chains(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin):
+    """Set core-chain bone tails to their child's head so the spine and limbs run upright.
+
+    Heads (joints) never move, which keeps rest-pose deformation unchanged; only tails are
+    rewritten. Head, having no core child, extends along the up axis by its default length.
+    A near-zero-length result (child head coincident with this bone's head) is skipped.
+    """
+    up = placement_metadata["up_axis"]
+    up_index = int(up["index"])
+    # Trust the upstream validator's sign (consistent with geometry_resolution); a
+    # degenerate 0 yields a no-op Head extension caught by the zero-length guard.
+    up_sign = int(up.get("sign", 1))
+
+    for target, child in _SPAN_CHILD.items():
+        if target in resolved_geometry and child in resolved_geometry:
+            _retarget_tail(resolved_geometry, spec_bones, target, list(resolved_geometry[child]["head"]), grp_root_local_origin)
+
+    if "Head" in resolved_geometry:
+        head_geom = resolved_geometry["Head"]
+        length = _default_length_for_target("Head", placement_metadata)
+        new_tail = list(head_geom["head"])
+        new_tail[up_index] = head_geom["head"][up_index] + (up_sign * length)
+        _retarget_tail(resolved_geometry, spec_bones, "Head", new_tail, grp_root_local_origin)
+
+
+# Terminal extremities have no spanned child; orient each one along its (post-spanning)
+# parent's direction at a default length so hands/fingers/thumbs/toes flow out of the limb
+# chain (#60). Ordered so hands are oriented before fingers/thumb (which then follow the
+# oriented hand). Eye_* (forward gaze) and Head (up-extension) are intentionally excluded.
+_TERMINAL_EXTREMITIES = [
+    "Hand_Left", "Hand_Right",
+    "Full_Fingers_Left", "Full_Fingers_Right",
+    "Full_Thumb_Left", "Full_Thumb_Right",
+    "Full_Toes_Left", "Full_Toes_Right",
+]
+
+
+def _orient_terminal_extremities(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin, bone_parents):
+    """Point each terminal extremity along its parent's direction; head/joint unchanged."""
+    for target in _TERMINAL_EXTREMITIES:
+        if target not in resolved_geometry:
+            continue
+        parent_geom = resolved_geometry.get(bone_parents.get(target))
+        if parent_geom is None:
+            continue
+        direction = _direction_vector(parent_geom["head"], parent_geom["tail"])
+        if _distance([0.0, 0.0, 0.0], direction) <= 1e-6:
+            continue
+        length = _default_length_for_target(target, placement_metadata)
+        new_tail = _offset_point(resolved_geometry[target]["head"], direction, length)
+        _retarget_tail(resolved_geometry, spec_bones, target, new_tail, grp_root_local_origin)
+
+
 def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones: Dict[str, dict]) -> dict:
     """
     Build a deterministic ASAM armature creation spec from classifier outputs.
@@ -415,6 +548,7 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         "generated_armature_name": "Armature_{0}".format(asset_name),
         "root_resolution": copy.deepcopy(root_resolution),
         "placement_metadata": copy.deepcopy(placement_metadata),
+        "roll_align_axis": _asam_roll_align_axis(placement_metadata),
         "mesh_binding": copy.deepcopy(build_plan["mesh_binding"]),
         "extras_preserved": copy.deepcopy(build_plan.get("extras_preserved", [])),
         "grp_root_local_origin": list(grp_root_local_origin),
@@ -474,6 +608,15 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
                 if bone["name"] == "Root":
                     bone["tail"] = _to_grp_root_local(new_tail, grp_root_local_origin)
                     break
+
+    # Span the central chain so the spine renders upright (see _span_core_chains / #57).
+    _span_core_chains(resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin)
+
+    _orient_terminal_extremities(
+        resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin, bone_parents
+    )
+
+    spec["weight_merges"] = _compute_weight_merges(spec["bones"], source_bones)
 
     preserved_root = _resolve_preserved_source_root_extra(root_resolution, source_bones)
     if preserved_root is not None:

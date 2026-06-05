@@ -234,6 +234,13 @@ class _FakeBone:
         self.tail = [0.0, 0.0, 0.0]
         self.parent = None
         self.use_connect = False
+        self.roll = 0.0
+        self.roll_aligned_to = None
+
+    def align_roll(self, vector):
+        # Mirror Blender's EditBone.align_roll just enough for assertions: record
+        # the target axis the bone's local Z was aligned to.
+        self.roll_aligned_to = [float(component) for component in vector]
 
 
 class _FakeEditBones:
@@ -1311,20 +1318,24 @@ class AsamHumanBuilderTests(unittest.TestCase):
             "source_bone": "Root",
             "grp_root_local_origin": [0.0, 0.0, 0.0],
         })
-        report["semantic_mapping"]["Hip"].update({
-            "source_bone": "Hip",
-            "action": "direct_map",
-            "confidence": 1.0,
-        })
+        for target, src in (("Hip", "Hip"), ("Lower_Spine", "Lower_Spine")):
+            report["semantic_mapping"][target].update({
+                "source_bone": src,
+                "action": "direct_map",
+                "confidence": 1.0,
+            })
         source_bones = {
             "Root": _bone("Root", None, (0.0, 0.0, 0.0), (0.0, 0.0, 0.5)),
             "Hip": _bone("Hip", "Root", (0.0, 0.0, 0.9), (0.0, 0.0, 1.0)),
+            "Lower_Spine": _bone("Lower_Spine", "Hip", (0.0, 0.0, 1.0), (0.0, 0.0, 1.1)),
         }
 
         spec = build_armature_spec(report, plan, source_bones)
 
+        # Zero origin -> spec coords are identical to source coords (pass-through).
         hip_bone = _spec_bone(spec, "Hip")
         self.assertEqual(hip_bone["head"], [0.0, 0.0, 0.9])
+        # Hip now spans to Lower_Spine's head (both pass through unchanged at zero origin).
         self.assertEqual(hip_bone["tail"], [0.0, 0.0, 1.0])
 
     def test_reuse_existing_root_keeps_source_position_in_grp_root_local(self):
@@ -1808,7 +1819,7 @@ class CrowdNamingTests(unittest.TestCase):
         self.assertNotIn("unmapped_vertex_groups:BodyMesh", execution_result["mesh_warnings"])
 
     def test_blender_builder_reports_unmapped_vertex_groups(self):
-        """Vertex groups with no ASAM mapping must surface as a mesh_warning."""
+        """Vertex groups with no ASAM mapping are purged (#58)."""
         bpy_module = _FakeBpy()
         source_armature = bpy_module.add_source_armature("Rig")
         source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
@@ -1827,7 +1838,7 @@ class CrowdNamingTests(unittest.TestCase):
 
         generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
         self.assertIn("Hand_Left", generated_mesh.vertex_groups)
-        self.assertIn("MCH-helper_bone", generated_mesh.vertex_groups)  # left alone
+        self.assertNotIn("MCH-helper_bone", generated_mesh.vertex_groups)  # purged (no matching bone)
         self.assertIn("unmapped_vertex_groups:BodyMesh", execution_result["mesh_warnings"])
 
         remap = execution_result["duplicated_meshes"][0]["vertex_group_remap"]
@@ -2314,6 +2325,34 @@ class ComputeVertexGroupRemapPlanTests(unittest.TestCase):
         self.assertEqual(plan["asam_targets_without_source_group"], [])
 
 
+class AsamHumanBuilderRollTests(unittest.TestCase):
+    """Every generated bone (mapped AND synthesized) is roll-aligned to the ASAM
+    side axis so its local Z points sidewards."""
+
+    def test_every_bone_is_roll_aligned_to_side_axis(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Armature")
+        for mesh_record in build_plan["mesh_binding"]["meshes"]:
+            bpy_module.add_source_mesh(
+                mesh_record["mesh_name"],
+                bpy_module.data.objects.get("Armature"),
+            )
+        build_armature_in_blender(build_spec, bpy_module)
+
+        expected = build_spec["roll_align_axis"]
+        edit_bones = bpy_module.data.objects.get(
+            build_spec["generated_armature_name"]
+        ).data.edit_bones
+        for bone in build_spec["bones"]:
+            self.assertEqual(
+                edit_bones[bone["name"]].roll_aligned_to, expected,
+                f"{bone['name']} was not roll-aligned to the ASAM side axis",
+            )
+
+
 class CrowdFlatInputsTests(unittest.TestCase):
     def _inputs(self):
         classifier_report = {
@@ -2408,6 +2447,12 @@ class CrowdSpecsFromAssetDirTests(unittest.TestCase):
             self.assertEqual(spec["generated_armature_name"], "Armature_crowd_{0}".format(cid))
             # Each character resolves Hip geometry from its OWN bones (no cross-character mixing).
             self.assertTrue(any(b["name"] == "Hip" for b in spec["bones"]))
+            # The ASAM roll-alignment axis must propagate to EVERY character's spec
+            # through the crowd fan-out (build_armature_spec runs per character).
+            side = spec["placement_metadata"]["side_axis"]
+            expected_axis = [0.0, 0.0, 0.0]
+            expected_axis[int(side["index"])] = 1.0 if float(side.get("sign", 1)) >= 0 else -1.0
+            self.assertEqual(spec["roll_align_axis"], expected_axis)
 
     def test_single_character_returns_unchanged_path(self):
         from asam_human_builder.builder import build_character_specs_from_asset_dir
@@ -2593,6 +2638,285 @@ class PlacementDeltaTests(unittest.TestCase):
         from asam_human_builder import blender_builder
         sentinel = object()  # a non-matrix; zero delta must not touch it
         self.assertIs(blender_builder._translated_matrix(sentinel, [0.0, 0.0, 0.0]), sentinel)
+
+
+class AsamRollAxisTests(unittest.TestCase):
+    """build_armature_spec exposes the ASAM roll-alignment axis: a unit vector along
+    the world side axis (local bone Z points sidewards per ASAM OpenMATERIAL)."""
+
+    def test_spec_carries_unit_side_axis_roll_vector(self):
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+
+        side = build_plan["placement_metadata"]["side_axis"]
+        index = int(side["index"])
+        expected = [0.0, 0.0, 0.0]
+        expected[index] = 1.0 if float(side.get("sign", 1)) >= 0 else -1.0
+
+        self.assertEqual(build_spec["roll_align_axis"], expected)
+
+
+class LimbChainSpanningTests(unittest.TestCase):
+    """Arm/leg chains span tail->child-head like the spine (issue #59)."""
+
+    def _report_with_direct_limbs(self):
+        report = _base_classifier_report()
+        for target, src in {
+            "Shoulder_Left": "LClavicle", "Upper_Arm_Left": "LUpperArm",
+            "Lower_Arm_Left": "LForeArm", "Hand_Left": "LHand",
+            "Upper_Leg_Left": "LThigh", "Lower_Leg_Left": "LCalf",
+            "Foot_Left": "LFoot", "Full_Toes_Left": "LToe",
+        }.items():
+            report["semantic_mapping"][target].update(
+                {"source_bone": src, "action": "direct_map", "confidence": 0.95}
+            )
+        return report
+
+    def _gapped_limb_source_bones(self):
+        b = _bone
+        return {
+            "LClavicle": b("LClavicle", None, (0.05, 0.0, 1.45), (0.10, 0.0, 1.45)),
+            "LUpperArm": b("LUpperArm", "LClavicle", (0.18, 0.0, 1.45), (0.22, 0.0, 1.45)),
+            "LForeArm": b("LForeArm", "LUpperArm", (0.45, 0.0, 1.45), (0.50, 0.0, 1.45)),
+            "LHand": b("LHand", "LForeArm", (0.70, 0.0, 1.45), (0.75, 0.0, 1.45)),
+            "LThigh": b("LThigh", None, (0.10, 0.0, 0.95), (0.10, 0.0, 0.90)),
+            "LCalf": b("LCalf", "LThigh", (0.10, 0.0, 0.55), (0.10, 0.0, 0.50)),
+            "LFoot": b("LFoot", "LCalf", (0.10, 0.0, 0.10), (0.15, 0.0, 0.10)),
+            "LToe": b("LToe", "LFoot", (0.20, 0.0, 0.05), (0.25, 0.0, 0.05)),
+        }
+
+    def test_limb_chains_span_to_child_heads(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        spec = build_armature_spec(
+            self._report_with_direct_limbs(), plan, self._gapped_limb_source_bones()
+        )
+        def head(t): return _spec_bone(spec, t)["head"]
+        for parent, child in [
+            ("Shoulder_Left", "Upper_Arm_Left"), ("Upper_Arm_Left", "Lower_Arm_Left"),
+            ("Lower_Arm_Left", "Hand_Left"), ("Upper_Leg_Left", "Lower_Leg_Left"),
+            ("Lower_Leg_Left", "Foot_Left"), ("Foot_Left", "Full_Toes_Left"),
+        ]:
+            _assert_vec_almost_equal(self, _spec_bone(spec, parent)["tail"], head(child))
+
+
+class CentralChainSpanningTests(unittest.TestCase):
+    """The central chain (Lower_Spine, Upper_Spine, Neck, Head) spans to child joints so
+    the spine renders upright; heads stay on source joints; Hip is untouched (issue #57)."""
+
+    def _report_with_direct_central_chain(self):
+        report = _base_classifier_report()
+        for target, src in {
+            "Hip": "Hip",
+            "Lower_Spine": "Lower_Spine",
+            "Upper_Spine": "Upper_Spine",
+            "Neck": "Neck",
+            "Head": "Head",
+        }.items():
+            report["semantic_mapping"][target].update(
+                {"source_bone": src, "action": "direct_map", "confidence": 0.95}
+            )
+        return report
+
+    def _short_nub_source_bones(self):
+        # Vertical Hip; short forward-pointing (-Y) nubs for the rest, with vertical gaps.
+        return {
+            "Hip": _bone("Hip", None, (0.0, 0.0, 0.90), (0.0, 0.0, 0.95)),
+            "Lower_Spine": _bone("Lower_Spine", "Hip", (0.0, 0.05, 0.93), (0.0, -0.03, 0.93)),
+            "Upper_Spine": _bone("Upper_Spine", "Lower_Spine", (0.0, 0.05, 1.20), (0.0, -0.05, 1.20)),
+            "Neck": _bone("Neck", "Upper_Spine", (0.0, 0.05, 1.47), (0.0, -0.06, 1.47)),
+            "Head": _bone("Head", "Neck", (0.0, 0.05, 1.57), (0.0, -0.09, 1.57)),
+        }
+
+    def test_central_chain_spans_to_child_heads(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        spec = build_armature_spec(
+            self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
+        )
+        src = self._short_nub_source_bones()
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Lower_Spine")["tail"], src["Upper_Spine"]["head"])
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Upper_Spine")["tail"], src["Neck"]["head"])
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Neck")["tail"], src["Head"]["head"])
+        for target in ("Lower_Spine", "Upper_Spine", "Neck", "Head"):
+            _assert_vec_almost_equal(self, _spec_bone(spec, target)["head"], src[target]["head"])
+
+    def test_head_extends_along_up_axis(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        up_index = int(plan["placement_metadata"]["up_axis"]["index"])
+        spec = build_armature_spec(
+            self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
+        )
+        head = _spec_bone(spec, "Head")
+        self.assertGreater(head["tail"][up_index], head["head"][up_index])
+        for axis in range(3):
+            if axis != up_index:
+                self.assertAlmostEqual(head["tail"][axis], head["head"][axis], places=6)
+
+    def test_hip_spans_to_lower_spine(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        spec = build_armature_spec(
+            self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
+        )
+        src = self._short_nub_source_bones()
+        # Hip tail snaps to Lower_Spine's head (perfect Root->Hip->Lower_Spine continuity)...
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Hip")["tail"], src["Lower_Spine"]["head"])
+        # ...while its head (joint) is unchanged.
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Hip")["head"], src["Hip"]["head"])
+
+    def test_zero_length_guard_keeps_source_tail(self):
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        bones = self._short_nub_source_bones()
+        bones["Head"] = _bone("Head", "Neck", (0.0, 0.05, 1.47), (0.0, -0.09, 1.47))  # same head as Neck
+        spec = build_armature_spec(self._report_with_direct_central_chain(), plan, bones)
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Neck")["tail"], bones["Neck"]["tail"])
+
+    def test_spanned_tail_is_rebased_to_grp_root_local(self):
+        # With a non-zero Grp_Root origin, the spanned tail must be the child's source
+        # head expressed in Grp_Root-local coords (exercises the _to_grp_root_local write).
+        origin = [0.0, 0.0, 0.90]
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = list(origin)
+        spec = build_armature_spec(
+            self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
+        )
+        child_head = self._short_nub_source_bones()["Upper_Spine"]["head"]
+        expected = [child_head[i] - origin[i] for i in range(3)]
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Lower_Spine")["tail"], expected)
+
+
+class TerminalExtremityOrientationTests(unittest.TestCase):
+    """Hands/fingers/thumbs/toes point along their (spanned) parent's direction (#60)."""
+
+    def _report(self):
+        report = _base_classifier_report()
+        for target, src in {
+            "Upper_Arm_Left": "LUpperArm", "Lower_Arm_Left": "LForeArm", "Hand_Left": "LHand",
+            "Lower_Leg_Left": "LCalf", "Foot_Left": "LFoot", "Full_Toes_Left": "LToe",
+        }.items():
+            report["semantic_mapping"][target].update(
+                {"source_bone": src, "action": "direct_map", "confidence": 0.95})
+        return report
+
+    def _source_bones(self):
+        b = _bone
+        return {
+            "LUpperArm": b("LUpperArm", None, (0.18, 0, 1.45), (0.22, 0, 1.45)),
+            "LForeArm": b("LForeArm", "LUpperArm", (0.45, 0, 1.45), (0.50, 0, 1.45)),
+            "LHand": b("LHand", "LForeArm", (0.70, 0, 1.45), (0.70, 0, 1.20)),  # source: DOWN
+            "LCalf": b("LCalf", None, (0.10, 0, 0.55), (0.10, 0, 0.50)),
+            "LFoot": b("LFoot", "LCalf", (0.10, 0, 0.10), (0.15, 0, 0.10)),
+            "LToe": b("LToe", "LFoot", (0.20, 0, 0.05), (0.20, 0, 0.20)),       # source: UP
+        }
+
+    def _unit_dir_and_len(self, spec, target):
+        import math
+        bone = _spec_bone(spec, target)
+        v = [bone["tail"][i] - bone["head"][i] for i in range(3)]
+        length = math.sqrt(sum(x * x for x in v)) or 1.0
+        return [x / length for x in v], length
+
+    def test_terminals_follow_parent_direction(self):
+        from asam_human_builder.geometry_resolution import _default_length_for_target
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = [0.0, 0.0, 0.0]
+        spec = build_armature_spec(self._report(), plan, self._source_bones())
+
+        hand_dir, hand_len = self._unit_dir_and_len(spec, "Hand_Left")
+        forearm_dir, _ = self._unit_dir_and_len(spec, "Lower_Arm_Left")
+        for i in range(3):
+            self.assertAlmostEqual(hand_dir[i], forearm_dir[i], places=5)
+        self.assertAlmostEqual(
+            hand_len, _default_length_for_target("Hand_Left", plan["placement_metadata"]), places=5)
+
+        toe_dir, _ = self._unit_dir_and_len(spec, "Full_Toes_Left")
+        foot_dir, _ = self._unit_dir_and_len(spec, "Foot_Left")
+        for i in range(3):
+            self.assertAlmostEqual(toe_dir[i], foot_dir[i], places=5)
+
+        fingers_dir, _ = self._unit_dir_and_len(spec, "Full_Fingers_Left")
+        for i in range(3):
+            self.assertAlmostEqual(fingers_dir[i], hand_dir[i], places=5)
+
+
+class WeightMergeAndPurgeExecutionTests(unittest.TestCase):
+    """Test weight merge and purge execution during mesh duplication (#58 execution)."""
+
+    def test_merge_and_purge_leave_only_bone_groups(self):
+        """After merge+purge, only vertex groups matching generated bones remain."""
+        report = _base_classifier_report()
+        report["semantic_mapping"]["Lower_Spine"].update(
+            {"source_bone": "Spine0", "action": "direct_map", "confidence": 0.95})
+        report["semantic_mapping"]["Upper_Spine"].update(
+            {"source_bone": "Spine3", "action": "direct_map", "confidence": 0.95})
+        plan = _base_build_plan()
+        source_bones = {
+            "Spine0": _bone("Spine0", None, (0, 0, 1.0), (0, 0, 1.1)),
+            "Spine1": _bone("Spine1", "Spine0", (0, 0, 1.1), (0, 0, 1.2)),
+            "Spine3": _bone("Spine3", "Spine1", (0, 0, 1.3), (0, 0, 1.4)),
+            "Spine4": _bone("Spine4", "Spine3", (0, 0, 1.4), (0, 0, 1.5)),
+        }
+        spec = build_armature_spec(report, plan, source_bones)
+
+        bpy_module = _FakeBpy()
+        armature = bpy_module.add_source_armature("Rig")
+        mesh = bpy_module.add_source_mesh("BodyMesh", armature)
+        mesh.vertex_groups = ["Spine0", "Spine1", "Spine3", "Spine4", "Other"]
+        spec["mesh_binding"] = {"armature_object_name": "Rig", "meshes": [
+            {"mesh_name": "BodyMesh", "armature_link": "modifier",
+             "modifiers": [{"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": "Rig"}],
+             "vertex_groups": ["Spine0", "Spine1", "Spine3", "Spine4", "Other"]}]}
+
+        build_armature_in_blender(spec, bpy_module)
+        result_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        groups = set(result_mesh.vertex_groups)
+        self.assertIn("Lower_Spine", groups)
+        self.assertIn("Upper_Spine", groups)
+        self.assertNotIn("Spine1", groups)   # merged into Lower_Spine, removed
+        self.assertNotIn("Spine4", groups)   # merged into Upper_Spine, removed
+        self.assertNotIn("Other", groups)    # purged (no matching bone)
+        bone_names = {b["name"] for b in spec["bones"]}
+        self.assertTrue(groups.issubset(bone_names))
+
+
+class WeightMergePlanTests(unittest.TestCase):
+    """Orphaned source deform bones merge into their nearest mapped ASAM ancestor (#58)."""
+
+    def _report(self):
+        report = _base_classifier_report()
+        report["semantic_mapping"]["Lower_Spine"].update(
+            {"source_bone": "Spine0", "action": "direct_map", "confidence": 0.95})
+        report["semantic_mapping"]["Upper_Spine"].update(
+            {"source_bone": "Spine3", "action": "direct_map", "confidence": 0.95})
+        return report
+
+    def _source_bones(self):
+        b = _bone
+        return {
+            "Pelvis": b("Pelvis", None, (0, 0, 0.9), (0, 0, 1.0)),
+            "Spine0": b("Spine0", "Pelvis", (0, 0, 1.0), (0, 0, 1.1)),
+            "Spine1": b("Spine1", "Spine0", (0, 0, 1.1), (0, 0, 1.2)),
+            "Spine2": b("Spine2", "Spine1", (0, 0, 1.2), (0, 0, 1.3)),
+            "Spine3": b("Spine3", "Spine2", (0, 0, 1.3), (0, 0, 1.4)),
+            "Spine4": b("Spine4", "Spine3", (0, 0, 1.4), (0, 0, 1.5)),
+            "Floating": b("Floating", None, (5, 5, 5), (5, 5, 5.1)),  # no mapped ancestor
+        }
+
+    def test_weight_merges_resolve_to_nearest_mapped_ancestor(self):
+        plan = _base_build_plan()
+        spec = build_armature_spec(self._report(), plan, self._source_bones())
+        merges = {m["source"]: m["target"] for m in spec["weight_merges"]}
+        self.assertEqual(merges.get("Spine1"), "Lower_Spine")  # ancestor Spine0
+        self.assertEqual(merges.get("Spine2"), "Lower_Spine")  # ancestor Spine0
+        self.assertEqual(merges.get("Spine4"), "Upper_Spine")  # ancestor Spine3
+        self.assertNotIn("Spine0", merges)
+        self.assertNotIn("Spine3", merges)
+        self.assertNotIn("Floating", merges)
+        self.assertEqual(spec["weight_merges"], sorted(spec["weight_merges"], key=lambda m: (m["source"], m["target"])))
 
 
 if __name__ == "__main__":

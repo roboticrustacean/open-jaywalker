@@ -559,3 +559,20 @@ def _resolve_preserved_source_root_extra(
         "source_bone": source_name,
         "semantic_action": "preserve_extra",
     }
+
+
+def _asam_roll_align_axis(placement_metadata: dict) -> List[float]:
+    """World-space unit vector that a bone's local Z should align to under ASAM.
+
+    ASAM OpenMATERIAL human geometry: the bone y-axis follows the bone direction and
+    the z-axis points sidewards (x forward for upright bones, x up for foot/toe bones,
+    which follows automatically). Aligning every generated bone's local Z to the world
+    side axis reproduces that convention uniformly. Returns a unit vector along the
+    placement side axis, signed by side_axis['sign'].
+    """
+    side = placement_metadata["side_axis"]
+    index = int(side["index"])
+    sign = float(side.get("sign", 1)) or 1.0
+    axis = [0.0, 0.0, 0.0]
+    axis[index] = 1.0 if sign >= 0 else -1.0
+    return axis

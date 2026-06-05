@@ -94,7 +94,7 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
         bpy_module, group_root_name, asset_name, collection, grp_root_location
     )
     armature_object = _create_armature_object(bpy_module, armature_name, asset_name, collection, group_root)
-    _populate_edit_bones(bpy_module, armature_object, build_spec["bones"])
+    _populate_edit_bones(bpy_module, armature_object, build_spec["bones"], build_spec.get("roll_align_axis"))
     # Force the dependency graph to evaluate the just-placed Grp_Root/armature so the
     # duplicated meshes below are positioned against their parent's CURRENT world
     # transform.
@@ -393,6 +393,10 @@ def _duplicate_bound_meshes(
             group_names,
         )
         _apply_vertex_group_renames(generated_mesh, remap_plan["renames"])
+        _apply_weight_merges(generated_mesh, build_spec.get("weight_merges", []))
+        _purge_unbound_vertex_groups(
+            generated_mesh, {bone["name"] for bone in build_spec.get("bones", [])}
+        )
         if remap_plan["unmapped_groups"]:
             mesh_warnings.append("unmapped_vertex_groups:{0}".format(mesh_name))
         if remap_plan["asam_targets_without_source_group"]:
@@ -530,7 +534,77 @@ def _apply_vertex_group_renames(mesh_obj, renames: List[dict]) -> None:
             groups[index] = new_name
 
 
-def _populate_edit_bones(bpy_module, armature_object, bones: List[dict]) -> None:
+def _apply_weight_merges(mesh_obj, merges: List[dict]) -> None:
+    """Merge orphaned source vertex groups into their target ASAM group (#58).
+
+    Real Blender: ADD each source group's per-vertex weights into the target group (creating
+    it if absent), then remove the source group. Test fake (vertex_groups is a list[str]):
+    ensure the target name exists and drop the source name. No-op for sources absent on this
+    mesh.
+    """
+    if not merges:
+        return
+    groups = getattr(mesh_obj, "vertex_groups", None)
+    if groups is None:
+        return
+
+    is_fake = isinstance(groups, list) and (not groups or isinstance(groups[0], str))
+    if is_fake:
+        names = groups
+        for merge in merges:
+            src, tgt = merge["source"], merge["target"]
+            if src not in names:
+                continue
+            if tgt not in names:
+                names.append(tgt)
+            names.remove(src)
+        return
+
+    by_name = {g.name: g for g in groups}
+    for merge in merges:
+        src_name, tgt_name = merge["source"], merge["target"]
+        src = by_name.get(src_name)
+        if src is None:
+            continue
+        tgt = by_name.get(tgt_name)
+        if tgt is None:
+            tgt = mesh_obj.vertex_groups.new(name=tgt_name)
+            by_name[tgt_name] = tgt
+        for vert in mesh_obj.data.vertices:
+            for ge in vert.groups:
+                if ge.group == src.index:
+                    tgt.add([vert.index], min(1.0, ge.weight), "ADD")
+                    break
+        mesh_obj.vertex_groups.remove(src)
+        del by_name[src_name]
+
+
+def _purge_unbound_vertex_groups(mesh_obj, bone_names) -> None:
+    """Remove vertex groups whose name is not a bone in the generated armature (#58 cleanup).
+    Runs after renames + merges, so it only drops genuinely dead groups."""
+    groups = getattr(mesh_obj, "vertex_groups", None)
+    if groups is None:
+        return
+    if isinstance(groups, list) and (not groups or isinstance(groups[0], str)):
+        mesh_obj.vertex_groups = [name for name in groups if name in bone_names]
+        return
+    for group in list(groups):
+        if group.name not in bone_names:
+            mesh_obj.vertex_groups.remove(group)
+
+
+def _roll_axis_vector(axis):
+    """Return a value accepted by EditBone.align_roll. In Blender that is a
+    mathutils.Vector; outside Blender (tests) mathutils is unavailable, so the
+    raw sequence is returned and the fake records it directly."""
+    try:
+        from mathutils import Vector  # type: ignore
+    except ImportError:
+        return axis
+    return Vector(axis)
+
+
+def _populate_edit_bones(bpy_module, armature_object, bones: List[dict], roll_align_axis=None) -> None:
     _ensure_object_mode(bpy_module)
     _set_active_object(bpy_module, armature_object)
     bpy_module.ops.object.mode_set(mode="EDIT")
@@ -549,6 +623,11 @@ def _populate_edit_bones(bpy_module, armature_object, bones: List[dict]) -> None
         edit_bone = edit_bones[bone["name"]]
         edit_bone.parent = edit_bones[parent_name]
         edit_bone.use_connect = bool(bone.get("use_connect", False))
+
+    if roll_align_axis is not None:
+        axis_vector = _roll_axis_vector(roll_align_axis)
+        for bone in bones:
+            edit_bones[bone["name"]].align_roll(axis_vector)
 
     bpy_module.ops.object.mode_set(mode="OBJECT")
 
