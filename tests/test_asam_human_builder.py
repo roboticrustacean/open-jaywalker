@@ -1819,7 +1819,7 @@ class CrowdNamingTests(unittest.TestCase):
         self.assertNotIn("unmapped_vertex_groups:BodyMesh", execution_result["mesh_warnings"])
 
     def test_blender_builder_reports_unmapped_vertex_groups(self):
-        """Vertex groups with no ASAM mapping must surface as a mesh_warning."""
+        """Vertex groups with no ASAM mapping are purged (#58)."""
         bpy_module = _FakeBpy()
         source_armature = bpy_module.add_source_armature("Rig")
         source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
@@ -1838,7 +1838,7 @@ class CrowdNamingTests(unittest.TestCase):
 
         generated_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
         self.assertIn("Hand_Left", generated_mesh.vertex_groups)
-        self.assertIn("MCH-helper_bone", generated_mesh.vertex_groups)  # left alone
+        self.assertNotIn("MCH-helper_bone", generated_mesh.vertex_groups)  # purged (no matching bone)
         self.assertIn("unmapped_vertex_groups:BodyMesh", execution_result["mesh_warnings"])
 
         remap = execution_result["duplicated_meshes"][0]["vertex_group_remap"]
@@ -2787,6 +2787,46 @@ class CentralChainSpanningTests(unittest.TestCase):
         child_head = self._short_nub_source_bones()["Upper_Spine"]["head"]
         expected = [child_head[i] - origin[i] for i in range(3)]
         _assert_vec_almost_equal(self, _spec_bone(spec, "Lower_Spine")["tail"], expected)
+
+
+class WeightMergeAndPurgeExecutionTests(unittest.TestCase):
+    """Test weight merge and purge execution during mesh duplication (#58 execution)."""
+
+    def test_merge_and_purge_leave_only_bone_groups(self):
+        """After merge+purge, only vertex groups matching generated bones remain."""
+        report = _base_classifier_report()
+        report["semantic_mapping"]["Lower_Spine"].update(
+            {"source_bone": "Spine0", "action": "direct_map", "confidence": 0.95})
+        report["semantic_mapping"]["Upper_Spine"].update(
+            {"source_bone": "Spine3", "action": "direct_map", "confidence": 0.95})
+        plan = _base_build_plan()
+        source_bones = {
+            "Spine0": _bone("Spine0", None, (0, 0, 1.0), (0, 0, 1.1)),
+            "Spine1": _bone("Spine1", "Spine0", (0, 0, 1.1), (0, 0, 1.2)),
+            "Spine3": _bone("Spine3", "Spine1", (0, 0, 1.3), (0, 0, 1.4)),
+            "Spine4": _bone("Spine4", "Spine3", (0, 0, 1.4), (0, 0, 1.5)),
+        }
+        spec = build_armature_spec(report, plan, source_bones)
+
+        bpy_module = _FakeBpy()
+        armature = bpy_module.add_source_armature("Rig")
+        mesh = bpy_module.add_source_mesh("BodyMesh", armature)
+        mesh.vertex_groups = ["Spine0", "Spine1", "Spine3", "Spine4", "Other"]
+        spec["mesh_binding"] = {"armature_object_name": "Rig", "meshes": [
+            {"mesh_name": "BodyMesh", "armature_link": "modifier",
+             "modifiers": [{"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": "Rig"}],
+             "vertex_groups": ["Spine0", "Spine1", "Spine3", "Spine4", "Other"]}]}
+
+        build_armature_in_blender(spec, bpy_module)
+        result_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        groups = set(result_mesh.vertex_groups)
+        self.assertIn("Lower_Spine", groups)
+        self.assertIn("Upper_Spine", groups)
+        self.assertNotIn("Spine1", groups)   # merged into Lower_Spine, removed
+        self.assertNotIn("Spine4", groups)   # merged into Upper_Spine, removed
+        self.assertNotIn("Other", groups)    # purged (no matching bone)
+        bone_names = {b["name"] for b in spec["bones"]}
+        self.assertTrue(groups.issubset(bone_names))
 
 
 class WeightMergePlanTests(unittest.TestCase):

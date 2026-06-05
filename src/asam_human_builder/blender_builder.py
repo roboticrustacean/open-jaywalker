@@ -393,6 +393,10 @@ def _duplicate_bound_meshes(
             group_names,
         )
         _apply_vertex_group_renames(generated_mesh, remap_plan["renames"])
+        _apply_weight_merges(generated_mesh, build_spec.get("weight_merges", []))
+        _purge_unbound_vertex_groups(
+            generated_mesh, {bone["name"] for bone in build_spec.get("bones", [])}
+        )
         if remap_plan["unmapped_groups"]:
             mesh_warnings.append("unmapped_vertex_groups:{0}".format(mesh_name))
         if remap_plan["asam_targets_without_source_group"]:
@@ -528,6 +532,65 @@ def _apply_vertex_group_renames(mesh_obj, renames: List[dict]) -> None:
         else:
             # The fake exposes vertex_groups as a list[str]; mutate in place.
             groups[index] = new_name
+
+
+def _apply_weight_merges(mesh_obj, merges: List[dict]) -> None:
+    """Merge orphaned source vertex groups into their target ASAM group (#58).
+
+    Real Blender: ADD each source group's per-vertex weights into the target group (creating
+    it if absent), then remove the source group. Test fake (vertex_groups is a list[str]):
+    ensure the target name exists and drop the source name. No-op for sources absent on this
+    mesh.
+    """
+    if not merges:
+        return
+    groups = getattr(mesh_obj, "vertex_groups", None)
+    if groups is None:
+        return
+
+    is_fake = isinstance(groups, list) and (not groups or isinstance(groups[0], str))
+    if is_fake:
+        names = groups
+        for merge in merges:
+            src, tgt = merge["source"], merge["target"]
+            if src not in names:
+                continue
+            if tgt not in names:
+                names.append(tgt)
+            names.remove(src)
+        return
+
+    by_name = {g.name: g for g in groups}
+    for merge in merges:
+        src_name, tgt_name = merge["source"], merge["target"]
+        src = by_name.get(src_name)
+        if src is None:
+            continue
+        tgt = by_name.get(tgt_name)
+        if tgt is None:
+            tgt = mesh_obj.vertex_groups.new(name=tgt_name)
+            by_name[tgt_name] = tgt
+        for vert in mesh_obj.data.vertices:
+            for ge in vert.groups:
+                if ge.group == src.index:
+                    tgt.add([vert.index], min(1.0, ge.weight), "ADD")
+                    break
+        mesh_obj.vertex_groups.remove(src)
+        del by_name[src_name]
+
+
+def _purge_unbound_vertex_groups(mesh_obj, bone_names) -> None:
+    """Remove vertex groups whose name is not a bone in the generated armature (#58 cleanup).
+    Runs after renames + merges, so it only drops genuinely dead groups."""
+    groups = getattr(mesh_obj, "vertex_groups", None)
+    if groups is None:
+        return
+    if isinstance(groups, list) and (not groups or isinstance(groups[0], str)):
+        mesh_obj.vertex_groups = [name for name in groups if name in bone_names]
+        return
+    for group in list(groups):
+        if group.name not in bone_names:
+            mesh_obj.vertex_groups.remove(group)
 
 
 def _roll_axis_vector(axis):
