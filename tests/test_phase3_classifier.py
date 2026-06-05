@@ -1687,6 +1687,18 @@ class SingleSpineSplitTests(unittest.TestCase):
         self.assertNotEqual(sm["Lower_Spine"]["action"], "split_in_builder")
         self.assertNotEqual(sm["Upper_Spine"]["action"], "split_in_builder")
 
+    def test_single_spine_emits_split_action_in_build_plan(self):
+        asset_dir = self._single_spine_asset("single_spine_action")
+        _report, build_plan, _r, _pp = write_asset_report(asset_dir)
+        self.assertIn("split", build_plan["actions"])
+        self.assertEqual(
+            build_plan["actions"]["split"],
+            [{"source": "Spine", "lower_target": "Lower_Spine",
+              "upper_target": "Upper_Spine", "ratio": 0.5}],
+        )
+        rename_sources = {entry["source"] for entry in build_plan["actions"]["rename"]}
+        self.assertNotIn("Spine", rename_sources)
+
 
 if __name__ == "__main__":
     unittest.main()

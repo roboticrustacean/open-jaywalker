@@ -457,14 +457,29 @@ def classify_asset_folder(asset_dir: Path) -> Tuple[dict, dict]:
 
 
 def _build_actions(asam_targets: Dict[str, dict]) -> Dict[str, list]:
-    actions: Dict[str, list] = {"rename": [], "create": []}
+    actions: Dict[str, list] = {"rename": [], "create": [], "split": []}
+    split_pending: Dict[str, dict] = {}
     for target, payload in asam_targets.items():
         if target == "Root":
             continue
         if payload["action"] in {"direct_map", "alias_map"} and payload["source_bone"]:
             actions["rename"].append({"source": payload["source_bone"], "target": target})
+        elif payload["action"] == SPLIT_ACTION:
+            entry = split_pending.setdefault(
+                payload["source_bone"],
+                {"source": payload["source_bone"], "lower_target": None,
+                 "upper_target": None, "ratio": 0.5},
+            )
+            if payload.get("split_half") == "lower":
+                entry["lower_target"] = target
+            else:
+                entry["upper_target"] = target
         elif payload["action"] == "create_in_builder":
             actions["create"].append({"target": target, "parent": TARGET_PARENTS.get(target)})
+    actions["split"] = [
+        entry for entry in split_pending.values()
+        if entry["lower_target"] and entry["upper_target"]
+    ]
     return actions
 
 
