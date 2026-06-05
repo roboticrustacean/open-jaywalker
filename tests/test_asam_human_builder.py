@@ -2919,5 +2919,55 @@ class WeightMergePlanTests(unittest.TestCase):
         self.assertEqual(spec["weight_merges"], sorted(spec["weight_merges"], key=lambda m: (m["source"], m["target"])))
 
 
+def _minimal_report_and_plan(extra_mapping: dict):
+    """Return a valid (classifier_report, build_plan) pair with extra_mapping overlaid.
+
+    Starts from the full-baseline helpers (_base_classifier_report / _base_build_plan)
+    which already cover all 28 CORE_TARGETS, then overlays any entries in extra_mapping
+    so callers only need to supply the targets they care about.
+    """
+    report = _base_classifier_report()
+    plan = _base_build_plan()
+    for target, payload in extra_mapping.items():
+        report["semantic_mapping"][target] = payload
+    return report, plan
+
+
+class SingleSpineSplitBuilderTests(unittest.TestCase):
+    """The builder bisects a lone source spine bone: lower half -> Lower_Spine
+    (keeps the source bone's weights), upper half -> Upper_Spine (structural)."""
+
+    def _split_inputs(self):
+        source_bones = {
+            "Spine": {"name": "Spine", "parent": "Hips",
+                      "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.4], "length": 0.4},
+        }
+        def spine_payload(half):
+            return {"action": "split_in_builder", "source_bone": "Spine",
+                    "split_half": half, "confidence": 0.7, "notes": []}
+        report, plan = _minimal_report_and_plan(
+            extra_mapping={
+                "Lower_Spine": spine_payload("lower"),
+                "Upper_Spine": spine_payload("upper"),
+            },
+        )
+        return report, plan, source_bones
+
+    def test_split_creates_two_half_bones_at_midpoint(self):
+        report, plan, source_bones = self._split_inputs()
+        spec = build_armature_spec(report, plan, source_bones)
+        lower = _spec_bone(spec, "Lower_Spine")
+        upper = _spec_bone(spec, "Upper_Spine")
+        self.assertAlmostEqual(lower["tail"][2], upper["head"][2], places=5)
+        self.assertLess(lower["head"][2], lower["tail"][2])
+        self.assertLess(upper["head"][2], upper["tail"][2])
+        self.assertEqual(lower["geometry_source"], "source_bone")
+        self.assertEqual(lower["source_bone"], "Spine")
+        self.assertEqual(upper["geometry_source"], "split_spine_upper")
+        self.assertIsNone(upper["source_bone"])
+        self.assertEqual(lower["semantic_action"], "split_in_builder")
+        self.assertEqual(upper["semantic_action"], "split_in_builder")
+
+
 if __name__ == "__main__":
     unittest.main()

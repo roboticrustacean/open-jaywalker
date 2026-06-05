@@ -91,6 +91,13 @@ def _resolve_target_geometry(
         )
         return geometry, "centered_pelvis_pair", source_bone_name
 
+    if payload.get("action") == "split_in_builder":
+        split_geometry = _resolve_split_spine_geometry(
+            target_name, payload, source_bones, placement_metadata, warnings
+        )
+        if split_geometry is not None:
+            return split_geometry
+
     if payload.get("action") in RECOVERABLE_ACTIONS and source_bone_name in source_bones:
         return copy.deepcopy(source_bones[source_bone_name]), "source_bone", source_bone_name
 
@@ -282,6 +289,37 @@ def _resolve_root_geometry(
 
     geometry = _ensure_non_zero_geometry(head, tail, placement_metadata)
     return geometry, "root_resolution", source_bone_name
+
+
+def _resolve_split_spine_geometry(
+    target_name: str,
+    payload: dict,
+    source_bones: Dict[str, dict],
+    placement_metadata: dict,
+    warnings: List[str],
+) -> Optional[Tuple[dict, str, Optional[str]]]:
+    """Bisect a single source spine bone at its midpoint (issue #56).
+
+    Lower half -> Lower_Spine, tagged `source_bone` so the mesh's vertex group
+    renames onto it (weights consolidate on the lower half). Upper half ->
+    Upper_Spine, a synthesized structural bone (`split_spine_upper`, no source
+    bone) so the remap planner leaves it unweighted. Returns None when the source
+    bone is missing, so the caller falls through to ordinary synthesis."""
+    source_bone_name = payload.get("source_bone")
+    source_geometry = source_bones.get(source_bone_name) if source_bone_name else None
+    if source_geometry is None:
+        warnings.append("missing_split_source_geometry:{0}->{1}".format(target_name, source_bone_name))
+        return None
+
+    head = [float(v) for v in source_geometry["head"]]
+    tail = [float(v) for v in source_geometry["tail"]]
+    midpoint = [head[i] + 0.5 * (tail[i] - head[i]) for i in range(3)]
+
+    if payload.get("split_half") == "lower":
+        geometry = _ensure_non_zero_geometry(head, midpoint, placement_metadata)
+        return geometry, "source_bone", source_bone_name
+    geometry = _ensure_non_zero_geometry(midpoint, tail, placement_metadata)
+    return geometry, "split_spine_upper", None
 
 
 def _resolve_created_target_geometry(
