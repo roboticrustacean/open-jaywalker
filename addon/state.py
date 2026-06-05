@@ -17,6 +17,9 @@ class OJSettings(bpy.types.PropertyGroup):
     character_ids_csv: bpy.props.StringProperty(default="")
     is_crowd: bpy.props.BoolProperty(default=False)
     character_count: bpy.props.IntProperty(default=0)
+    build_succeeded: bpy.props.IntProperty(default=0)
+    build_failed: bpy.props.IntProperty(default=0)
+    failed_characters_csv: bpy.props.StringProperty(default="")
     packaging_mode: bpy.props.EnumProperty(
         name="Output",
         description="How to package the generated ASAM human(s)",
