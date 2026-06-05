@@ -412,7 +412,9 @@ def _span_central_chain(resolved_geometry, spec_bones, placement_metadata, grp_r
     """
     up = placement_metadata["up_axis"]
     up_index = int(up["index"])
-    up_sign = int(up.get("sign", 1)) or 1
+    # Trust the upstream validator's sign (consistent with geometry_resolution); a
+    # degenerate 0 yields a no-op Head extension caught by the zero-length guard.
+    up_sign = int(up.get("sign", 1))
 
     def _apply(target, new_tail):
         geom = resolved_geometry[target]

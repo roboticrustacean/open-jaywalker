@@ -2723,6 +2723,19 @@ class CentralChainSpanningTests(unittest.TestCase):
         spec = build_armature_spec(self._report_with_direct_central_chain(), plan, bones)
         _assert_vec_almost_equal(self, _spec_bone(spec, "Neck")["tail"], bones["Neck"]["tail"])
 
+    def test_spanned_tail_is_rebased_to_grp_root_local(self):
+        # With a non-zero Grp_Root origin, the spanned tail must be the child's source
+        # head expressed in Grp_Root-local coords (exercises the _to_grp_root_local write).
+        origin = [0.0, 0.0, 0.90]
+        plan = _base_build_plan()
+        plan["root_resolutions"][0]["grp_root_local_origin"] = list(origin)
+        spec = build_armature_spec(
+            self._report_with_direct_central_chain(), plan, self._short_nub_source_bones()
+        )
+        child_head = self._short_nub_source_bones()["Upper_Spine"]["head"]
+        expected = [child_head[i] - origin[i] for i in range(3)]
+        _assert_vec_almost_equal(self, _spec_bone(spec, "Lower_Spine")["tail"], expected)
+
 
 if __name__ == "__main__":
     unittest.main()
