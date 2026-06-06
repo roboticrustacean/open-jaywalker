@@ -104,5 +104,62 @@ class RunBuildPackagingTests(unittest.TestCase):
             self.assertIn("export_error", report)
 
 
+class RunBuildWarningTests(unittest.TestCase):
+    def test_single_character_warning_logged(self):
+        import io
+        spec = {"generated_collection_name": "ASAM_A", "name": "SPEC"}
+        resolved = {"crowd": False, "asset_name": "A", "specs": [spec]}
+        report_data = {
+            "asset_name": "A",
+            "targets_created_heuristically": ["Full_Fingers_Left", "Full_Fingers_Right"]
+        }
+        
+        f = io.StringIO()
+        with mock.patch("sys.stdout", new=f):
+            with mock.patch.object(build_runner, "build_character_specs_from_asset_dir", return_value=resolved), \
+                 mock.patch.object(build_runner, "build_armature_in_blender", return_value={"exec": True}), \
+                 mock.patch.object(build_runner, "write_builder_report", return_value=(report_data, Path("/x/builder_report.json"))), \
+                 mock.patch.object(build_runner, "print_builder_summary"):
+                build_runner.run_build(Path("/x"), bpy="BPY", packaging_mode="inplace_only")
+                
+        output = f.getvalue()
+        self.assertIn("WARNING: Synthesized inert bones added for compliance: Full_Fingers_Left, Full_Fingers_Right", output)
+
+    def test_crowd_warning_logged(self):
+        import io
+        resolved = {
+            "crowd": True,
+            "asset_name": "Crowd",
+            "wrapper_collection_name": "Crowd_Humans",
+            "decomposition": {"source_armature": "Root"},
+            "character_specs": [("c0", "SPEC0"), ("c1", "SPEC1")],
+        }
+        crowd_report = {
+            "characters": [
+                {
+                    "character_id": "c0",
+                    "targets_created_heuristically": ["Full_Fingers_Left"]
+                },
+                {
+                    "character_id": "c1",
+                    "targets_created_heuristically": ["Full_Toes_Right"]
+                }
+            ],
+            "failed_characters": []
+        }
+        
+        f = io.StringIO()
+        with mock.patch("sys.stdout", new=f):
+            with mock.patch.object(build_runner, "build_character_specs_from_asset_dir", return_value=resolved), \
+                 mock.patch.object(build_runner, "build_crowd_in_blender", return_value={"exec": True}), \
+                 mock.patch.object(build_runner, "build_crowd_builder_report", return_value=crowd_report), \
+                 mock.patch.object(build_runner, "write_crowd_builder_report", return_value=(crowd_report, Path("/x/builder_report.json"))):
+                build_runner.run_build(Path("/x"), bpy="BPY", packaging_mode="inplace_only")
+                
+        output = f.getvalue()
+        self.assertIn("WARNING: Character 'c0' has synthesized inert bones added for compliance: Full_Fingers_Left", output)
+        self.assertIn("WARNING: Character 'c1' has synthesized inert bones added for compliance: Full_Toes_Right", output)
+
+
 if __name__ == "__main__":
     unittest.main()

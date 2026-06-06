@@ -89,9 +89,23 @@ class OJ_PT_panel(bpy.types.Panel):
                     for cid in s.failed_characters_csv.split(", "):
                         if cid:
                             det.label(text="   - {0}".format(cid))
+                if s.synthesized_bones_by_character_csv:
+                    warn_box = res_box.box()
+                    warn_box.alert = True
+                    warn_box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+                    for line in s.synthesized_bones_by_character_csv.split(" | "):
+                        if line:
+                            warn_box.label(text="   {0}".format(line))
             else:
                 if s.build_succeeded > 0:
                     res_col.label(text="Successfully built character.", icon='CHECKMARK')
+                    if s.synthesized_bones_csv:
+                        warn_box = res_box.box()
+                        warn_box.alert = True
+                        warn_box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+                        for name in s.synthesized_bones_csv.split(", "):
+                            if name:
+                                warn_box.label(text="   - {0}".format(name))
                 else:
                     res_col.label(text="Build failed.", icon='ERROR')
 
