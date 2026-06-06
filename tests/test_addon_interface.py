@@ -20,6 +20,7 @@ class AddonInterfaceTests(unittest.TestCase):
         self.fake_bpy.app = types.ModuleType("bpy.app")
         self.fake_bpy.app.handlers = types.ModuleType("bpy.app.handlers")
         self.fake_bpy.app.handlers.persistent = lambda x: x  # decorator mock
+        self.fake_bpy.app.handlers.load_post = []
         
         self.fake_bpy.types = types.SimpleNamespace(
             Operator=object,
@@ -318,7 +319,9 @@ class AddonInterfaceTests(unittest.TestCase):
             show_details=False,
             export_blend=False,
             export_gltf=True,
-            per_character_export=False
+            per_character_export=False,
+            show_failed_details=True,
+            show_inert_details=True
         )
         mock_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=mock_settings))
         
@@ -384,7 +387,9 @@ class AddonInterfaceTests(unittest.TestCase):
             show_details=False,
             export_blend=False,
             export_gltf=True,
-            per_character_export=False
+            per_character_export=False,
+            show_failed_details=True,
+            show_inert_details=True
         )
         mock_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=mock_settings))
         
@@ -512,7 +517,9 @@ class AddonInterfaceTests(unittest.TestCase):
             export_blend=False,
             export_gltf=True,
             per_character_export=False,
-            show_generated_armature=True
+            show_generated_armature=True,
+            show_failed_details=False,
+            show_inert_details=False
         )
         ui_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=ui_settings))
         
@@ -521,6 +528,231 @@ class AddonInterfaceTests(unittest.TestCase):
         panel.draw(ui_context)
         
         self.assertIn((ui_settings, "show_generated_armature"), mock_layout.props_drawn)
+
+    def test_reset_pipeline_operator(self):
+        import tempfile
+        import shutil
+        
+        # Create a temp directory for mock assets
+        temp_dir = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, temp_dir)
+        
+        mock_settings = types.SimpleNamespace(
+            has_plan=True,
+            built=True,
+            show_details=True,
+            asset_dir=temp_dir,
+            recommended_armature="Rig",
+            mapped=15,
+            total=28,
+            missing_csv="some_missing",
+            missing_by_target_csv="some_target",
+            review_flags_csv="flags",
+            character_ids_csv="ids",
+            is_crowd=True,
+            character_count=5,
+            build_succeeded=4,
+            build_failed=1,
+            failed_characters_csv="char1",
+            synthesized_bones_csv="bone1",
+            synthesized_bones_by_character_csv="char1 (bone1)",
+            show_failed_details=True,
+            show_inert_details=True
+        )
+        mock_context = types.SimpleNamespace(
+            scene=types.SimpleNamespace(open_jaywalker=mock_settings)
+        )
+        
+        # Create dummy report files in asset_dir
+        reports = ["classifier_report.json", "build_plan.json", "builder_report.json"]
+        for report in reports:
+            with open(Path(temp_dir) / report, "w") as f:
+                f.write("{}")
+                
+        # Verify files exist
+        for report in reports:
+            self.assertTrue((Path(temp_dir) / report).exists())
+            
+        with mock.patch("addon.operators.purge_previous_generated_artifacts") as mock_purge:
+            reset_op = self.operators.OJ_OT_reset_pipeline()
+            reset_op.report = mock.Mock()
+            res = reset_op.execute(mock_context)
+            
+            self.assertEqual(res, {'FINISHED'})
+            mock_purge.assert_called_once()
+            
+        # Verify files are deleted
+        for report in reports:
+            self.assertFalse((Path(temp_dir) / report).exists())
+            
+        # Verify state properties are reset to default values
+        self.assertFalse(mock_settings.has_plan)
+        self.assertFalse(mock_settings.built)
+        self.assertFalse(mock_settings.show_details)
+        self.assertEqual(mock_settings.asset_dir, "")
+        self.assertEqual(mock_settings.recommended_armature, "")
+        self.assertEqual(mock_settings.mapped, 0)
+        self.assertEqual(mock_settings.total, 28)
+        self.assertEqual(mock_settings.missing_csv, "")
+        self.assertEqual(mock_settings.missing_by_target_csv, "")
+        self.assertEqual(mock_settings.review_flags_csv, "")
+        self.assertEqual(mock_settings.character_ids_csv, "")
+        self.assertFalse(mock_settings.is_crowd)
+        self.assertEqual(mock_settings.character_count, 0)
+        self.assertEqual(mock_settings.build_succeeded, 0)
+        self.assertEqual(mock_settings.build_failed, 0)
+        self.assertEqual(mock_settings.failed_characters_csv, "")
+        self.assertEqual(mock_settings.synthesized_bones_csv, "")
+        self.assertEqual(mock_settings.synthesized_bones_by_character_csv, "")
+        self.assertFalse(mock_settings.show_failed_details)
+        self.assertFalse(mock_settings.show_inert_details)
+
+    def test_load_post_handler_resets_properties(self):
+        # We need to test the load_post_handler defined in addon.__init__
+        if "addon" in sys.modules:
+            del sys.modules["addon"]
+        addon = importlib.import_module("addon")
+        
+        mock_settings = types.SimpleNamespace(
+            has_plan=True,
+            built=True,
+            show_details=True,
+            asset_dir="/some/path",
+            recommended_armature="Rig",
+            mapped=15,
+            total=28,
+            missing_csv="some_missing",
+            missing_by_target_csv="some_target",
+            review_flags_csv="flags",
+            character_ids_csv="ids",
+            is_crowd=True,
+            character_count=5,
+            build_succeeded=4,
+            build_failed=1,
+            failed_characters_csv="char1",
+            synthesized_bones_csv="bone1",
+            synthesized_bones_by_character_csv="char1 (bone1)",
+            show_failed_details=True,
+            show_inert_details=True
+        )
+        
+        # Set up fake_bpy.context
+        self.fake_bpy.context = types.SimpleNamespace(
+            scene=types.SimpleNamespace(open_jaywalker=mock_settings)
+        )
+        
+        # Call the load_post_handler
+        addon.load_post_handler(None, None)
+        
+        # Verify state properties are reset
+        self.assertFalse(mock_settings.has_plan)
+        self.assertFalse(mock_settings.built)
+        self.assertFalse(mock_settings.show_details)
+        self.assertEqual(mock_settings.asset_dir, "")
+        self.assertEqual(mock_settings.recommended_armature, "")
+        self.assertEqual(mock_settings.mapped, 0)
+        self.assertEqual(mock_settings.total, 28)
+        self.assertEqual(mock_settings.missing_csv, "")
+        self.assertEqual(mock_settings.missing_by_target_csv, "")
+        self.assertEqual(mock_settings.review_flags_csv, "")
+        self.assertEqual(mock_settings.character_ids_csv, "")
+        self.assertFalse(mock_settings.is_crowd)
+        self.assertEqual(mock_settings.character_count, 0)
+        self.assertEqual(mock_settings.build_succeeded, 0)
+        self.assertEqual(mock_settings.build_failed, 0)
+        self.assertEqual(mock_settings.failed_characters_csv, "")
+        self.assertEqual(mock_settings.synthesized_bones_csv, "")
+        self.assertEqual(mock_settings.synthesized_bones_by_character_csv, "")
+        self.assertFalse(mock_settings.show_failed_details)
+        self.assertFalse(mock_settings.show_inert_details)
+
+    def test_ui_draw_collapsible_sections_and_reset_button(self):
+        class MockLayout:
+            def __init__(self):
+                self.labels = []
+                self.operators = []
+                self.props = []
+                self.alert = False
+                
+            def separator(self, *args, **kwargs):
+                pass
+                
+            def label(self, text="", icon='NONE', *args, **kwargs):
+                self.labels.append((text, icon))
+                
+            def operator(self, name, icon='NONE', *args, **kwargs):
+                self.operators.append((name, icon))
+                
+            def prop(self, data, prop_name, text="", icon='NONE', emboss=True, *args, **kwargs):
+                self.props.append((prop_name, text, icon, emboss))
+                
+            def row(self, *args, **kwargs):
+                return self
+                
+            def box(self, *args, **kwargs):
+                return self
+                
+            def column(self, align=False, *args, **kwargs):
+                return self
+
+        # Test case 1: Crowd build failed and inert bones warning, collapsed state
+        mock_settings = types.SimpleNamespace(
+            built=True,
+            has_plan=True,
+            is_crowd=True,
+            build_succeeded=1,
+            build_failed=1,
+            failed_characters_csv="char_01",
+            synthesized_bones_csv="",
+            synthesized_bones_by_character_csv="char_01 (Full_Fingers_Left)",
+            asset_dir="/x",
+            recommended_armature="Rig",
+            mapped=28,
+            total=28,
+            missing_csv="",
+            missing_by_target_csv="",
+            review_flags_csv="",
+            character_ids_csv="",
+            character_count=2,
+            show_details=False,
+            export_blend=False,
+            export_gltf=True,
+            per_character_export=False,
+            show_failed_details=False,
+            show_inert_details=False
+        )
+        mock_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=mock_settings))
+        
+        mock_layout = MockLayout()
+        panel = self.ui.OJ_PT_panel()
+        panel.layout = mock_layout
+        panel.draw(mock_context)
+        
+        # Verify reset button is drawn
+        self.assertIn(("open_jaywalker.reset_pipeline", "LOOP_BACK"), mock_layout.operators)
+        
+        # Verify collapsible properties are drawn with TRIA_RIGHT icon (collapsed)
+        self.assertIn(("show_failed_details", "Failed Details", "TRIA_RIGHT", False), mock_layout.props)
+        self.assertIn(("show_inert_details", "Inert Bone Details", "TRIA_RIGHT", False), mock_layout.props)
+        
+        # Since details are false, the actual details shouldn't be drawn (e.g. mock_layout.labels should NOT contain character names or bone details)
+        self.assertNotIn(("   - char_01", "NONE"), mock_layout.labels)
+        
+        # Test case 2: expanded state
+        mock_settings.show_failed_details = True
+        mock_settings.show_inert_details = True
+        
+        mock_layout = MockLayout()
+        panel.layout = mock_layout
+        panel.draw(mock_context)
+        
+        # Verify collapsible properties are drawn with TRIA_DOWN icon (expanded)
+        self.assertIn(("show_failed_details", "Failed Details", "TRIA_DOWN", False), mock_layout.props)
+        self.assertIn(("show_inert_details", "Inert Bone Details", "TRIA_DOWN", False), mock_layout.props)
+        
+        # Verify the details are drawn
+        self.assertIn(("Failed characters:", "NONE"), mock_layout.labels)
+        self.assertIn(("   - char_01", "NONE"), mock_layout.labels)
 
 if __name__ == "__main__":
     unittest.main()

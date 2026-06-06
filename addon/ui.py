@@ -87,28 +87,49 @@ class OJ_PT_panel(bpy.types.Panel):
                 res_col.label(text="Succeeded: {0}".format(s.build_succeeded), icon='CHECKMARK')
                 if s.build_failed > 0:
                     res_col.label(text="Failed: {0}".format(s.build_failed), icon='ERROR')
-                    det = res_box.box()
-                    det.label(text="Failed characters:")
-                    for cid in s.failed_characters_csv.split(", "):
-                        if cid:
-                            det.label(text="   - {0}".format(cid))
+                    res_box.prop(
+                        s, "show_failed_details",
+                        text="Failed Details",
+                        icon=('TRIA_DOWN' if s.show_failed_details else 'TRIA_RIGHT'),
+                        emboss=False,
+                    )
+                    if s.show_failed_details:
+                        det = res_box.box()
+                        det.label(text="Failed characters:")
+                        for cid in s.failed_characters_csv.split(", "):
+                            if cid:
+                                det.label(text="   - {0}".format(cid))
                 if s.synthesized_bones_by_character_csv:
-                    warn_box = res_box.box()
-                    warn_box.alert = True
-                    warn_box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
-                    for line in s.synthesized_bones_by_character_csv.split(" | "):
-                        if line:
-                            warn_box.label(text="   {0}".format(line))
+                    res_box.prop(
+                        s, "show_inert_details",
+                        text="Inert Bone Details",
+                        icon=('TRIA_DOWN' if s.show_inert_details else 'TRIA_RIGHT'),
+                        emboss=False,
+                    )
+                    if s.show_inert_details:
+                        warn_box = res_box.box()
+                        warn_box.alert = True
+                        warn_box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+                        for line in s.synthesized_bones_by_character_csv.split(" | "):
+                            if line:
+                                warn_box.label(text="   {0}".format(line))
             else:
                 if s.build_succeeded > 0:
                     res_col.label(text="Successfully built character.", icon='CHECKMARK')
                     if s.synthesized_bones_csv:
-                        warn_box = res_box.box()
-                        warn_box.alert = True
-                        warn_box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
-                        for name in s.synthesized_bones_csv.split(", "):
-                            if name:
-                                warn_box.label(text="   - {0}".format(name))
+                        res_box.prop(
+                            s, "show_inert_details",
+                            text="Inert Bone Details",
+                            icon=('TRIA_DOWN' if s.show_inert_details else 'TRIA_RIGHT'),
+                            emboss=False,
+                        )
+                        if s.show_inert_details:
+                            warn_box = res_box.box()
+                            warn_box.alert = True
+                            warn_box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+                            for name in s.synthesized_bones_csv.split(", "):
+                                if name:
+                                    warn_box.label(text="   - {0}".format(name))
                 else:
                     res_col.label(text="Build failed.", icon='ERROR')
 
@@ -130,4 +151,5 @@ class OJ_PT_panel(bpy.types.Panel):
             layout.label(text="Run the pipeline to generate a plan.")
 
         layout.separator()
+        layout.operator("open_jaywalker.reset_pipeline", icon='LOOP_BACK')
         layout.operator("open_jaywalker.clean", icon='TRASH')

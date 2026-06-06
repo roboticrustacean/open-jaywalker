@@ -273,3 +273,48 @@ class OJ_OT_clean(bpy.types.Operator):
         s.show_generated_armature = True
         self.report({'INFO'}, "Removed {0} generated object(s)/collection(s).".format(removed))
         return {'FINISHED'}
+
+
+class OJ_OT_reset_pipeline(bpy.types.Operator):
+    bl_idname = "open_jaywalker.reset_pipeline"
+    bl_label = "Reset pipeline"
+    bl_description = "Clear all pipeline settings, generated reports on disk, and clean rigs/collections"
+
+    def execute(self, context):
+        purge_previous_generated_artifacts(bpy)
+        s = context.scene.open_jaywalker
+        
+        if s.asset_dir:
+            path = Path(s.asset_dir)
+            if path.exists() and path.is_dir():
+                for filename in ["classifier_report.json", "build_plan.json", "builder_report.json"]:
+                    file_path = path / filename
+                    if file_path.exists():
+                        try:
+                            file_path.unlink()
+                        except Exception:
+                            pass
+                            
+        s.has_plan = False
+        s.built = False
+        s.show_details = False
+        s.asset_dir = ""
+        s.recommended_armature = ""
+        s.mapped = 0
+        s.total = 28
+        s.missing_csv = ""
+        s.missing_by_target_csv = ""
+        s.review_flags_csv = ""
+        s.character_ids_csv = ""
+        s.is_crowd = False
+        s.character_count = 0
+        s.build_succeeded = 0
+        s.build_failed = 0
+        s.failed_characters_csv = ""
+        s.synthesized_bones_csv = ""
+        s.synthesized_bones_by_character_csv = ""
+        s.show_failed_details = False
+        s.show_inert_details = False
+        
+        self.report({'INFO'}, "Pipeline reset: rigs purged, reports cleared, state reset.")
+        return {'FINISHED'}
