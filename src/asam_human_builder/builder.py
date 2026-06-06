@@ -657,28 +657,50 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
                 "parent": "Hip",
             }
         )
-    # Build lookup map: source_bone_name -> final_bone_name
+    # Materialize only extras that actually skin the mesh. The classifier flags every
+    # non-core source bone as an extra, which for a control rig (Rigify) includes
+    # hundreds of non-deforming MCH-/VIS-/IK/FK bones. Adding those to the generated
+    # armature clutters it with stray (often long pole) bones that deform nothing - the
+    # #88 "spiky build" regression. The durable rule is to build from what the mesh is
+    # weighted to, so an extra is preserved only when it carries skin weight.
+    mesh_binding = build_plan.get("mesh_binding", {})
+    kept_extra_names = [
+        extra.get("bone_name")
+        for extra in spec["extras_preserved"]
+        if extra.get("bone_name") in source_bones
+        and _bone_has_skin_weight(extra.get("bone_name"), mesh_binding)
+    ]
+
+    # Map source bone name -> final (in-armature) bone name: core/pelvis/root bones
+    # already in spec["bones"], plus the kept extras (which keep their own names).
     source_to_final_name = {}
     for bone in spec["bones"]:
         src_name = bone.get("source_bone")
         if src_name:
             source_to_final_name[src_name] = bone["name"]
-    for extra in spec["extras_preserved"]:
-        extra_name = extra.get("bone_name")
-        if extra_name:
-            source_to_final_name[extra_name] = extra_name
+    for extra_name in kept_extra_names:
+        source_to_final_name[extra_name] = extra_name
 
-    for extra in spec["extras_preserved"]:
-        extra_name = extra.get("bone_name")
-        if not extra_name or extra_name not in source_bones:
-            continue
+    def _resolve_extra_parent(parent_name):
+        # Walk up the source parent chain to the nearest bone that exists in the
+        # generated armature, so a kept extra never dangles off a dropped parent.
+        seen = set()
+        current = parent_name
+        while current and current not in seen:
+            seen.add(current)
+            mapped = source_to_final_name.get(current)
+            if mapped:
+                return mapped
+            geom = source_bones.get(current)
+            current = geom.get("parent") if geom else None
+        return None
+
+    for extra_name in kept_extra_names:
         geom = source_bones[extra_name]
-        parent_name = geom.get("parent")
-        final_parent = source_to_final_name.get(parent_name) if parent_name else None
         spec["bones"].append(
             {
                 "name": extra_name,
-                "parent_bone": final_parent,
+                "parent_bone": _resolve_extra_parent(geom.get("parent")),
                 "head": _to_grp_root_local(geom["head"], grp_root_local_origin),
                 "tail": _to_grp_root_local(geom["tail"], grp_root_local_origin),
                 "use_connect": False,

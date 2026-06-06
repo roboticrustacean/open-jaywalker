@@ -950,6 +950,35 @@ class AsamHumanBuilderTests(unittest.TestCase):
             self.assertEqual(preserved_bone["source_bone"], source_name)
             self.assertEqual(preserved_bone["semantic_action"], "preserve_paired_pelvis")
 
+    def test_preserved_extras_only_materialize_mesh_driving_bones(self):
+        """Regression for #88: only extras that actually skin the mesh become bones.
+
+        The Rigify LowPolyCharacter4 rig flags 153 extras, but 140+ of them are
+        non-deforming control/mechanism/pole bones (MCH-/VIS-/IK/FK). Materializing
+        those into the generated armature clutters it with stray (often long pole)
+        bones - the "spiky" build. The durable rule (CLAUDE.md) is to build from what
+        the mesh is weighted to, so a preserved extra must carry skin weight, and its
+        parent must be a bone that actually exists in the generated armature.
+        """
+        from asam_human_builder.builder import _bone_has_skin_weight
+
+        asset_dir = _copy_asset_folder("LowPolyCharacter4")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+
+        extra_bones = [b for b in build_spec["bones"] if b.get("semantic_action") == "preserve_extra"]
+        # The legitimate mesh-driving extras (DEF- segments + Hair) survive.
+        self.assertGreater(len(extra_bones), 0)
+
+        # No non-deforming control/mechanism/visualization bones leak in.
+        leaked = [b["name"] for b in extra_bones if not _bone_has_skin_weight(b["source_bone"], build_plan["mesh_binding"])]
+        self.assertEqual(leaked, [], "non-mesh-driving extras must not become bones")
+
+        # Every materialized extra parents onto a bone that exists in the armature.
+        all_names = {b["name"] for b in build_spec["bones"]}
+        orphans = [b["name"] for b in extra_bones if b["parent_bone"] is not None and b["parent_bone"] not in all_names]
+        self.assertEqual(orphans, [], "preserved extras must not have dangling parents")
+
     def test_lowpoly_central_chain_is_monotonic_and_continuous(self):
         # Regression for #73: the spanned central chain Hip -> Lower_Spine ->
         # Upper_Spine -> Neck -> Head on the real LowPolyCharacter4 rig must render as
@@ -3571,7 +3600,14 @@ class EyeFingerDispatchTests(unittest.TestCase):
         plan["extras_preserved"] = [
             {"bone_name": "DEF-hair", "reason": "named_extra", "origin": "primary", "role": "deform"}
         ]
-        
+        # DEF-hair represents a real hair bone that skins a hair mesh, so it must
+        # report skin weight for the build to materialize it (mesh-driven rule).
+        plan["mesh_binding"]["meshes"][0]["vertex_groups"] = ["DEF-hair"]
+        plan["mesh_binding"]["meshes"][0]["vertex_group_stats"] = {
+            "non_empty_group_count": 1,
+            "per_group": [{"name": "DEF-hair", "weighted_vertex_count": 9}],
+        }
+
         # Lower_Arm_Left is mapped to DEF-forearm.L
         report["semantic_mapping"]["Lower_Arm_Left"]["action"] = "direct_map"
         report["semantic_mapping"]["Lower_Arm_Left"]["source_bone"] = "DEF-forearm.L"
