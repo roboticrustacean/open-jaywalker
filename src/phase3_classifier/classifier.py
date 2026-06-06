@@ -610,6 +610,7 @@ def classify_armature(asset_name: str, armature_input: ArmatureInput) -> dict:
     resolved_targets = _resolve_targets(target_candidates, context)
     _reconcile_hip_to_spine_pivot(resolved_targets, context)
     _plan_single_spine_split(resolved_targets, context)
+    _demote_neck_coincident_upper_spine(resolved_targets, context)
     root_resolution = _resolve_root_compliance(resolved_targets, target_candidates.get("Root", []), context)
     mapped_bones = {
         payload["source_bone"]
