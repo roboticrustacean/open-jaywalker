@@ -873,7 +873,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertFalse(edit_bones["Full_Thumb_Left"].hide, "Mapped extremity bone should remain visible")
         self.assertFalse(edit_bones["Hip"].hide, "Non-extremity bones should remain visible even when heuristic")
 
-    def test_lowpoly_fixture_creates_new_root_and_preserves_extras(self):
+    def test_lowpoly_fixture_creates_new_root_and_collapses_extras(self):
         asset_dir = _copy_asset_folder("LowPolyCharacter4")
         write_asset_report(asset_dir)
 
@@ -881,6 +881,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
 
         self.assertEqual(build_plan["root_resolutions"][0]["mode"], "create_new_root")
         self.assertEqual(build_spec["source_armature_name"], "rig")
+        # The classifier still flags the non-core bones (for the report/traceability).
         self.assertGreater(len(build_spec["extras_preserved"]), 0)
 
         # Root preservation is disabled: the generated armature must contain exactly
@@ -892,12 +893,13 @@ class AsamHumanBuilderTests(unittest.TestCase):
             [],
         )
 
-        # Verify that preserved extra bones are added to build_spec["bones"]
+        # No extras are materialized as bones; their weights collapse into core via
+        # the single weight_merges mechanism (e.g. the baked-in hair bone -> core).
         extra_bones = [bone for bone in build_spec["bones"] if bone.get("semantic_action") == "preserve_extra"]
-        self.assertGreater(len(extra_bones), 0)
-        hair_bone = _spec_bone(build_spec, "Hair_Front")
-        self.assertEqual(hair_bone["parent_bone"], "DEF-spine.006")
-        self.assertEqual(hair_bone["semantic_action"], "preserve_extra")
+        self.assertEqual(extra_bones, [])
+        merges = {m["source"]: m["target"] for m in build_spec["weight_merges"]}
+        self.assertIn("Hair_Front", merges)
+        self.assertIn(merges["Hair_Front"], set(CORE_TARGETS))
 
         root_bone = _spec_bone(build_spec, "Root")
         self.assertEqual(root_bone["geometry_source"], "root_resolution")
@@ -949,6 +951,39 @@ class AsamHumanBuilderTests(unittest.TestCase):
             self.assertEqual(preserved_bone["geometry_source"], "source_bone")
             self.assertEqual(preserved_bone["source_bone"], source_name)
             self.assertEqual(preserved_bone["semantic_action"], "preserve_paired_pelvis")
+
+    def test_non_core_deform_extras_collapse_into_core(self):
+        """#88 regression: non-core source bones are NOT materialized as bones; a
+        single mechanism (weight_merges) consolidates their skin weights into core.
+
+        The Rigify LowPolyCharacter4 rig flags 153 extras (140+ non-deforming
+        MCH-/VIS-/IK/FK control bones). Materializing them filled the clean ASAM
+        armature with stray (often long pole) bones - the "spiky" build - and even the
+        mesh-driving subdivisions overlapped with weight_merges, leaving weightless
+        clutter. The coherent rule: the 28 core is the skeleton, every non-core deform
+        weight is merged into core (lossless), control bones never appear. Genuine
+        separate-mesh decorators are a future additive feature (ASAM Hair_/Clothing_
+        containers).
+        """
+        asset_dir = _copy_asset_folder("LowPolyCharacter4")
+        write_asset_report(asset_dir)
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+
+        # No extras are materialized as bones - one mechanism, no conflict.
+        extra_bones = [b for b in build_spec["bones"] if b.get("semantic_action") == "preserve_extra"]
+        self.assertEqual(extra_bones, [])
+
+        # No non-deforming control/mechanism/visualization bone leaks in.
+        names = {b["name"] for b in build_spec["bones"]}
+        self.assertEqual([n for n in names if n.startswith(("MCH-", "VIS-", "ORG-"))], [])
+
+        # Every non-core deform bone's weights are consolidated into a core target,
+        # so no skin weight is lost (spine subdivisions, twist bones, baked-in hair).
+        merges = {m["source"]: m["target"] for m in build_spec["weight_merges"]}
+        core = set(CORE_TARGETS)
+        for src in ("DEF-spine.006", "DEF-spine.002", "DEF-forearm.L.001", "Hair_Front"):
+            self.assertIn(src, merges, "{0} weights must be consolidated".format(src))
+            self.assertIn(merges[src], core, "{0} must merge into a core bone".format(src))
 
     def test_lowpoly_central_chain_is_monotonic_and_continuous(self):
         # Regression for #73: the spanned central chain Hip -> Lower_Spine ->
@@ -2684,12 +2719,12 @@ class SuccessMessageTests(unittest.TestCase):
         report = {
             "asset_name": "LowPolyCharacter4",
             "built_core_targets": ["Hip"] * 28,
-            "preserved_extras_count": 153,
+            "merged_extra_deform_count": 12,
         }
         msg = success_message(report, "/out/builder_report.json")
         self.assertIn("LowPolyCharacter4", msg)
         self.assertIn("28 core targets", msg)
-        self.assertIn("153 extras", msg)
+        self.assertIn("12 extra deform", msg)
         self.assertIn("/out/builder_report.json", msg)
 
     def test_crowd_message(self):
@@ -3562,39 +3597,43 @@ class EyeFingerDispatchTests(unittest.TestCase):
         self.assertEqual(source, "source_bone")   # direct map, not eye_anchored
         self.assertEqual(bone, "L_eye")
 
-    def test_build_armature_spec_preserves_extras(self):
+    def test_build_armature_spec_collapses_extras_into_core(self):
         from asam_human_builder.builder import build_armature_spec
         report = _base_classifier_report()
         plan = _base_build_plan()
-        
-        # Add an extra bone in extras_preserved
+
+        # A non-core deform bone (a hair bone skinning the body mesh).
         plan["extras_preserved"] = [
             {"bone_name": "DEF-hair", "reason": "named_extra", "origin": "primary", "role": "deform"}
         ]
-        
+        plan["mesh_binding"]["meshes"][0]["vertex_groups"] = ["DEF-hair"]
+        plan["mesh_binding"]["meshes"][0]["vertex_group_stats"] = {
+            "non_empty_group_count": 1,
+            "per_group": [{"name": "DEF-hair", "weighted_vertex_count": 9}],
+        }
+
         # Lower_Arm_Left is mapped to DEF-forearm.L
         report["semantic_mapping"]["Lower_Arm_Left"]["action"] = "direct_map"
         report["semantic_mapping"]["Lower_Arm_Left"]["source_bone"] = "DEF-forearm.L"
-        
-        # Set up source bones: DEF-hair has parent DEF-forearm.L
+
+        # DEF-hair has parent DEF-forearm.L (which maps to the core Lower_Arm_Left).
         source_bones = {
             "DEF-forearm.L": _bone("DEF-forearm.L", "DEF-upper_arm.L", (0.0, 0.0, 1.0), (0.0, 0.0, 1.5)),
             "DEF-hair": _bone("DEF-hair", "DEF-forearm.L", (0.0, 0.0, 1.5), (0.0, 0.0, 2.0)),
         }
-        
+
         spec = build_armature_spec(report, plan, source_bones)
-        
-        # Verify extras_preserved contains DEF-hair
+
+        # The classifier's extras list is carried through for the report...
         self.assertEqual(len(spec["extras_preserved"]), 1)
         self.assertEqual(spec["extras_preserved"][0]["bone_name"], "DEF-hair")
-        
-        # Verify the bone was added to spec["bones"]
-        extra_bone = next((b for b in spec["bones"] if b["name"] == "DEF-hair"), None)
-        self.assertIsNotNone(extra_bone)
-        self.assertEqual(extra_bone["source_bone"], "DEF-hair")
-        self.assertEqual(extra_bone["parent_bone"], "Lower_Arm_Left")  # Resolved parent to mapped target name
-        self.assertEqual(extra_bone["semantic_action"], "preserve_extra")
-        self.assertEqual(extra_bone["geometry_source"], "source_bone")
+
+        # ...but DEF-hair is NOT materialized as a bone.
+        self.assertIsNone(next((b for b in spec["bones"] if b["name"] == "DEF-hair"), None))
+
+        # Its skin weights collapse into the core target its parent maps to.
+        merges = {m["source"]: m["target"] for m in spec["weight_merges"]}
+        self.assertEqual(merges.get("DEF-hair"), "Lower_Arm_Left")
 
 
 if __name__ == "__main__":

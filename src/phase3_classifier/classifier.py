@@ -586,7 +586,7 @@ def print_console_summary(report: dict, plan: dict, report_path: Path, plan_path
         else:
             print("  (none)")
     print("Ambiguous targets: {0}".format(", ".join(item["target"] for item in report["ambiguous_targets"]) or "(none)"))
-    print("Preserved extras count: {0}".format(len(plan["extras_preserved"])))
+    print("Non-core bones flagged as extras: {0}".format(len(plan["extras_preserved"])))
     print("Report written to: {0}".format(report_path))
     print("Build plan written to: {0}".format(plan_path))
 
