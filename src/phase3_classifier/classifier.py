@@ -1486,6 +1486,69 @@ def _plan_single_spine_split(resolved_targets: Dict[str, dict], context: dict) -
             payload["notes"].append("single_spine_geometric_split")
 
 
+def _demote_neck_coincident_upper_spine(resolved_targets: Dict[str, dict], context: dict) -> None:
+    """Keep ASAM Upper_Spine strictly below Neck (issue #73).
+
+    On some rigs the spine-segment chosen for Upper_Spine has its head on the very
+    joint the Neck bone starts from (e.g. Rigify `DEF-spine.004` head == `neck` head),
+    so the two bones share a joint and render overlapping. The structural channel cannot
+    see this — the colliding joint belongs to the parallel name-alias Neck bone, not the
+    structural spine column — so we enforce the invariant here, after both targets have
+    resolved to concrete source bones.
+
+    When Upper_Spine's source head is not strictly below Neck's source head along the up
+    axis, re-point Upper_Spine to the nearest ancestor spine segment whose head IS strictly
+    below Neck (without stealing Lower_Spine's source). If no such segment exists, leave the
+    mapping unchanged and annotate it for review. Only acts on directly-mapped spine
+    segments; split/created/review mappings are left alone. Mutates `resolved_targets`."""
+    upper = resolved_targets.get("Upper_Spine", {})
+    neck = resolved_targets.get("Neck", {})
+    if upper.get("action") not in {"direct_map", "alias_map"}:
+        return
+    if neck.get("action") not in {"direct_map", "alias_map"}:
+        return
+
+    bones = context["bones"]
+    upper_bone = bones.get(upper.get("source_bone"))
+    neck_bone = bones.get(neck.get("source_bone"))
+    if upper_bone is None or neck_bone is None:
+        return
+
+    up = context["height_axis"]
+    sign = context["height_sign"]
+    eps = 1e-4
+    neck_h = neck_bone.head[up] * sign
+
+    # Already strictly below the neck joint -> nothing to do.
+    if upper_bone.head[up] * sign < neck_h - eps:
+        return
+
+    lower_source = resolved_targets.get("Lower_Spine", {}).get("source_bone")
+
+    # Walk up the source parent chain to the nearest ancestor strictly below the neck.
+    chosen = None
+    node = upper_bone.parent
+    while node is not None:
+        if node == lower_source:
+            break  # don't collide with Lower_Spine; treat as degenerate
+        candidate = bones.get(node)
+        if candidate is None:
+            break
+        if candidate.head[up] * sign < neck_h - eps:
+            chosen = node
+            break
+        node = candidate.parent
+
+    if chosen is None:
+        if "neck_coincident_upper_spine_unresolved" not in upper["notes"]:
+            upper["notes"].append("neck_coincident_upper_spine_unresolved")
+        return
+
+    upper["source_bone"] = chosen
+    if "neck_coincident_upper_spine_demoted" not in upper["notes"]:
+        upper["notes"].append("neck_coincident_upper_spine_demoted")
+
+
 def _build_review_flags(resolved_targets: Dict[str, dict], root_resolution: dict, context: dict) -> List[str]:
     flags: Set[str] = set()
     actual_roots = [bone for bone in context["bones"].values() if bone.parent is None]
