@@ -892,6 +892,13 @@ class AsamHumanBuilderTests(unittest.TestCase):
             [],
         )
 
+        # Verify that preserved extra bones are added to build_spec["bones"]
+        extra_bones = [bone for bone in build_spec["bones"] if bone.get("semantic_action") == "preserve_extra"]
+        self.assertGreater(len(extra_bones), 0)
+        hair_bone = _spec_bone(build_spec, "Hair_Front")
+        self.assertEqual(hair_bone["parent_bone"], "DEF-spine.006")
+        self.assertEqual(hair_bone["semantic_action"], "preserve_extra")
+
         root_bone = _spec_bone(build_spec, "Root")
         self.assertEqual(root_bone["geometry_source"], "root_resolution")
         self.assertEqual(root_bone["source_bone"], "root")
@@ -3554,6 +3561,40 @@ class EyeFingerDispatchTests(unittest.TestCase):
         )
         self.assertEqual(source, "source_bone")   # direct map, not eye_anchored
         self.assertEqual(bone, "L_eye")
+
+    def test_build_armature_spec_preserves_extras(self):
+        from asam_human_builder.builder import build_armature_spec
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        
+        # Add an extra bone in extras_preserved
+        plan["extras_preserved"] = [
+            {"bone_name": "DEF-hair", "reason": "named_extra", "origin": "primary", "role": "deform"}
+        ]
+        
+        # Lower_Arm_Left is mapped to DEF-forearm.L
+        report["semantic_mapping"]["Lower_Arm_Left"]["action"] = "direct_map"
+        report["semantic_mapping"]["Lower_Arm_Left"]["source_bone"] = "DEF-forearm.L"
+        
+        # Set up source bones: DEF-hair has parent DEF-forearm.L
+        source_bones = {
+            "DEF-forearm.L": _bone("DEF-forearm.L", "DEF-upper_arm.L", (0.0, 0.0, 1.0), (0.0, 0.0, 1.5)),
+            "DEF-hair": _bone("DEF-hair", "DEF-forearm.L", (0.0, 0.0, 1.5), (0.0, 0.0, 2.0)),
+        }
+        
+        spec = build_armature_spec(report, plan, source_bones)
+        
+        # Verify extras_preserved contains DEF-hair
+        self.assertEqual(len(spec["extras_preserved"]), 1)
+        self.assertEqual(spec["extras_preserved"][0]["bone_name"], "DEF-hair")
+        
+        # Verify the bone was added to spec["bones"]
+        extra_bone = next((b for b in spec["bones"] if b["name"] == "DEF-hair"), None)
+        self.assertIsNotNone(extra_bone)
+        self.assertEqual(extra_bone["source_bone"], "DEF-hair")
+        self.assertEqual(extra_bone["parent_bone"], "Lower_Arm_Left")  # Resolved parent to mapped target name
+        self.assertEqual(extra_bone["semantic_action"], "preserve_extra")
+        self.assertEqual(extra_bone["geometry_source"], "source_bone")
 
 
 if __name__ == "__main__":

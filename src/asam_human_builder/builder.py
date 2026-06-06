@@ -657,6 +657,36 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
                 "parent": "Hip",
             }
         )
+    # Build lookup map: source_bone_name -> final_bone_name
+    source_to_final_name = {}
+    for bone in spec["bones"]:
+        src_name = bone.get("source_bone")
+        if src_name:
+            source_to_final_name[src_name] = bone["name"]
+    for extra in spec["extras_preserved"]:
+        extra_name = extra.get("bone_name")
+        if extra_name:
+            source_to_final_name[extra_name] = extra_name
+
+    for extra in spec["extras_preserved"]:
+        extra_name = extra.get("bone_name")
+        if not extra_name or extra_name not in source_bones:
+            continue
+        geom = source_bones[extra_name]
+        parent_name = geom.get("parent")
+        final_parent = source_to_final_name.get(parent_name) if parent_name else None
+        spec["bones"].append(
+            {
+                "name": extra_name,
+                "parent_bone": final_parent,
+                "head": _to_grp_root_local(geom["head"], grp_root_local_origin),
+                "tail": _to_grp_root_local(geom["tail"], grp_root_local_origin),
+                "use_connect": False,
+                "geometry_source": "source_bone",
+                "source_bone": extra_name,
+                "semantic_action": "preserve_extra",
+            }
+        )
 
     return spec
 
