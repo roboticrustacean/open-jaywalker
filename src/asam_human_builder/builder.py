@@ -675,6 +675,10 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
         if _bone_has_skin_weight(merge["source"], mesh_binding)
     )
 
+    spec["body_mesh_name"] = _select_body_mesh(
+        mesh_binding, spec["bones"], spec["weight_merges"]
+    )
+
     return spec
 
 
@@ -814,6 +818,50 @@ def _bone_has_skin_weight(source_bone_name: str, mesh_binding: dict) -> bool:
             except (TypeError, ValueError):
                 continue
     return False
+
+
+def _select_body_mesh(mesh_binding, spec_bones, weight_merges):
+    """Pick the body mesh by weighted core coverage (name-free). Returns a mesh_name or None.
+
+    Body score = number of a mesh's vertex groups that have weighted_vertex_count > 0 AND
+    resolve to a core target (the group is a core target's source_bone, is itself a core
+    target name, or maps to a core target via weight_merges). Tie-break by total weighted
+    vertices, then by mesh_name (deterministic). Returns None when no mesh scores > 0.
+    """
+    core_sources = set()
+    for bone in spec_bones or []:
+        if bone.get("name") in CORE_TARGETS:
+            core_sources.add(bone["name"])
+            if bone.get("source_bone"):
+                core_sources.add(bone["source_bone"])
+    for merge in weight_merges or []:
+        if merge.get("target") in CORE_TARGETS:
+            core_sources.add(merge.get("source"))
+
+    candidates = []
+    for mesh in (mesh_binding or {}).get("meshes", []) or []:
+        name = mesh.get("mesh_name")
+        if not name:
+            continue
+        score = 0
+        total = 0
+        stats = mesh.get("vertex_group_stats") or {}
+        for group in stats.get("per_group", []) or []:
+            try:
+                count = int(group.get("weighted_vertex_count") or 0)
+            except (TypeError, ValueError):
+                count = 0
+            if count <= 0:
+                continue
+            total += count
+            if group.get("name") in core_sources:
+                score += 1
+        if score > 0:
+            candidates.append((score, total, name))
+    if not candidates:
+        return None
+    candidates.sort(key=lambda c: (-c[0], -c[1], c[2]))
+    return candidates[0][2]
 
 
 def _resolve_preserved_pelvis_pair(

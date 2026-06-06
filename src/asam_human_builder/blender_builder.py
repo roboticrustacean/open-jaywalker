@@ -120,6 +120,7 @@ def build_armature_in_blender(build_spec: dict, bpy_module=None, parent_collecti
         collection,
         source_armature,
         armature_object,
+        group_root,
         character_prefix,
         placement_delta,
     )
@@ -358,6 +359,7 @@ def _duplicate_bound_meshes(
     collection,
     source_armature,
     generated_armature,
+    group_root,
     character_prefix=None,
     placement_delta=(0.0, 0.0, 0.0),
 ) -> dict:
@@ -382,12 +384,19 @@ def _duplicate_bound_meshes(
             skipped_meshes.append({"mesh_name": mesh_name, "reason": "source_object_not_mesh"})
             continue
 
+        is_body = mesh_name == build_spec.get("body_mesh_name")
+        base_name = (
+            "Body_{0}".format(build_spec["asset_name"])
+            if is_body
+            else "ASAM_{0}".format(source_mesh.name)
+        )
         generated_mesh = _copy_mesh_object(
             bpy_module,
             source_mesh,
             build_spec["asset_name"],
             collection,
-            generated_armature,
+            group_root,
+            base_name,
             placement_delta,
         )
         retargeted = _retarget_armature_modifiers(generated_mesh, source_armature, generated_armature)
@@ -423,6 +432,8 @@ def _duplicate_bound_meshes(
                 "generated_mesh_name": generated_mesh.name,
                 "armature_link": record.get("armature_link"),
                 "retargeted_armature_modifiers": retargeted,
+                "role": "body" if is_body else "extra",
+                "parent": group_root.name,
                 "vertex_group_remap": {
                     "renamed": remap_plan["renames"],
                     "unmapped": remap_plan["unmapped_groups"],
@@ -448,6 +459,7 @@ def _copy_mesh_object(
     asset_name: str,
     collection,
     parent_object,
+    base_name: str,
     placement_delta=(0.0, 0.0, 0.0),
 ):
     """Duplicate a mesh object, parent it to parent_object, and place it on its rig.
@@ -461,9 +473,9 @@ def _copy_mesh_object(
     """
     generated_mesh = source_mesh.copy()
     generated_mesh.name = _resolve_unique_name(
-        "ASAM_{0}".format(source_mesh.name),
+        base_name,
         lambda name: bpy_module.data.objects.get(name) is not None,
-        ["ASAM_{0}_Generated".format(source_mesh.name)],
+        ["{0}_Generated".format(base_name)],
     )
     if getattr(source_mesh, "data", None) is not None:
         generated_mesh.data = source_mesh.data.copy()
@@ -475,7 +487,7 @@ def _copy_mesh_object(
     generated_mesh[GENERATED_MARKER_KEY] = True
     generated_mesh[GENERATED_ASSET_KEY] = asset_name
     collection.objects.link(generated_mesh)
-    # Parent to the generated armature (one level below group_root) to match ASAM hierarchy.
+    # Parent to Grp_Root (sibling of the armature) per the ASAM geometry-container hierarchy.
     generated_mesh.parent = parent_object
     if world_matrix is not None:
         generated_mesh.matrix_world = _translated_matrix(world_matrix, placement_delta)

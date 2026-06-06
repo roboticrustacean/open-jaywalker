@@ -707,11 +707,11 @@ class AsamHumanBuilderTests(unittest.TestCase):
                 bpy_module.data.objects.get("Armature"),
             )
             mesh.matrix_world = ("source_world", mesh_record["mesh_name"])
-        build_armature_in_blender(build_spec, bpy_module)
-        for mesh_record in build_plan["mesh_binding"]["meshes"]:
-            generated = bpy_module.data.objects.get("ASAM_{0}".format(mesh_record["mesh_name"]))
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+        for dup in execution_result["duplicated_meshes"]:
+            generated = bpy_module.data.objects.get(dup["generated_mesh_name"])
             self.assertIsNotNone(generated)
-            self.assertEqual(generated.matrix_world, ("source_world", mesh_record["mesh_name"]))
+            self.assertEqual(generated.matrix_world, ("source_world", dup["source_mesh_name"]))
 
     def test_synthesized_path_preserves_source_root_as_sibling_extra(self):
         """When mode == create_new_root and preserve_source_root_as_extra is true,
@@ -1600,6 +1600,20 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(builder_report["grp_root_location"], spec["grp_root_world_location"])
         self.assertIsNone(builder_report["applied_grid_offset"])
 
+    def test_select_body_mesh_picks_broadest_weighted_core_coverage(self):
+        # openmatexamplehuman: Body_Human is weighted across the core skeleton (27),
+        # decorators only on a few bones (6/1/1) -> Body_Human is the body mesh.
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, _, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        self.assertEqual(build_spec["body_mesh_name"], "Body_Human")
+
+    def test_select_body_mesh_lowpoly_single_mesh(self):
+        asset_dir = _copy_asset_folder("LowPolyCharacter4")
+        write_asset_report(asset_dir)
+        _, _, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        self.assertEqual(build_spec["body_mesh_name"], "Cube")
+
 
 class CrowdNamingTests(unittest.TestCase):
     def test_apply_character_naming_overrides_generated_names(self):
@@ -1776,8 +1790,9 @@ class CrowdNamingTests(unittest.TestCase):
         generated_armature = bpy_module.data.objects.get(execution_result["generated_armature_name"])
         self.assertIsNotNone(generated_mesh)
         self.assertIn(generated_mesh, generated_collection.all_objects)
-        # Meshes must be children of the generated armature (ASAM hierarchy), not group_root.
-        self.assertIs(generated_mesh.parent, generated_armature)
+        # Meshes are siblings under Grp_Root (ASAM geometry-container hierarchy), not under the armature.
+        group_root = bpy_module.data.objects.get(execution_result["group_root_name"])
+        self.assertIs(generated_mesh.parent, group_root)
         self.assertTrue(generated_mesh.get(GENERATED_MARKER_KEY))
         self.assertEqual(generated_mesh.get(GENERATED_ASSET_KEY), "SyntheticAsset")
         self.assertTrue(generated_mesh.data.get(GENERATED_MARKER_KEY))
@@ -1789,6 +1804,34 @@ class CrowdNamingTests(unittest.TestCase):
         self.assertEqual(execution_result["duplicated_meshes"][0]["source_mesh_name"], "BodyMesh")
         self.assertEqual(execution_result["duplicated_meshes"][0]["generated_mesh_name"], "ASAM_BodyMesh")
         self.assertEqual(execution_result["duplicated_meshes"][0]["retargeted_armature_modifiers"], ["Armature"])
+
+    def test_body_mesh_named_body_container_and_parented_to_grp_root(self):
+        bpy_module = _FakeBpy()
+        source_armature = bpy_module.add_source_armature("Rig")
+        source_mesh = bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
+        source_mesh.vertex_groups = ["Hip"]
+        build_spec = {
+            "asset_name": "SyntheticAsset",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_SyntheticAsset",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_SyntheticAsset",
+            "mesh_binding": _mesh_binding("Rig"),
+            "bones": [{"name": "Hip", "parent_bone": None, "head": [0.0, 0.0, 1.0], "tail": [0.0, 0.0, 1.2], "use_connect": False, "geometry_source": "source_bone", "source_bone": "Hip"}],
+            "body_mesh_name": "BodyMesh",
+        }
+
+        execution_result = build_armature_in_blender(build_spec, bpy_module)
+
+        group_root = bpy_module.data.objects.get(execution_result["group_root_name"])
+        generated_armature = bpy_module.data.objects.get(execution_result["generated_armature_name"])
+        body = bpy_module.data.objects.get("Body_SyntheticAsset")
+        self.assertIsNotNone(body)
+        self.assertIs(body.parent, group_root)
+        self.assertIs(body.modifiers[0].object, generated_armature)
+        dup = execution_result["duplicated_meshes"][0]
+        self.assertEqual(dup["generated_mesh_name"], "Body_SyntheticAsset")
+        self.assertEqual(dup["role"], "body")
 
     def test_blender_builder_duplicates_parent_only_mesh_with_warning(self):
         bpy_module = _FakeBpy()
@@ -1864,8 +1907,8 @@ class CrowdNamingTests(unittest.TestCase):
             ["Armature"],
         )
 
-    def test_blender_builder_parents_mesh_to_armature_not_group_root(self):
-        """Generated meshes must be one level below the armature in the ASAM hierarchy."""
+    def test_blender_builder_parents_mesh_to_grp_root_not_armature(self):
+        """Generated meshes are siblings of the armature under Grp_Root (geometry-container hierarchy)."""
         bpy_module = _FakeBpy()
         source_armature = bpy_module.add_source_armature("Rig")
         bpy_module.add_source_mesh("BodyMesh", source_armature, armature_modifier=True)
@@ -1886,9 +1929,9 @@ class CrowdNamingTests(unittest.TestCase):
         group_root = bpy_module.data.objects.get(execution_result["group_root_name"])
         self.assertIsNotNone(generated_mesh)
         self.assertIsNotNone(generated_armature)
-        # Mesh parent must be the armature, not the group root.
-        self.assertIs(generated_mesh.parent, generated_armature)
-        self.assertIsNot(generated_mesh.parent, group_root)
+        # Mesh parent must be Grp_Root (sibling of armature), not the armature itself.
+        self.assertIs(generated_mesh.parent, group_root)
+        self.assertIsNot(generated_mesh.parent, generated_armature)
         # The armature itself must still be parented to group_root.
         self.assertIs(generated_armature.parent, group_root)
 
@@ -3139,8 +3182,9 @@ class WeightMergeAndPurgeExecutionTests(unittest.TestCase):
              "modifiers": [{"stack_index": 0, "type": "ARMATURE", "name": "Armature", "object": "Rig"}],
              "vertex_groups": ["Spine0", "Spine1", "Spine3", "Spine4", "Other"]}]}
 
-        build_armature_in_blender(spec, bpy_module)
-        result_mesh = bpy_module.data.objects.get("ASAM_BodyMesh")
+        execution_result = build_armature_in_blender(spec, bpy_module)
+        generated_mesh_name = execution_result["duplicated_meshes"][0]["generated_mesh_name"]
+        result_mesh = bpy_module.data.objects.get(generated_mesh_name)
         groups = set(result_mesh.vertex_groups)
         self.assertIn("Lower_Spine", groups)
         self.assertIn("Upper_Spine", groups)
@@ -3634,6 +3678,34 @@ class EyeFingerDispatchTests(unittest.TestCase):
         # Its skin weights collapse into the core target its parent maps to.
         merges = {m["source"]: m["target"] for m in spec["weight_merges"]}
         self.assertEqual(merges.get("DEF-hair"), "Lower_Arm_Left")
+
+    def test_select_body_mesh_unit_scoring_and_tiebreak(self):
+        from asam_human_builder.builder import _select_body_mesh
+        spec_bones = [
+            {"name": "Hip", "source_bone": "Hip"},
+            {"name": "Lower_Spine", "source_bone": "Lower_Spine"},
+        ]
+        weight_merges = [{"source": "DEF-hair", "target": "Upper_Spine"}]
+        mesh_binding = {"meshes": [
+            {"mesh_name": "body", "vertex_group_stats": {"per_group": [
+                {"name": "Hip", "weighted_vertex_count": 100},
+                {"name": "Lower_Spine", "weighted_vertex_count": 50},
+            ]}},
+            {"mesh_name": "hair", "vertex_group_stats": {"per_group": [
+                {"name": "DEF-hair", "weighted_vertex_count": 30},
+            ]}},
+            {"mesh_name": "empty", "vertex_group_stats": {"per_group": [
+                {"name": "Hip", "weighted_vertex_count": 0},
+            ]}},
+        ]}
+        self.assertEqual(_select_body_mesh(mesh_binding, spec_bones, weight_merges), "body")
+
+    def test_select_body_mesh_none_when_no_weighted_core(self):
+        from asam_human_builder.builder import _select_body_mesh
+        self.assertIsNone(_select_body_mesh({"meshes": []}, [], []))
+        self.assertIsNone(_select_body_mesh(
+            {"meshes": [{"mesh_name": "x", "vertex_group_stats": {"per_group": [
+                {"name": "x", "weighted_vertex_count": 0}]}}]}, [], []))
 
 
 if __name__ == "__main__":
