@@ -1600,6 +1600,20 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(builder_report["grp_root_location"], spec["grp_root_world_location"])
         self.assertIsNone(builder_report["applied_grid_offset"])
 
+    def test_select_body_mesh_picks_broadest_weighted_core_coverage(self):
+        # openmatexamplehuman: Body_Human is weighted across the core skeleton (27),
+        # decorators only on a few bones (6/1/1) -> Body_Human is the body mesh.
+        asset_dir = _copy_asset_folder("openmatexamplehuman")
+        write_asset_report(asset_dir)
+        _, _, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        self.assertEqual(build_spec["body_mesh_name"], "Body_Human")
+
+    def test_select_body_mesh_lowpoly_single_mesh(self):
+        asset_dir = _copy_asset_folder("LowPolyCharacter4")
+        write_asset_report(asset_dir)
+        _, _, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+        self.assertEqual(build_spec["body_mesh_name"], "Cube")
+
 
 class CrowdNamingTests(unittest.TestCase):
     def test_apply_character_naming_overrides_generated_names(self):
@@ -3634,6 +3648,34 @@ class EyeFingerDispatchTests(unittest.TestCase):
         # Its skin weights collapse into the core target its parent maps to.
         merges = {m["source"]: m["target"] for m in spec["weight_merges"]}
         self.assertEqual(merges.get("DEF-hair"), "Lower_Arm_Left")
+
+    def test_select_body_mesh_unit_scoring_and_tiebreak(self):
+        from asam_human_builder.builder import _select_body_mesh
+        spec_bones = [
+            {"name": "Hip", "source_bone": "Hip"},
+            {"name": "Lower_Spine", "source_bone": "Lower_Spine"},
+        ]
+        weight_merges = [{"source": "DEF-hair", "target": "Upper_Spine"}]
+        mesh_binding = {"meshes": [
+            {"mesh_name": "body", "vertex_group_stats": {"per_group": [
+                {"name": "Hip", "weighted_vertex_count": 100},
+                {"name": "Lower_Spine", "weighted_vertex_count": 50},
+            ]}},
+            {"mesh_name": "hair", "vertex_group_stats": {"per_group": [
+                {"name": "DEF-hair", "weighted_vertex_count": 30},
+            ]}},
+            {"mesh_name": "empty", "vertex_group_stats": {"per_group": [
+                {"name": "Hip", "weighted_vertex_count": 0},
+            ]}},
+        ]}
+        self.assertEqual(_select_body_mesh(mesh_binding, spec_bones, weight_merges), "body")
+
+    def test_select_body_mesh_none_when_no_weighted_core(self):
+        from asam_human_builder.builder import _select_body_mesh
+        self.assertIsNone(_select_body_mesh({"meshes": []}, [], []))
+        self.assertIsNone(_select_body_mesh(
+            {"meshes": [{"mesh_name": "x", "vertex_group_stats": {"per_group": [
+                {"name": "x", "weighted_vertex_count": 0}]}}]}, [], []))
 
 
 if __name__ == "__main__":
