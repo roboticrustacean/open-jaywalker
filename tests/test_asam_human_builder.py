@@ -240,6 +240,7 @@ class _FakeBone:
         self.use_connect = False
         self.roll = 0.0
         self.roll_aligned_to = None
+        self.hide = False
 
     def align_roll(self, vector):
         # Mirror Blender's EditBone.align_roll just enough for assertions: record
@@ -797,6 +798,63 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertEqual(root_bone["geometry_source"], "source_root")
         self.assertEqual(root_bone["source_bone"], "Root")
         self.assertFalse(root_bone["use_connect"])
+
+    def test_heuristic_extremity_bones_are_hidden(self):
+        """Heuristically created extremity bones (not source_bone mapped) are hidden,
+        while directly mapped ones or non-extremity heuristic bones remain visible.
+        """
+        spec = {
+            "asset_name": "test_visibility",
+            "source_armature_name": "Rig",
+            "generated_collection_name": "ASAM_test_visibility",
+            "group_root_name": "Grp_Root",
+            "generated_armature_name": "Armature_test_visibility",
+            "bones": [
+                {
+                    "name": "Full_Fingers_Left",
+                    "parent_bone": None,
+                    "head": [0.0, 0.0, 1.0],
+                    "tail": [0.0, 0.0, 1.2],
+                    "use_connect": False,
+                    "geometry_source": "create_in_builder",  # heuristic extremity
+                    "source_bone": None,
+                },
+                {
+                    "name": "Full_Thumb_Left",
+                    "parent_bone": None,
+                    "head": [0.0, 0.1, 1.0],
+                    "tail": [0.0, 0.1, 1.2],
+                    "use_connect": False,
+                    "geometry_source": "source_bone",  # mapped extremity
+                    "source_bone": "ThumbSource",
+                },
+                {
+                    "name": "Hip",
+                    "parent_bone": None,
+                    "head": [0.0, 0.2, 1.0],
+                    "tail": [0.0, 0.2, 1.2],
+                    "use_connect": False,
+                    "geometry_source": "create_in_builder",  # heuristic non-extremity
+                    "source_bone": None,
+                },
+            ],
+            "mesh_binding": {"armature_object_name": "Rig", "meshes": []},
+            "extras_preserved": [],
+            "warnings": [],
+        }
+
+        bpy_module = _FakeBpy()
+        bpy_module.add_source_armature("Rig")
+
+        build_armature_in_blender(spec, bpy_module)
+
+        generated_armature_obj = bpy_module.data.objects.get("Armature_test_visibility")
+        self.assertIsNotNone(generated_armature_obj)
+        edit_bones = generated_armature_obj.data.edit_bones
+
+        self.assertTrue(edit_bones["Full_Fingers_Left"].hide, "Heuristic extremity bone should be hidden")
+        self.assertFalse(edit_bones["Full_Thumb_Left"].hide, "Mapped extremity bone should remain visible")
+        self.assertFalse(edit_bones["Hip"].hide, "Non-extremity bones should remain visible even when heuristic")
 
     def test_lowpoly_fixture_creates_new_root_and_preserves_extras(self):
         asset_dir = _copy_asset_folder("LowPolyCharacter4")
