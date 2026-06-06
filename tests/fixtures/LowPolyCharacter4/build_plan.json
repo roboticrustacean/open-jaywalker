@@ -12,7 +12,7 @@
         "target": "Lower_Spine"
       },
       {
-        "source": "DEF-spine.004",
+        "source": "DEF-spine.003",
         "target": "Upper_Spine"
       },
       {
@@ -113,7 +113,8 @@
         "target": "Full_Fingers_Right",
         "parent": "Hand_Right"
       }
-    ]
+    ],
+    "split": []
   },
   "root_resolutions": [
     {
@@ -468,7 +469,7 @@
       "role": "deform"
     },
     {
-      "bone_name": "DEF-spine.003",
+      "bone_name": "DEF-spine.004",
       "reason": "supporting_chain_detail",
       "origin": "primary",
       "role": "deform"

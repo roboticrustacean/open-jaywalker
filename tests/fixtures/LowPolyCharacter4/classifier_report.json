@@ -1530,7 +1530,7 @@
           "role": "deform"
         },
         {
-          "bone_name": "DEF-spine.003",
+          "bone_name": "DEF-spine.004",
           "reason": "supporting_chain_detail",
           "origin": "primary",
           "role": "deform"
