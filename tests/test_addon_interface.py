@@ -216,6 +216,56 @@ class AddonInterfaceTests(unittest.TestCase):
                 "Synthesized inert bones added for compliance: Hero000 (Full_Fingers_Left), Hero001 (Full_Toes_Right)"
             )
 
+    def test_operator_build_populates_state_for_mixed_crowd_success_failure(self):
+        mock_settings = types.SimpleNamespace(
+            has_plan=True,
+            built=False,
+            asset_dir="/x",
+            packaging_mode="inplace_only",
+            export_gltf=False,
+            build_succeeded=0,
+            build_failed=0,
+            failed_characters_csv="",
+            synthesized_bones_csv="",
+            synthesized_bones_by_character_csv=""
+        )
+        mock_context = types.SimpleNamespace(
+            scene=types.SimpleNamespace(open_jaywalker=mock_settings),
+            window=types.SimpleNamespace(cursor_set=mock.Mock()),
+            preferences=types.SimpleNamespace(addons={
+                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", dev_reload=False))
+            })
+        )
+        
+        report_data = {
+            "characters": [
+                {
+                    "character_id": "Hero000",
+                    "targets_created_heuristically": []
+                }
+            ],
+            "failed_characters": [
+                {
+                    "character_id": "Hero001",
+                    "error": "Failed to resolve rig template"
+                }
+            ]
+        }
+        
+        with mock.patch("addon.operators._addon_prefs") as mock_prefs, \
+             mock.patch("asam_human_builder.build_runner.run_build", return_value=report_data) as mock_run_build, \
+             mock.patch("asam_human_builder.builder.success_message", return_value="Crowd built"):
+            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", dev_reload=False)
+            
+            build_op = self.operators.OJ_OT_build()
+            build_op.report = mock.Mock()
+            build_op.execute(mock_context)
+            
+            self.assertTrue(mock_settings.built)
+            self.assertEqual(mock_settings.build_succeeded, 1)
+            self.assertEqual(mock_settings.build_failed, 1)
+            self.assertEqual(mock_settings.failed_characters_csv, "Hero001")
+
     def test_ui_draw_renders_warnings_without_crash(self):
         class MockLayout:
             def __init__(self):
@@ -279,6 +329,75 @@ class AddonInterfaceTests(unittest.TestCase):
         mock_settings.synthesized_bones_by_character_csv = "Hero000 (Full_Fingers_Left) | Hero001 (Full_Toes_Right)"
         
         panel.draw(mock_context)
+
+    def test_ui_draw_renders_mixed_crowd_success_failure(self):
+        class MockLayout:
+            def __init__(self):
+                self.labels = []
+                self.alert = False
+                
+            def separator(self):
+                pass
+                
+            def label(self, text="", icon='NONE'):
+                self.labels.append((text, icon))
+                
+            def operator(self, name, icon='NONE'):
+                pass
+                
+            def prop(self, data, prop_name, text="", icon='NONE', emboss=True):
+                pass
+                
+            def row(self):
+                return self
+                
+            def box(self):
+                return self
+                
+            def column(self, align=False):
+                return self
+
+        mock_layout = MockLayout()
+        
+        mock_settings = types.SimpleNamespace(
+            built=True,
+            has_plan=True,
+            is_crowd=True,
+            build_succeeded=5,
+            build_failed=2,
+            failed_characters_csv="char_01, char_03",
+            synthesized_bones_csv="",
+            synthesized_bones_by_character_csv="",
+            asset_dir="/x",
+            recommended_armature="Rig",
+            mapped=28,
+            total=28,
+            missing_csv="",
+            missing_by_target_csv="",
+            review_flags_csv="",
+            character_ids_csv="",
+            character_count=7,
+            show_details=False,
+            packaging_mode="inplace_only",
+            export_gltf=False
+        )
+        mock_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=mock_settings))
+        
+        panel = self.ui.OJ_PT_panel()
+        panel.layout = mock_layout
+        
+        panel.draw(mock_context)
+        
+        expected_labels = [
+            ("Succeeded: 5", "CHECKMARK"),
+            ("Failed: 2", "ERROR"),
+            ("Failed characters:", "NONE"),
+            ("   - char_01", "NONE"),
+            ("   - char_03", "NONE")
+        ]
+        
+        for text, icon in expected_labels:
+            self.assertIn((text, icon), mock_layout.labels)
 
     def test_show_generated_armature_toggle_and_ui(self):
         # 1. Test update callback toggles hide_set on generated armatures
