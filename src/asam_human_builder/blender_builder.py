@@ -148,6 +148,9 @@ def _hide_source_objects(bpy_module, source_armature, build_spec) -> List[str]:
     targets = []
     if source_armature is not None:
         targets.append(source_armature)
+    metarig = bpy_module.data.objects.get("metarig")
+    if metarig is not None and getattr(metarig, "type", None) == "ARMATURE" and metarig not in targets:
+        targets.append(metarig)
     for record in build_spec.get("mesh_binding", {}).get("meshes", []):
         mesh = bpy_module.data.objects.get(record.get("mesh_name"))
         if mesh is not None and mesh not in targets:

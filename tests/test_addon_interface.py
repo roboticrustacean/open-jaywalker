@@ -280,5 +280,122 @@ class AddonInterfaceTests(unittest.TestCase):
         
         panel.draw(mock_context)
 
+    def test_show_generated_armature_toggle_and_ui(self):
+        # 1. Test update callback toggles hide_set on generated armatures
+        mock_generated_armature = types.SimpleNamespace(
+            type="ARMATURE",
+            open_jaywalker_generated=True,
+            hide_set=mock.Mock()
+        )
+        mock_other_object = types.SimpleNamespace(
+            type="MESH",
+            open_jaywalker_generated=True,
+            hide_set=mock.Mock()
+        )
+        mock_non_gen_armature = types.SimpleNamespace(
+            type="ARMATURE",
+            open_jaywalker_generated=False,
+            hide_set=mock.Mock()
+        )
+        
+        class DictLikeMockObj:
+            def __init__(self, type_str, gen_val):
+                self.type = type_str
+                self.props = {"open_jaywalker_generated": gen_val}
+                self.hide_set = mock.Mock()
+            def get(self, key, default=None):
+                return self.props.get(key, default)
+
+        mock_dict_gen_armature = DictLikeMockObj("ARMATURE", True)
+        mock_dict_non_gen_armature = DictLikeMockObj("ARMATURE", False)
+
+        mock_settings = types.SimpleNamespace(show_generated_armature=False)
+        mock_context = types.SimpleNamespace(
+            scene=types.SimpleNamespace(
+                objects=[
+                    mock_generated_armature,
+                    mock_other_object,
+                    mock_non_gen_armature,
+                    mock_dict_gen_armature,
+                    mock_dict_non_gen_armature,
+                    None
+                ]
+            )
+        )
+
+        self.state.update_show_generated_armature(mock_settings, mock_context)
+        
+        mock_generated_armature.hide_set.assert_called_once_with(True)
+        mock_other_object.hide_set.assert_not_called()
+        mock_non_gen_armature.hide_set.assert_not_called()
+        mock_dict_gen_armature.hide_set.assert_called_once_with(True)
+        mock_dict_non_gen_armature.hide_set.assert_not_called()
+        
+        mock_generated_armature.hide_set.reset_mock()
+        mock_dict_gen_armature.hide_set.reset_mock()
+
+        mock_settings.show_generated_armature = True
+        self.state.update_show_generated_armature(mock_settings, mock_context)
+        mock_generated_armature.hide_set.assert_called_once_with(False)
+        mock_dict_gen_armature.hide_set.assert_called_once_with(False)
+
+        # 2. Test that UI renders the checkbox without crashing
+        class MockLayout:
+            def __init__(self):
+                self.props_drawn = []
+                
+            def separator(self):
+                pass
+                
+            def label(self, text="", icon='NONE'):
+                pass
+                
+            def operator(self, name, icon='NONE'):
+                pass
+                
+            def prop(self, data, prop_name, text="", icon='NONE', emboss=True):
+                self.props_drawn.append((data, prop_name))
+                
+            def row(self):
+                return self
+                
+            def box(self):
+                return self
+                
+            def column(self, align=False):
+                return self
+
+        mock_layout = MockLayout()
+        ui_settings = types.SimpleNamespace(
+            built=True,
+            has_plan=True,
+            is_crowd=False,
+            build_succeeded=1,
+            build_failed=0,
+            failed_characters_csv="",
+            synthesized_bones_csv="",
+            synthesized_bones_by_character_csv="",
+            asset_dir="/x",
+            recommended_armature="Rig",
+            mapped=28,
+            total=28,
+            missing_csv="",
+            missing_by_target_csv="",
+            review_flags_csv="",
+            character_ids_csv="",
+            character_count=1,
+            show_details=False,
+            packaging_mode="inplace_only",
+            export_gltf=False,
+            show_generated_armature=True
+        )
+        ui_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=ui_settings))
+        
+        panel = self.ui.OJ_PT_panel()
+        panel.layout = mock_layout
+        panel.draw(ui_context)
+        
+        self.assertIn((ui_settings, "show_generated_armature"), mock_layout.props_drawn)
+
 if __name__ == "__main__":
     unittest.main()
