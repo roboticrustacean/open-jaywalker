@@ -658,6 +658,21 @@ class AsamHumanBuilderTests(unittest.TestCase):
         report = build_builder_report(build_spec, execution_result)
         self.assertIn("Armature", report["hidden_source_objects"])
 
+    def test_hide_source_objects_hides_metarig_if_exists(self):
+        """_hide_source_objects hides metarig if it exists and is an armature."""
+        from asam_human_builder.blender_builder import _hide_source_objects
+        bpy_module = _FakeBpy()
+        build_spec = {"mesh_binding": {"meshes": []}}
+        source_arm = bpy_module.add_source_armature("Armature")
+        hidden = _hide_source_objects(bpy_module, source_arm, build_spec)
+        self.assertNotIn("metarig", hidden)
+
+        metarig_arm = bpy_module.data.armatures.new("metarig")
+        metarig_obj = bpy_module.data.objects.new("metarig", metarig_arm)
+        hidden2 = _hide_source_objects(bpy_module, source_arm, build_spec)
+        self.assertIn("metarig", hidden2)
+        self.assertTrue(metarig_obj.hide_get())
+
     def test_grp_root_location_set_to_bbox_ground_center(self):
         """Grp_Root empty's location must equal the source-frame bbox_ground_center."""
         asset_dir = _copy_asset_folder("openmatexamplehuman")

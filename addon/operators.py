@@ -26,6 +26,7 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         settings.built = False
         settings.synthesized_bones_csv = ""
         settings.synthesized_bones_by_character_csv = ""
+        settings.show_generated_armature = True
 
         prefs = _addon_prefs(context)
         if prefs.output_dir:
@@ -170,5 +171,6 @@ class OJ_OT_clean(bpy.types.Operator):
         s.built = False
         s.synthesized_bones_csv = ""
         s.synthesized_bones_by_character_csv = ""
+        s.show_generated_armature = True
         self.report({'INFO'}, "Removed {0} generated object(s)/collection(s).".format(removed))
         return {'FINISHED'}

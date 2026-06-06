@@ -80,6 +80,7 @@ class OJ_PT_panel(bpy.types.Panel):
             res_box = layout.box()
             res_box.label(text="Build Results", icon='INFO')
             res_col = res_box.column(align=True)
+            res_col.prop(s, "show_generated_armature")
             if s.is_crowd:
                 res_col.label(text="Succeeded: {0}".format(s.build_succeeded), icon='CHECKMARK')
                 if s.build_failed > 0:
