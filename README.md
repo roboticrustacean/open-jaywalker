@@ -22,6 +22,12 @@ see [Architecture](https://github.com/roboticrustacean/open-jaywalker/wiki/Archi
 (the 28 core targets, name-free structural inference, decision tags, crowd
 decomposition).
 
+To use the generated `.glb` assets in an OpenSCENARIO simulator such as
+[esmini](https://github.com/eclipse/esmini) (which ingests OpenSceneGraph `.osgb`),
+the repo ships an unsupported post-build conversion helper, `tools/glb_to_osgb.py`,
+that wraps a local `osgconv`. See
+[Using Outputs in esmini / OpenSCENARIO](https://github.com/roboticrustacean/open-jaywalker/wiki/Using-Outputs-in-esmini-and-OpenSCENARIO).
+
 ### Blender Add-on (recommended)
 
 The pipeline ships as an installable Blender add-on, **Open Jaywalker**, which is
