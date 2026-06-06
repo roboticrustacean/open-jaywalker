@@ -98,10 +98,11 @@ class OJ_OT_build(bpy.types.Operator):
         context.window.cursor_set('WAIT')
         try:
             report = run_build(
-                asset_dir, 
-                bpy, 
-                packaging_mode=settings.packaging_mode,
-                export_gltf=settings.export_gltf
+                asset_dir,
+                bpy,
+                export_blend=settings.export_blend,
+                export_gltf=settings.export_gltf,
+                per_character=settings.per_character_export,
             )
         except Exception as exc:  # surface as an operator error, never crash
             self.report({'ERROR'}, "Build failed: {0}".format(exc))
@@ -143,6 +144,104 @@ class OJ_OT_build(bpy.types.Operator):
                     ", ".join(heuristics)
                 ))
 
+        return {'FINISHED'}
+
+
+class OJ_OT_export_blend(bpy.types.Operator):
+    bl_idname = "open_jaywalker.export_blend"
+    bl_label = "Export .blend"
+    bl_description = "Export the generated ASAM human(s) to .blend format"
+
+    @classmethod
+    def poll(cls, context):
+        s = context.scene.open_jaywalker
+        return bool(s.built) and bool(s.asset_dir)
+
+    def execute(self, context):
+        import json
+        settings = context.scene.open_jaywalker
+        prefs = _addon_prefs(context)
+        if getattr(prefs, "dev_reload", False):
+            from . import dev_reload
+            dev_reload.purge_pipeline_modules()
+        from asam_human_builder.blender_builder import (
+            export_generated_blend,
+            export_crowd_characters_blend,
+        )
+        asset_dir = Path(settings.asset_dir)
+        report_path = asset_dir / "builder_report.json"
+        if not report_path.exists():
+            self.report({'ERROR'}, "Builder report not found at {0}".format(report_path))
+            return {'CANCELLED'}
+        with report_path.open(encoding="utf-8") as fh:
+            report = json.load(fh)
+        wrapper_name = report.get("wrapper_collection_name")
+        if not wrapper_name:
+            wrapper_name = report.get("generated_collection_name")
+        if not wrapper_name:
+            self.report({'ERROR'}, "Cannot determine wrapper collection from builder report.")
+            return {'CANCELLED'}
+        try:
+            if settings.is_crowd and settings.per_character_export:
+                paths = export_crowd_characters_blend(bpy, wrapper_name, str(asset_dir))
+                self.report({'INFO'}, "Exported {0} .blend file(s) to {1}/blend/".format(len(paths), asset_dir))
+            else:
+                asset_name = report.get("asset_name", "output")
+                out_path = str(asset_dir / "{0}_asam.blend".format(asset_name))
+                export_generated_blend(bpy, wrapper_name, out_path)
+                self.report({'INFO'}, "Exported .blend to {0}".format(out_path))
+        except Exception as exc:
+            self.report({'ERROR'}, "Export failed: {0}".format(exc))
+            return {'CANCELLED'}
+        return {'FINISHED'}
+
+
+class OJ_OT_export_gltf(bpy.types.Operator):
+    bl_idname = "open_jaywalker.export_gltf"
+    bl_label = "Export .glb"
+    bl_description = "Export the generated ASAM human(s) to .glb format"
+
+    @classmethod
+    def poll(cls, context):
+        s = context.scene.open_jaywalker
+        return bool(s.built) and bool(s.asset_dir)
+
+    def execute(self, context):
+        import json
+        settings = context.scene.open_jaywalker
+        prefs = _addon_prefs(context)
+        if getattr(prefs, "dev_reload", False):
+            from . import dev_reload
+            dev_reload.purge_pipeline_modules()
+        from asam_human_builder.blender_builder import (
+            export_generated_gltf,
+            export_crowd_characters_gltf,
+        )
+        asset_dir = Path(settings.asset_dir)
+        report_path = asset_dir / "builder_report.json"
+        if not report_path.exists():
+            self.report({'ERROR'}, "Builder report not found at {0}".format(report_path))
+            return {'CANCELLED'}
+        with report_path.open(encoding="utf-8") as fh:
+            report = json.load(fh)
+        wrapper_name = report.get("wrapper_collection_name")
+        if not wrapper_name:
+            wrapper_name = report.get("generated_collection_name")
+        if not wrapper_name:
+            self.report({'ERROR'}, "Cannot determine wrapper collection from builder report.")
+            return {'CANCELLED'}
+        try:
+            if settings.is_crowd and settings.per_character_export:
+                paths = export_crowd_characters_gltf(bpy, wrapper_name, str(asset_dir))
+                self.report({'INFO'}, "Exported {0} .glb file(s) to {1}/glb/".format(len(paths), asset_dir))
+            else:
+                asset_name = report.get("asset_name", "output")
+                out_path = str(asset_dir / "{0}_asam.glb".format(asset_name))
+                export_generated_gltf(bpy, wrapper_name, out_path)
+                self.report({'INFO'}, "Exported .glb to {0}".format(out_path))
+        except Exception as exc:
+            self.report({'ERROR'}, "Export failed: {0}".format(exc))
+            return {'CANCELLED'}
         return {'FINISHED'}
 
 

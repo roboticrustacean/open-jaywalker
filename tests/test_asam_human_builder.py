@@ -27,6 +27,8 @@ from asam_human_builder.builder import (  # noqa: E402
 )
 from asam_human_builder.blender_builder import (  # noqa: E402
     build_armature_in_blender,
+    export_crowd_characters_blend,
+    export_crowd_characters_gltf,
     export_generated_blend,
     purge_previous_generated_artifacts,
 )
@@ -2720,6 +2722,123 @@ class ExportGeneratedBlendTests(unittest.TestCase):
         fake_bpy = _FakeBpy()
         with self.assertRaises(ValueError):
             export_generated_blend(fake_bpy, "DoesNotExist", "/tmp/x.blend")
+
+
+class ExportCrowdCharactersBlendTests(unittest.TestCase):
+    def test_export_crowd_characters_blend_writes_children(self):
+        import tempfile
+        import os
+        fake_bpy = _FakeBpy()
+        wrapper = fake_bpy.data.collections.new("ASAM_crowd")
+        wrapper[GENERATED_MARKER_KEY] = True
+        wrapper[GENERATED_ASSET_KEY] = "crowd"
+
+        # Add child collections for individual characters
+        char0 = fake_bpy.data.collections.new("ASAM_crowd_char0")
+        char1 = fake_bpy.data.collections.new("ASAM_crowd_char1")
+        wrapper.children.link(char0)
+        wrapper.children.link(char1)
+
+        out_dir = tempfile.mkdtemp()
+        paths = export_crowd_characters_blend(fake_bpy, "ASAM_crowd", out_dir)
+        
+        # Returns list of written files
+        self.assertEqual(len(paths), 2)
+        # Verify prefix stripping logic: ASAM_crowd_char0 -> char0.blend
+        expected_char0 = os.path.join(out_dir, "blend", "char0.blend")
+        expected_char1 = os.path.join(out_dir, "blend", "char1.blend")
+        self.assertIn(expected_char0, paths)
+        self.assertIn(expected_char1, paths)
+        
+        # Check libraries.write calls
+        write_calls = fake_bpy.data.libraries.write_calls
+        self.assertEqual(len(write_calls), 2)
+        
+        # Verify that libraries.write was called with each character collection
+        written_datablocks = [list(call["datablocks"])[0] for call in write_calls]
+        self.assertIn(char0, written_datablocks)
+        self.assertIn(char1, written_datablocks)
+
+    def test_export_crowd_characters_blend_errors(self):
+        fake_bpy = _FakeBpy()
+        # Missing collection
+        with self.assertRaises(ValueError):
+            export_crowd_characters_blend(fake_bpy, "DoesNotExist", "/tmp")
+
+        # Not generated collection
+        wrapper = fake_bpy.data.collections.new("ASAM_crowd")
+        with self.assertRaises(ValueError):
+            export_crowd_characters_blend(fake_bpy, "ASAM_crowd", "/tmp")
+
+        # No children
+        wrapper[GENERATED_MARKER_KEY] = True
+        with self.assertRaises(ValueError):
+            export_crowd_characters_blend(fake_bpy, "ASAM_crowd", "/tmp")
+
+
+class ExportCrowdCharactersGltfTests(unittest.TestCase):
+    def test_export_crowd_characters_gltf_exports_children(self):
+        import tempfile
+        import os
+        fake_bpy = _FakeBpy()
+        # Set up mock gltf operator
+        class _FakeExportSceneOps:
+            def __init__(self):
+                self.calls = []
+            def gltf(self, filepath, use_selection=False, export_format='GLB', **kwargs):
+                self.calls.append({
+                    "filepath": filepath,
+                    "use_selection": use_selection,
+                    "export_format": export_format,
+                })
+        fake_bpy.ops.export_scene = _FakeExportSceneOps()
+
+        wrapper = fake_bpy.data.collections.new("ASAM_crowd")
+        wrapper[GENERATED_MARKER_KEY] = True
+        wrapper[GENERATED_ASSET_KEY] = "crowd"
+
+        char0 = fake_bpy.data.collections.new("ASAM_crowd_char0")
+        char1 = fake_bpy.data.collections.new("ASAM_crowd_char1")
+        wrapper.children.link(char0)
+        wrapper.children.link(char1)
+
+        # Add some mock objects to the character collections so they can be selected
+        obj0 = _FakeObject("char0_mesh")
+        obj1 = _FakeObject("char1_mesh")
+        char0.objects.link(obj0)
+        char1.objects.link(obj1)
+
+        out_dir = tempfile.mkdtemp()
+        paths = export_crowd_characters_gltf(fake_bpy, "ASAM_crowd", out_dir)
+
+        self.assertEqual(len(paths), 2)
+        expected_char0 = os.path.join(out_dir, "glb", "char0.glb")
+        expected_char1 = os.path.join(out_dir, "glb", "char1.glb")
+        self.assertIn(expected_char0, paths)
+        self.assertIn(expected_char1, paths)
+
+        # Check gltf calls
+        calls = fake_bpy.ops.export_scene.calls
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(calls[0]["filepath"], expected_char0)
+        self.assertTrue(calls[0]["use_selection"])
+        self.assertEqual(calls[0]["export_format"], "GLB")
+
+    def test_export_crowd_characters_gltf_errors(self):
+        fake_bpy = _FakeBpy()
+        # Missing collection
+        with self.assertRaises(ValueError):
+            export_crowd_characters_gltf(fake_bpy, "DoesNotExist", "/tmp")
+
+        # Not generated collection
+        wrapper = fake_bpy.data.collections.new("ASAM_crowd")
+        with self.assertRaises(ValueError):
+            export_crowd_characters_gltf(fake_bpy, "ASAM_crowd", "/tmp")
+
+        # No children
+        wrapper[GENERATED_MARKER_KEY] = True
+        with self.assertRaises(ValueError):
+            export_crowd_characters_gltf(fake_bpy, "ASAM_crowd", "/tmp")
 
 
 class PlacementDeltaTests(unittest.TestCase):

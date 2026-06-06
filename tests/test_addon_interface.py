@@ -124,8 +124,9 @@ class AddonInterfaceTests(unittest.TestCase):
             has_plan=True,
             built=False,
             asset_dir="/x",
-            packaging_mode="inplace_only",
-            export_gltf=False,
+            export_blend=False,
+            export_gltf=True,
+            per_character_export=False,
             build_succeeded=0,
             build_failed=0,
             failed_characters_csv="",
@@ -168,8 +169,9 @@ class AddonInterfaceTests(unittest.TestCase):
             has_plan=True,
             built=False,
             asset_dir="/x",
-            packaging_mode="inplace_only",
-            export_gltf=False,
+            export_blend=False,
+            export_gltf=True,
+            per_character_export=False,
             build_succeeded=0,
             build_failed=0,
             failed_characters_csv="",
@@ -221,8 +223,9 @@ class AddonInterfaceTests(unittest.TestCase):
             has_plan=True,
             built=False,
             asset_dir="/x",
-            packaging_mode="inplace_only",
-            export_gltf=False,
+            export_blend=False,
+            export_gltf=True,
+            per_character_export=False,
             build_succeeded=0,
             build_failed=0,
             failed_characters_csv="",
@@ -271,25 +274,25 @@ class AddonInterfaceTests(unittest.TestCase):
             def __init__(self):
                 self.alert = False
                 
-            def separator(self):
+            def separator(self, *args, **kwargs):
                 pass
                 
-            def label(self, text="", icon='NONE'):
+            def label(self, text="", icon='NONE', *args, **kwargs):
                 pass
                 
-            def operator(self, name, icon='NONE'):
+            def operator(self, name, icon='NONE', *args, **kwargs):
                 pass
                 
-            def prop(self, data, prop_name, text="", icon='NONE', emboss=True):
+            def prop(self, data, prop_name, text="", icon='NONE', emboss=True, *args, **kwargs):
                 pass
                 
-            def row(self):
+            def row(self, *args, **kwargs):
                 return MockLayout()
                 
-            def box(self):
+            def box(self, *args, **kwargs):
                 return MockLayout()
                 
-            def column(self, align=False):
+            def column(self, align=False, *args, **kwargs):
                 return MockLayout()
 
         mock_layout = MockLayout()
@@ -313,8 +316,9 @@ class AddonInterfaceTests(unittest.TestCase):
             character_ids_csv="",
             character_count=1,
             show_details=False,
-            packaging_mode="inplace_only",
-            export_gltf=False
+            export_blend=False,
+            export_gltf=True,
+            per_character_export=False
         )
         mock_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=mock_settings))
         
@@ -336,25 +340,25 @@ class AddonInterfaceTests(unittest.TestCase):
                 self.labels = []
                 self.alert = False
                 
-            def separator(self):
+            def separator(self, *args, **kwargs):
                 pass
                 
-            def label(self, text="", icon='NONE'):
+            def label(self, text="", icon='NONE', *args, **kwargs):
                 self.labels.append((text, icon))
                 
-            def operator(self, name, icon='NONE'):
+            def operator(self, name, icon='NONE', *args, **kwargs):
                 pass
                 
-            def prop(self, data, prop_name, text="", icon='NONE', emboss=True):
+            def prop(self, data, prop_name, text="", icon='NONE', emboss=True, *args, **kwargs):
                 pass
                 
-            def row(self):
+            def row(self, *args, **kwargs):
                 return self
                 
-            def box(self):
+            def box(self, *args, **kwargs):
                 return self
                 
-            def column(self, align=False):
+            def column(self, align=False, *args, **kwargs):
                 return self
 
         mock_layout = MockLayout()
@@ -378,8 +382,9 @@ class AddonInterfaceTests(unittest.TestCase):
             character_ids_csv="",
             character_count=7,
             show_details=False,
-            packaging_mode="inplace_only",
-            export_gltf=False
+            export_blend=False,
+            export_gltf=True,
+            per_character_export=False
         )
         mock_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=mock_settings))
         
@@ -463,25 +468,25 @@ class AddonInterfaceTests(unittest.TestCase):
             def __init__(self):
                 self.props_drawn = []
                 
-            def separator(self):
+            def separator(self, *args, **kwargs):
                 pass
                 
-            def label(self, text="", icon='NONE'):
+            def label(self, text="", icon='NONE', *args, **kwargs):
                 pass
                 
-            def operator(self, name, icon='NONE'):
+            def operator(self, name, icon='NONE', *args, **kwargs):
                 pass
                 
-            def prop(self, data, prop_name, text="", icon='NONE', emboss=True):
+            def prop(self, data, prop_name, text="", icon='NONE', emboss=True, *args, **kwargs):
                 self.props_drawn.append((data, prop_name))
                 
-            def row(self):
+            def row(self, *args, **kwargs):
                 return self
                 
-            def box(self):
+            def box(self, *args, **kwargs):
                 return self
                 
-            def column(self, align=False):
+            def column(self, align=False, *args, **kwargs):
                 return self
 
         mock_layout = MockLayout()
@@ -504,8 +509,9 @@ class AddonInterfaceTests(unittest.TestCase):
             character_ids_csv="",
             character_count=1,
             show_details=False,
-            packaging_mode="inplace_only",
-            export_gltf=False,
+            export_blend=False,
+            export_gltf=True,
+            per_character_export=False,
             show_generated_armature=True
         )
         ui_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=ui_settings))

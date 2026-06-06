@@ -69,8 +69,10 @@ class OJ_PT_panel(bpy.types.Panel):
                         icon='CHECKMARK',
                     )
 
-            layout.prop(s, "packaging_mode")
+            layout.prop(s, "export_blend")
             layout.prop(s, "export_gltf")
+            if s.is_crowd:
+                layout.prop(s, "per_character_export")
             build_row = layout.row()
             build_row.enabled = s.has_plan and not s.built
             build_row.operator("open_jaywalker.build", icon='MOD_ARMATURE')
@@ -109,6 +111,15 @@ class OJ_PT_panel(bpy.types.Panel):
                                 warn_box.label(text="   - {0}".format(name))
                 else:
                     res_col.label(text="Build failed.", icon='ERROR')
+
+            layout.separator()
+            export_box = layout.box()
+            export_box.label(text="Export", icon='EXPORT')
+            if s.is_crowd:
+                export_box.prop(s, "per_character_export")
+            row = export_box.row(align=True)
+            row.operator("open_jaywalker.export_blend", icon='FILE_BLEND', text=".blend")
+            row.operator("open_jaywalker.export_gltf", icon='FILE_3D', text=".glb")
 
         if s.asset_dir:
             layout.separator()

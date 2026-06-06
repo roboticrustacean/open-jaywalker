@@ -824,3 +824,90 @@ def export_generated_gltf(bpy_module, wrapper_collection_name: str, filepath: st
         export_format='GLB',
     )
     return filepath
+
+
+def export_crowd_characters_blend(bpy_module, wrapper_collection_name: str, output_dir: str) -> List[str]:
+    """Export each child collection of a crowd wrapper as a separate .blend file.
+
+    Iterates over wrapper.children (one per character) and writes each to
+    <output_dir>/blend/<character_id>.blend via bpy.data.libraries.write.
+    Returns the list of written file paths.
+
+    Raises ValueError if the wrapper is absent, not generated, or has no children.
+    """
+    wrapper = bpy_module.data.collections.get(wrapper_collection_name)
+    if wrapper is None or not bool(wrapper.get(GENERATED_MARKER_KEY)):
+        raise ValueError(
+            "Refusing to export '{0}': not a generated wrapper collection".format(
+                wrapper_collection_name
+            )
+        )
+    children = list(wrapper.children)
+    if not children:
+        raise ValueError(
+            "Wrapper '{0}' has no child collections to export individually".format(
+                wrapper_collection_name
+            )
+        )
+    blend_dir = os.path.join(output_dir, "blend")
+    os.makedirs(blend_dir, exist_ok=True)
+    exported = []
+    asset_name = wrapper.get(GENERATED_ASSET_KEY) or ""
+    prefix = "ASAM_{0}_".format(asset_name)
+    for child in children:
+        character_id = child.name
+        if character_id.startswith(prefix):
+            character_id = character_id[len(prefix):]
+        filepath = os.path.join(blend_dir, "{0}.blend".format(character_id))
+        bpy_module.data.libraries.write(filepath, {child}, fake_user=True)
+        exported.append(filepath)
+    return exported
+
+
+def export_crowd_characters_gltf(bpy_module, wrapper_collection_name: str, output_dir: str) -> List[str]:
+    """Export each child collection of a crowd wrapper as a separate .glb file.
+
+    Iterates over wrapper.children (one per character), selects its objects,
+    and exports to <output_dir>/glb/<character_id>.glb.
+    Returns the list of written file paths.
+
+    Raises ValueError if the wrapper is absent, not generated, or has no children.
+    """
+    wrapper = bpy_module.data.collections.get(wrapper_collection_name)
+    if wrapper is None or not bool(wrapper.get(GENERATED_MARKER_KEY)):
+        raise ValueError(
+            "Refusing to export '{0}': not a generated wrapper collection".format(
+                wrapper_collection_name
+            )
+        )
+    children = list(wrapper.children)
+    if not children:
+        raise ValueError(
+            "Wrapper '{0}' has no child collections to export individually".format(
+                wrapper_collection_name
+            )
+        )
+    glb_dir = os.path.join(output_dir, "glb")
+    os.makedirs(glb_dir, exist_ok=True)
+    exported = []
+    asset_name = wrapper.get(GENERATED_ASSET_KEY) or ""
+    prefix = "ASAM_{0}_".format(asset_name)
+    try:
+        bpy_module.ops.object.mode_set(mode="OBJECT")
+    except RuntimeError:
+        pass
+    for child in children:
+        character_id = child.name
+        if character_id.startswith(prefix):
+            character_id = character_id[len(prefix):]
+        filepath = os.path.join(glb_dir, "{0}.glb".format(character_id))
+        bpy_module.ops.object.select_all(action='DESELECT')
+        for obj in child.all_objects:
+            obj.select_set(True)
+        bpy_module.ops.export_scene.gltf(
+            filepath=filepath,
+            use_selection=True,
+            export_format='GLB',
+        )
+        exported.append(filepath)
+    return exported
