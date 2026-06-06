@@ -23,6 +23,16 @@ except ImportError:  # pragma: no cover - Blender script path fallback
     )
 
 
+_EXTREMITY_BONES_TO_HIDE = {
+    "Full_Thumb_Left",
+    "Full_Thumb_Right",
+    "Full_Fingers_Left",
+    "Full_Fingers_Right",
+    "Full_Toes_Left",
+    "Full_Toes_Right",
+}
+
+
 def snapshot_existing_collections(bpy_module) -> List[dict]:
     """Capture collection metadata needed for safe rerun decisions."""
     collections = []
@@ -615,6 +625,8 @@ def _populate_edit_bones(bpy_module, armature_object, bones: List[dict], roll_al
         edit_bone.head = bone["head"]
         edit_bone.tail = bone["tail"]
         edit_bone.use_connect = bool(bone.get("use_connect", False))
+        if bone["name"] in _EXTREMITY_BONES_TO_HIDE and bone.get("geometry_source") != "source_bone":
+            edit_bone.hide = True
 
     for bone in bones:
         parent_name = bone.get("parent_bone")
