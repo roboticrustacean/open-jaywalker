@@ -20,6 +20,8 @@ class OJSettings(bpy.types.PropertyGroup):
     build_succeeded: bpy.props.IntProperty(default=0)
     build_failed: bpy.props.IntProperty(default=0)
     failed_characters_csv: bpy.props.StringProperty(default="")
+    synthesized_bones_csv: bpy.props.StringProperty(default="")
+    synthesized_bones_by_character_csv: bpy.props.StringProperty(default="")
     packaging_mode: bpy.props.EnumProperty(
         name="Output",
         description="How to package the generated ASAM human(s)",

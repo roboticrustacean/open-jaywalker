@@ -74,6 +74,21 @@ def run_build(asset_dir, bpy, packaging_mode=PACKAGING_INPLACE_EXPORT, export_gl
 
     _export_if_requested(asset_dir, resolved["asset_name"], wrapper_name, bpy, packaging_mode, export_gltf, report)
 
+    if resolved["crowd"]:
+        for char_report in report.get("characters", []):
+            heuristics = char_report.get("targets_created_heuristically", [])
+            if heuristics:
+                print("WARNING: Character '{0}' has synthesized inert bones added for compliance: {1}".format(
+                    char_report.get("character_id"),
+                    ", ".join(heuristics)
+                ))
+    else:
+        heuristics = report.get("targets_created_heuristically", [])
+        if heuristics:
+            print("WARNING: Synthesized inert bones added for compliance: {0}".format(
+                ", ".join(heuristics)
+            ))
+
     print(success_message(report, report_path))
     return report
 

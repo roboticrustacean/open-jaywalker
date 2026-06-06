@@ -24,6 +24,8 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         settings = context.scene.open_jaywalker
         settings.has_plan = False
         settings.built = False
+        settings.synthesized_bones_csv = ""
+        settings.synthesized_bones_by_character_csv = ""
 
         prefs = _addon_prefs(context)
         if prefs.output_dir:
@@ -114,10 +116,31 @@ class OJ_OT_build(bpy.types.Operator):
             failed = report.get("failed_characters", [])
             settings.build_failed = len(failed)
             settings.failed_characters_csv = ", ".join(f.get("character_id", "") for f in failed)
+            
+            synth_list = []
+            for char_report in report.get("characters", []):
+                heuristics = char_report.get("targets_created_heuristically", [])
+                if heuristics:
+                    synth_list.append("{0} ({1})".format(
+                        char_report.get("character_id"),
+                        ", ".join(heuristics)
+                    ))
+            settings.synthesized_bones_by_character_csv = " | ".join(synth_list)
+            if synth_list:
+                self.report({'WARNING'}, "Synthesized inert bones added for compliance: {0}".format(
+                    ", ".join(synth_list)
+                ))
         else:
             settings.build_succeeded = 1 if report.get("built_core_targets") else 0
             settings.build_failed = 0
             settings.failed_characters_csv = ""
+            
+            heuristics = report.get("targets_created_heuristically", [])
+            settings.synthesized_bones_csv = ", ".join(heuristics)
+            if heuristics:
+                self.report({'WARNING'}, "Synthesized inert bones added for compliance: {0}".format(
+                    ", ".join(heuristics)
+                ))
 
         return {'FINISHED'}
 
@@ -143,6 +166,9 @@ class OJ_OT_clean(bpy.types.Operator):
 
     def execute(self, context):
         removed = purge_previous_generated_artifacts(bpy)
-        context.scene.open_jaywalker.built = False
+        s = context.scene.open_jaywalker
+        s.built = False
+        s.synthesized_bones_csv = ""
+        s.synthesized_bones_by_character_csv = ""
         self.report({'INFO'}, "Removed {0} generated object(s)/collection(s).".format(removed))
         return {'FINISHED'}
