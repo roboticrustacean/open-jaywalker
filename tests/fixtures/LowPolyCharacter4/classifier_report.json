@@ -782,7 +782,7 @@
           "notes": []
         },
         "Upper_Spine": {
-          "source_bone": "DEF-spine.004",
+          "source_bone": "DEF-spine.003",
           "confidence": 0.736,
           "action": "alias_map",
           "decision": "structure_confirmed_by_name",
@@ -794,7 +794,9 @@
             "source_origin": "primary",
             "role": "deform"
           },
-          "notes": []
+          "notes": [
+            "neck_coincident_upper_spine_demoted"
+          ]
         },
         "Neck": {
           "source_bone": "neck",
@@ -1528,7 +1530,7 @@
           "role": "deform"
         },
         {
-          "bone_name": "DEF-spine.003",
+          "bone_name": "DEF-spine.004",
           "reason": "supporting_chain_detail",
           "origin": "primary",
           "role": "deform"
@@ -2744,7 +2746,7 @@
       "notes": []
     },
     "Upper_Spine": {
-      "source_bone": "DEF-spine.004",
+      "source_bone": "DEF-spine.003",
       "confidence": 0.736,
       "action": "alias_map",
       "decision": "structure_confirmed_by_name",
@@ -2756,7 +2758,9 @@
         "source_origin": "primary",
         "role": "deform"
       },
-      "notes": []
+      "notes": [
+        "neck_coincident_upper_spine_demoted"
+      ]
     },
     "Neck": {
       "source_bone": "neck",

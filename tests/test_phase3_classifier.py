@@ -4,6 +4,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import types
 import unittest
 from pathlib import Path
 from typing import Optional
@@ -23,6 +24,7 @@ from phase3_classifier.classifier import (  # noqa: E402
     _compute_vertex_group_coverage,
     _compute_deform_purity,
     _compute_selection_tiebreaker,
+    _demote_neck_coincident_upper_spine,
     _detect_convention,
     _normalize_bone_name,
     _detect_family_tags,
@@ -1723,6 +1725,121 @@ class SingleSpineSplitTests(unittest.TestCase):
         self.assertNotEqual(sm["Lower_Spine"]["action"], "split_in_builder")
         self.assertNotEqual(sm["Upper_Spine"]["action"], "split_in_builder")
         self.assertEqual(build_plan["actions"]["split"], [])
+
+
+def _guard_bone(head, parent=None):
+    # Only .head (index-able by axis) and .parent (name or None) are read by the guard.
+    return types.SimpleNamespace(head=list(head), parent=parent)
+
+
+def _guard_ctx(bones):
+    return {
+        "bones": bones,
+        "height_axis": 2,   # z is up in these fixtures
+        "height_sign": 1,
+        "height_span": 2.0,
+    }
+
+
+def _guard_payload(source_bone, action="alias_map", notes=None):
+    return {
+        "source_bone": source_bone,
+        "action": action,
+        "confidence": 0.7,
+        "notes": list(notes or []),
+    }
+
+
+class SpineNeckGuardTests(unittest.TestCase):
+    def test_demotes_upper_spine_when_head_coincides_with_neck(self):
+        bones = {
+            "s1": _guard_bone((0.0, 0.0, 1.0890), parent="hip"),
+            "s2": _guard_bone((0.0, 0.0, 1.2145), parent="s1"),
+            "s3": _guard_bone((0.0, 0.0, 1.3741), parent="s2"),
+            "s4": _guard_bone((0.0, 0.0, 1.5338), parent="s3"),  # head == neck head
+            "neck": _guard_bone((0.0, 0.0, 1.5338), parent="mch"),
+        }
+        resolved = {
+            "Lower_Spine": _guard_payload("s1"),
+            "Upper_Spine": _guard_payload("s4"),
+            "Neck": _guard_payload("neck", action="direct_map"),
+        }
+        _demote_neck_coincident_upper_spine(resolved, _guard_ctx(bones))
+        self.assertEqual(resolved["Upper_Spine"]["source_bone"], "s3")
+        self.assertIn(
+            "neck_coincident_upper_spine_demoted",
+            resolved["Upper_Spine"]["notes"],
+        )
+
+    def test_noop_when_upper_spine_already_below_neck(self):
+        bones = {
+            "s1": _guard_bone((0.0, 0.0, 1.0890), parent="hip"),
+            "s3": _guard_bone((0.0, 0.0, 1.3741), parent="s1"),
+            "neck": _guard_bone((0.0, 0.0, 1.5338), parent="mch"),
+        }
+        resolved = {
+            "Lower_Spine": _guard_payload("s1"),
+            "Upper_Spine": _guard_payload("s3"),
+            "Neck": _guard_payload("neck", action="direct_map"),
+        }
+        _demote_neck_coincident_upper_spine(resolved, _guard_ctx(bones))
+        self.assertEqual(resolved["Upper_Spine"]["source_bone"], "s3")
+        self.assertEqual(resolved["Upper_Spine"]["notes"], [])
+
+    def test_degenerate_leaves_mapping_and_annotates(self):
+        # Only spine bone below neck is Lower_Spine's own source -> nothing valid to pick.
+        bones = {
+            "s1": _guard_bone((0.0, 0.0, 1.0890), parent="hip"),
+            "s4": _guard_bone((0.0, 0.0, 1.5338), parent="s1"),  # head == neck head
+            "neck": _guard_bone((0.0, 0.0, 1.5338), parent="mch"),
+        }
+        resolved = {
+            "Lower_Spine": _guard_payload("s1"),
+            "Upper_Spine": _guard_payload("s4"),
+            "Neck": _guard_payload("neck", action="direct_map"),
+        }
+        _demote_neck_coincident_upper_spine(resolved, _guard_ctx(bones))
+        self.assertEqual(resolved["Upper_Spine"]["source_bone"], "s4")
+        self.assertIn(
+            "neck_coincident_upper_spine_unresolved",
+            resolved["Upper_Spine"]["notes"],
+        )
+
+    def test_noop_when_upper_spine_is_split(self):
+        # Single-spine split assigns both spine targets to one bone; guard must not touch it.
+        bones = {
+            "s1": _guard_bone((0.0, 0.0, 1.2000), parent="hip"),
+            "neck": _guard_bone((0.0, 0.0, 1.5338), parent="mch"),
+        }
+        resolved = {
+            "Lower_Spine": _guard_payload("s1", action="split_in_builder"),
+            "Upper_Spine": _guard_payload("s1", action="split_in_builder"),
+            "Neck": _guard_payload("neck", action="direct_map"),
+        }
+        _demote_neck_coincident_upper_spine(resolved, _guard_ctx(bones))
+        self.assertEqual(resolved["Upper_Spine"]["source_bone"], "s1")
+        self.assertEqual(resolved["Upper_Spine"]["notes"], [])
+
+    def test_demotes_with_negative_height_sign(self):
+        # Up is the -z direction (height_sign=-1): "higher" means more negative z.
+        bones = {
+            "s1": _guard_bone((0.0, 0.0, -1.0890), parent="hip"),
+            "s3": _guard_bone((0.0, 0.0, -1.3741), parent="s1"),
+            "s4": _guard_bone((0.0, 0.0, -1.5338), parent="s3"),  # head == neck head
+            "neck": _guard_bone((0.0, 0.0, -1.5338), parent="mch"),
+        }
+        ctx = {"bones": bones, "height_axis": 2, "height_sign": -1, "height_span": 2.0}
+        resolved = {
+            "Lower_Spine": _guard_payload("s1"),
+            "Upper_Spine": _guard_payload("s4"),
+            "Neck": _guard_payload("neck", action="direct_map"),
+        }
+        _demote_neck_coincident_upper_spine(resolved, ctx)
+        self.assertEqual(resolved["Upper_Spine"]["source_bone"], "s3")
+        self.assertIn(
+            "neck_coincident_upper_spine_demoted",
+            resolved["Upper_Spine"]["notes"],
+        )
 
 
 if __name__ == "__main__":

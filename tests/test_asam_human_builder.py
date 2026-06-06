@@ -941,6 +941,36 @@ class AsamHumanBuilderTests(unittest.TestCase):
             self.assertEqual(preserved_bone["source_bone"], source_name)
             self.assertEqual(preserved_bone["semantic_action"], "preserve_paired_pelvis")
 
+    def test_lowpoly_central_chain_is_monotonic_and_continuous(self):
+        # Regression for #73: the spanned central chain Hip -> Lower_Spine ->
+        # Upper_Spine -> Neck -> Head on the real LowPolyCharacter4 rig must render as
+        # an upright, non-overlapping spine. Overlap can only arise from a fold-back
+        # (a child head sitting at/below its parent along the up axis); pin against it.
+        asset_dir = _copy_asset_folder("LowPolyCharacter4")
+        write_asset_report(asset_dir)
+
+        _, build_plan, build_spec = build_armature_spec_from_asset_dir(asset_dir)
+
+        up = build_plan["placement_metadata"]["up_axis"]
+        up_index = int(up["index"])
+        up_sign = int(up.get("sign", 1))
+        chain = ["Hip", "Lower_Spine", "Upper_Spine", "Neck", "Head"]
+        bones = [_spec_bone(build_spec, name) for name in chain]
+
+        # 1. Strict monotonic ascent along the up axis: no inversion / fold-back / overlap.
+        for parent, child in zip(bones, bones[1:]):
+            self.assertGreater(
+                child["head"][up_index] * up_sign,
+                parent["head"][up_index] * up_sign,
+                "{0} head must sit strictly above {1} head along the up axis".format(
+                    child["name"], parent["name"]
+                ),
+            )
+
+        # 2. End-to-end continuity: each spanned bone's tail meets its child's head.
+        for parent, child in zip(bones, bones[1:]):
+            _assert_vec_almost_equal(self, parent["tail"], child["head"])
+
     def test_repaired_paired_pelvis_creates_centered_hip_at_pelvis_pointing_to_spine(self):
         classifier_report = _base_classifier_report()
         build_plan = _base_build_plan()
