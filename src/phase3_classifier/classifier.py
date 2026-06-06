@@ -1489,7 +1489,7 @@ def _plan_single_spine_split(resolved_targets: Dict[str, dict], context: dict) -
 def _demote_neck_coincident_upper_spine(resolved_targets: Dict[str, dict], context: dict) -> None:
     """Keep ASAM Upper_Spine strictly below Neck (issue #73).
 
-    On some rigs the spine-segment chosen for Upper_Spine has its head on the very
+    On some rigs the spine-segment chosen for Upper_Spine has its head at or above the
     joint the Neck bone starts from (e.g. Rigify `DEF-spine.004` head == `neck` head),
     so the two bones share a joint and render overlapping. The structural channel cannot
     see this — the colliding joint belongs to the parallel name-alias Neck bone, not the

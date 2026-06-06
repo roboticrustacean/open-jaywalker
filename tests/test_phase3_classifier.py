@@ -24,6 +24,7 @@ from phase3_classifier.classifier import (  # noqa: E402
     _compute_vertex_group_coverage,
     _compute_deform_purity,
     _compute_selection_tiebreaker,
+    _demote_neck_coincident_upper_spine,
     _detect_convention,
     _normalize_bone_name,
     _detect_family_tags,
@@ -1726,9 +1727,6 @@ class SingleSpineSplitTests(unittest.TestCase):
         self.assertEqual(build_plan["actions"]["split"], [])
 
 
-from phase3_classifier.classifier import _demote_neck_coincident_upper_spine
-
-
 def _guard_bone(head, parent=None):
     # Only .head (index-able by axis) and .parent (name or None) are read by the guard.
     return types.SimpleNamespace(head=list(head), parent=parent)
@@ -1821,6 +1819,27 @@ class SpineNeckGuardTests(unittest.TestCase):
         _demote_neck_coincident_upper_spine(resolved, _guard_ctx(bones))
         self.assertEqual(resolved["Upper_Spine"]["source_bone"], "s1")
         self.assertEqual(resolved["Upper_Spine"]["notes"], [])
+
+    def test_demotes_with_negative_height_sign(self):
+        # Up is the -z direction (height_sign=-1): "higher" means more negative z.
+        bones = {
+            "s1": _guard_bone((0.0, 0.0, -1.0890), parent="hip"),
+            "s3": _guard_bone((0.0, 0.0, -1.3741), parent="s1"),
+            "s4": _guard_bone((0.0, 0.0, -1.5338), parent="s3"),  # head == neck head
+            "neck": _guard_bone((0.0, 0.0, -1.5338), parent="mch"),
+        }
+        ctx = {"bones": bones, "height_axis": 2, "height_sign": -1, "height_span": 2.0}
+        resolved = {
+            "Lower_Spine": _guard_payload("s1"),
+            "Upper_Spine": _guard_payload("s4"),
+            "Neck": _guard_payload("neck", action="direct_map"),
+        }
+        _demote_neck_coincident_upper_spine(resolved, ctx)
+        self.assertEqual(resolved["Upper_Spine"]["source_bone"], "s3")
+        self.assertIn(
+            "neck_coincident_upper_spine_demoted",
+            resolved["Upper_Spine"]["notes"],
+        )
 
 
 if __name__ == "__main__":
