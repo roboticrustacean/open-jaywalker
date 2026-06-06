@@ -36,6 +36,8 @@ _CLASSES = (
     state.OJSettings,
     operators.OJ_OT_run_pipeline,
     operators.OJ_OT_build,
+    operators.OJ_OT_export_blend,
+    operators.OJ_OT_export_gltf,
     operators.OJ_OT_open_output,
     operators.OJ_OT_clean,
     ui.OJ_PT_panel,

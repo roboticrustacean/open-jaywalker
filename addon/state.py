@@ -61,21 +61,18 @@ class OJSettings(bpy.types.PropertyGroup):
     failed_characters_csv: bpy.props.StringProperty(default="")
     synthesized_bones_csv: bpy.props.StringProperty(default="")
     synthesized_bones_by_character_csv: bpy.props.StringProperty(default="")
-    packaging_mode: bpy.props.EnumProperty(
-        name="Output",
-        description="How to package the generated ASAM human(s)",
-        items=[
-            ("inplace_export", "In-place + export .blend",
-             "Build in this file, then export only the ASAM result to <asset>_asam.blend"),
-            ("inplace_only", "In-place only",
-             "Build in this file; do not export a separate .blend"),
-            ("separate_only", "Separate file only",
-             "Export the ASAM result, then remove generated data from this file"),
-        ],
-        default="inplace_export",
+    export_blend: bpy.props.BoolProperty(
+        default=False,
+        name="Auto-export .blend",
+        description="Automatically export the generated ASAM result to .blend after build"
     )
     export_gltf: bpy.props.BoolProperty(
-        default=False, 
-        name="Export glTF / .glb",
-        description="Wrap and export the generated ASAM human to .glb format"
+        default=True,
+        name="Auto-export .glb",
+        description="Automatically export the generated ASAM result to .glb format after build"
+    )
+    per_character_export: bpy.props.BoolProperty(
+        default=False,
+        name="Per-character files",
+        description="Export each crowd character as a separate file instead of one combined file"
     )
