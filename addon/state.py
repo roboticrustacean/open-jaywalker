@@ -76,3 +76,5 @@ class OJSettings(bpy.types.PropertyGroup):
         name="Per-character files",
         description="Export each crowd character as a separate file instead of one combined file"
     )
+    show_failed_details: bpy.props.BoolProperty(default=False)
+    show_inert_details: bpy.props.BoolProperty(default=False)
