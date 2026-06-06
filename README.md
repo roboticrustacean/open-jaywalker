@@ -25,8 +25,10 @@ decomposition).
 To use the generated `.glb` assets in an OpenSCENARIO simulator such as
 [esmini](https://github.com/eclipse/esmini) (which ingests OpenSceneGraph `.osgb`),
 the repo ships an unsupported post-build conversion helper, `tools/glb_to_osgb.py`,
-that wraps a local `osgconv`. See
-[Using Outputs in esmini / OpenSCENARIO](https://github.com/roboticrustacean/open-jaywalker/wiki/Using-Outputs-in-esmini-and-OpenSCENARIO).
+that wraps a local `osgconv`. Note that stock OpenSceneGraph builds cannot read `.glb`
+directly (no glTF plugin), so the portable route is `.glb → .obj → .osgb`. The
+[Using Outputs in esmini / OpenSCENARIO](https://github.com/roboticrustacean/open-jaywalker/wiki/Using-Outputs-in-esmini-and-OpenSCENARIO)
+wiki page has the verified end-to-end recipe plus the scale and texture caveats.
 
 ### Blender Add-on (recommended)
 

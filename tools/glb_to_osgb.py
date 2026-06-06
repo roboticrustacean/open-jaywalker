@@ -10,8 +10,17 @@ OpenSceneGraph). It is deliberately NOT part of the Blender add-on / core build 
 Resolution order for the `osgconv` executable: explicit argument -> ``OSGCONV`` env var
 -> ``shutil.which("osgconv")``.
 
+IMPORTANT -- input format depends on osgconv's plugins. ``osgconv`` can only read a
+format it has a plugin for. **Stock Windows OpenSceneGraph prebuilds ship no glTF/assimp
+read plugin**, so a direct ``.glb`` conversion fails with "Could not find plugin to read
+objects". The portable route is ``.glb`` -> ``.obj`` -> ``.osgb`` (export ``.obj`` from
+Blender; the ``.obj`` plugin is standard and preserves metres). This helper passes the
+input straight to osgconv, so it works on ``.obj``/``.fbx`` inputs too -- not only
+``.glb``. See the wiki page "Using Outputs in esmini / OpenSCENARIO" for the full recipe
+and the texture/scale caveats.
+
 Run:
-    python tools/glb_to_osgb.py <glb> [<glb> ...] [--osgconv PATH] [--outdir DIR]
+    python tools/glb_to_osgb.py <model> [<model> ...] [--osgconv PATH] [--outdir DIR]
 """
 
 from __future__ import annotations
