@@ -70,9 +70,30 @@ class OJ_PT_panel(bpy.types.Panel):
                     )
 
             layout.prop(s, "packaging_mode")
+            layout.prop(s, "export_gltf")
             build_row = layout.row()
             build_row.enabled = s.has_plan and not s.built
             build_row.operator("open_jaywalker.build", icon='MOD_ARMATURE')
+
+        if s.built:
+            layout.separator()
+            res_box = layout.box()
+            res_box.label(text="Build Results", icon='INFO')
+            res_col = res_box.column(align=True)
+            if s.is_crowd:
+                res_col.label(text="Succeeded: {0}".format(s.build_succeeded), icon='CHECKMARK')
+                if s.build_failed > 0:
+                    res_col.label(text="Failed: {0}".format(s.build_failed), icon='ERROR')
+                    det = res_box.box()
+                    det.label(text="Failed characters:")
+                    for cid in s.failed_characters_csv.split(", "):
+                        if cid:
+                            det.label(text="   - {0}".format(cid))
+            else:
+                if s.build_succeeded > 0:
+                    res_col.label(text="Successfully built character.", icon='CHECKMARK')
+                else:
+                    res_col.label(text="Build failed.", icon='ERROR')
 
         if s.asset_dir:
             layout.separator()
