@@ -213,6 +213,10 @@ def _assert_vec_almost_equal(test_case: unittest.TestCase, actual, expected, pla
         test_case.assertAlmostEqual(actual_value, expected_value, places=places)
 
 
+def _distance_for_test(a, b):
+    return sum((b[i] - a[i]) ** 2 for i in range(3)) ** 0.5
+
+
 class _FakeProps:
     def __init__(self):
         self._props = {}
@@ -3102,6 +3106,52 @@ def _write_single_spine_asset_on_disk(asset_name: str = "single_spine_integratio
     return asset_dir
 
 
+class EyePlacementTests(unittest.TestCase):
+    """Synthesized eyes anchor to the Head bone: two distinct bones on the
+    front-upper face, symmetric about the head, never collapsed to Head.tail."""
+
+    def _head(self):
+        return {"name": "Head", "parent": "Neck",
+                "head": [0.0, 0.0, 1.5], "tail": [0.0, 0.0, 1.7], "length": 0.2}
+
+    def test_eyes_are_distinct_front_upper_and_symmetric(self):
+        from asam_human_builder.geometry_resolution import _resolve_eye_geometry
+        pm = _placement_metadata()  # forward=+x, side=+y, up=+z
+        head = self._head()
+        left, lsrc, lbone = _resolve_eye_geometry("Eye_Left", head, pm)
+        right, rsrc, rbone = _resolve_eye_geometry("Eye_Right", head, pm)
+
+        self.assertGreater(left["head"][1], 0.0)    # Left -> +side (+y)
+        self.assertLess(right["head"][1], 0.0)      # Right -> -side (-y)
+        self.assertAlmostEqual(left["head"][1], -right["head"][1], places=6)  # symmetric
+
+        self.assertGreater(left["head"][0], 0.0)                 # in front (forward +x)
+        self.assertGreater(left["head"][2], head["head"][2])     # above head base
+
+        self.assertNotEqual(left["head"], head["tail"])          # NOT chin-collapsed
+        self.assertNotEqual(right["head"], head["tail"])
+
+        self.assertGreater(left["tail"][0], left["head"][0])     # points forward (gaze)
+        self.assertGreater(left["length"], 0.0)
+
+        self.assertEqual((lsrc, lbone), ("eye_anchored", None))
+        self.assertEqual((rsrc, rbone), ("eye_anchored", None))
+
+    def test_eyes_sit_in_upper_head_near_crown(self):
+        # Regression for the "eyes at mouth level" bug (#64): a Head bone whose
+        # base sits at the neck means a mid-bone eye level lands on the lower face.
+        # Eyes must anchor near the crown (Head.tail), in the upper part of the head.
+        from asam_human_builder.geometry_resolution import _resolve_eye_geometry
+        pm = _placement_metadata()
+        head = self._head()  # base z=1.5 (neck), crown z=1.7
+        base_z, crown_z = head["head"][2], head["tail"][2]
+        upper_threshold = base_z + 0.65 * (crown_z - base_z)  # 1.63
+        left, _, _ = _resolve_eye_geometry("Eye_Left", head, pm)
+        # Eye sits in the upper head, but still below the crown (not floating above).
+        self.assertGreater(left["head"][2], upper_threshold)
+        self.assertLessEqual(left["head"][2], crown_z)
+
+
 class SingleSpineSplitPipelineIntegrationTests(unittest.TestCase):
     """End-to-end on-disk seam for the single-spine geometric split (#56).
 
@@ -3166,6 +3216,122 @@ class SingleSpineSplitPipelineIntegrationTests(unittest.TestCase):
         self.assertEqual(renames.get("Spine"), "Lower_Spine")
         self.assertNotIn("Upper_Spine", renames.values())
         self.assertEqual(remap["name_collisions"], [])
+
+
+class FingerPlacementTests(unittest.TestCase):
+    """Synthesized fingers/thumb anchor at the wrist (carpal beginning) and point
+    along the Hand bone. The builder's terminal-orientation pass owns the final tail
+    direction/length, so the resolver only establishes the wrist head anchor."""
+
+    def _hand(self, side_sign=1):
+        wrist = [0.5, 0.1 * side_sign, 1.2]
+        end = [0.5, 0.3 * side_sign, 1.2]
+        return {"name": "Hand", "parent": "Lower_Arm",
+                "head": wrist, "tail": end, "length": _distance_for_test(wrist, end)}
+
+    def test_fingers_anchor_at_wrist_along_hand(self):
+        from asam_human_builder.geometry_resolution import _resolve_finger_geometry
+        pm = _placement_metadata()
+        hand = self._hand()
+        fingers, fsrc, fbone = _resolve_finger_geometry("Full_Fingers_Left", hand, pm)
+        self.assertEqual(fingers["head"], [float(v) for v in hand["head"]])  # wrist anchor
+        self.assertGreater(fingers["tail"][1], hand["head"][1])              # points along hand (+y)
+        self.assertGreater(fingers["length"], 0.0)                           # non-degenerate
+        self.assertEqual((fsrc, fbone), ("finger_anchored", None))
+
+    def test_thumb_and_fingers_share_wrist_anchor(self):
+        # Divergence and length are set later by _orient_terminal_extremities, so the
+        # resolver produces the same wrist-anchored placeholder for thumb and fingers.
+        from asam_human_builder.geometry_resolution import _resolve_finger_geometry
+        pm = _placement_metadata()
+        hand = self._hand()
+        fingers, _, _ = _resolve_finger_geometry("Full_Fingers_Left", hand, pm)
+        thumb, tsrc, tbone = _resolve_finger_geometry("Full_Thumb_Left", hand, pm)
+        self.assertEqual(thumb["head"], [float(v) for v in hand["head"]])    # wrist anchor
+        self.assertEqual(thumb["head"], fingers["head"])                     # same origin as fingers
+        self.assertEqual((tsrc, tbone), ("finger_anchored", None))
+
+    def test_sides_derive_from_their_own_hand_independently(self):
+        from asam_human_builder.geometry_resolution import _resolve_finger_geometry
+        pm = _placement_metadata()
+        left, _, _ = _resolve_finger_geometry("Full_Fingers_Left", self._hand(1), pm)
+        right, _, _ = _resolve_finger_geometry("Full_Fingers_Right", self._hand(-1), pm)
+        self.assertGreater(left["tail"][1], 0.0)    # left follows +y hand
+        self.assertLess(right["tail"][1], 0.0)      # right follows -y hand
+
+
+class EyeFingerDispatchTests(unittest.TestCase):
+    """The created-target resolver routes Eye_* to the Head anchor and
+    Full_*_* to the same-side Hand anchor, and falls through when the parent
+    is unavailable."""
+
+    def _bone_parents(self):
+        return {"Eye_Left": "Head", "Eye_Right": "Head",
+                "Full_Fingers_Left": "Hand_Left", "Full_Thumb_Left": "Hand_Left",
+                "Full_Fingers_Right": "Hand_Right", "Full_Thumb_Right": "Hand_Right"}
+
+    def _semantic(self, *targets):
+        # Include both the requested targets plus their opposites (for mirroring logic)
+        all_targets = set(targets)
+        for target in targets:
+            opposite = None
+            if target.endswith("_Left"):
+                opposite = target[:-5] + "_Right"
+            elif target.endswith("_Right"):
+                opposite = target[:-6] + "_Left"
+            if opposite:
+                all_targets.add(opposite)
+        return {t: {"action": "create_in_builder", "source_bone": None, "notes": []} for t in all_targets}
+
+    def test_eye_routes_to_head_anchor(self):
+        from asam_human_builder.geometry_resolution import _resolve_created_target_geometry
+        pm = _placement_metadata()
+        resolved = {"Head": {"name": "Head", "parent": "Neck",
+                             "head": [0.0, 0.0, 1.5], "tail": [0.0, 0.0, 1.7], "length": 0.2}}
+        geometry, source, bone = _resolve_created_target_geometry(
+            "Eye_Left", self._semantic("Eye_Left"), {}, {}, pm,
+            self._bone_parents(), {}, resolved,
+        )
+        self.assertEqual(source, "eye_anchored")
+        self.assertNotEqual(geometry["head"], resolved["Head"]["tail"])  # not chin-collapsed
+
+    def test_fingers_route_to_same_side_hand(self):
+        from asam_human_builder.geometry_resolution import _resolve_created_target_geometry
+        pm = _placement_metadata()
+        resolved = {"Hand_Left": {"name": "Hand_Left", "parent": "Lower_Arm_Left",
+                                  "head": [0.5, 0.1, 1.2], "tail": [0.5, 0.3, 1.2], "length": 0.2}}
+        geometry, source, bone = _resolve_created_target_geometry(
+            "Full_Fingers_Left", self._semantic("Full_Fingers_Left"), {}, {}, pm,
+            self._bone_parents(), {}, resolved,
+        )
+        self.assertEqual(source, "finger_anchored")
+        self.assertEqual(geometry["head"], [0.5, 0.1, 1.2])  # wrist anchor
+
+    def test_falls_through_when_parent_unavailable(self):
+        from asam_human_builder.geometry_resolution import _resolve_created_target_geometry
+        pm = _placement_metadata()
+        # Head present in semantic_mapping (as always in production) but unresolved
+        # (create_in_builder, no source) and absent from resolved_geometry -> the
+        # eye anchor cannot resolve a parent and must fall through to the generic path.
+        semantic = self._semantic("Eye_Left", "Head")
+        geometry, source, bone = _resolve_created_target_geometry(
+            "Eye_Left", semantic, {}, {}, pm,
+            self._bone_parents(), {}, {},
+        )
+        self.assertNotEqual(source, "eye_anchored")  # generic fallback ran instead
+        self.assertIsNotNone(geometry)               # still produced a bone, no crash
+
+    def test_mapped_eye_is_not_anchored(self):
+        from asam_human_builder.geometry_resolution import _resolve_target_geometry
+        pm = _placement_metadata()
+        semantic = {"Eye_Left": {"action": "direct_map", "source_bone": "L_eye", "notes": []}}
+        source_bones = {"L_eye": {"name": "L_eye", "parent": "Head",
+                                  "head": [0.3, 0.1, 1.6], "tail": [0.35, 0.1, 1.6], "length": 0.05}}
+        geometry, source, bone = _resolve_target_geometry(
+            "Eye_Left", semantic, {}, source_bones, pm, {"Eye_Left": "Head"}, {}, {}, [],
+        )
+        self.assertEqual(source, "source_bone")   # direct map, not eye_anchored
+        self.assertEqual(bone, "L_eye")
 
 
 if __name__ == "__main__":
