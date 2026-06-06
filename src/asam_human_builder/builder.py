@@ -657,58 +657,23 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
                 "parent": "Hip",
             }
         )
-    # Materialize only extras that actually skin the mesh. The classifier flags every
-    # non-core source bone as an extra, which for a control rig (Rigify) includes
-    # hundreds of non-deforming MCH-/VIS-/IK/FK bones. Adding those to the generated
-    # armature clutters it with stray (often long pole) bones that deform nothing - the
-    # #88 "spiky build" regression. The durable rule is to build from what the mesh is
-    # weighted to, so an extra is preserved only when it carries skin weight.
+    # Non-core source bones are NOT materialized as bones. The classifier flags every
+    # non-core bone as an extra, which for a control rig (Rigify) is hundreds of
+    # non-deforming MCH-/VIS-/IK/FK bones; materializing them all (#88) filled the clean
+    # ASAM armature with stray, often long pole bones - the "spiky build". The coherent
+    # rule is a single mechanism: the 28 core is the skeleton, and every non-core deform
+    # bone's skin weights are consolidated into the nearest core bone by
+    # _compute_weight_merges above (lossless - the mesh stays fully weighted). Control
+    # bones skin nothing, so they simply never appear. Genuine separate-mesh decorators
+    # (hair/clothing/accessories with their own mesh) are a future additive feature,
+    # preserved via ASAM Hair_/Clothing_/Accessories_ containers rather than as body-mesh
+    # skeleton subdivisions.
     mesh_binding = build_plan.get("mesh_binding", {})
-    kept_extra_names = [
-        extra.get("bone_name")
-        for extra in spec["extras_preserved"]
-        if extra.get("bone_name") in source_bones
-        and _bone_has_skin_weight(extra.get("bone_name"), mesh_binding)
-    ]
-
-    # Map source bone name -> final (in-armature) bone name: core/pelvis/root bones
-    # already in spec["bones"], plus the kept extras (which keep their own names).
-    source_to_final_name = {}
-    for bone in spec["bones"]:
-        src_name = bone.get("source_bone")
-        if src_name:
-            source_to_final_name[src_name] = bone["name"]
-    for extra_name in kept_extra_names:
-        source_to_final_name[extra_name] = extra_name
-
-    def _resolve_extra_parent(parent_name):
-        # Walk up the source parent chain to the nearest bone that exists in the
-        # generated armature, so a kept extra never dangles off a dropped parent.
-        seen = set()
-        current = parent_name
-        while current and current not in seen:
-            seen.add(current)
-            mapped = source_to_final_name.get(current)
-            if mapped:
-                return mapped
-            geom = source_bones.get(current)
-            current = geom.get("parent") if geom else None
-        return None
-
-    for extra_name in kept_extra_names:
-        geom = source_bones[extra_name]
-        spec["bones"].append(
-            {
-                "name": extra_name,
-                "parent_bone": _resolve_extra_parent(geom.get("parent")),
-                "head": _to_grp_root_local(geom["head"], grp_root_local_origin),
-                "tail": _to_grp_root_local(geom["tail"], grp_root_local_origin),
-                "use_connect": False,
-                "geometry_source": "source_bone",
-                "source_bone": extra_name,
-                "semantic_action": "preserve_extra",
-            }
-        )
+    spec["merged_extra_deform_count"] = sum(
+        1
+        for merge in spec["weight_merges"]
+        if _bone_has_skin_weight(merge["source"], mesh_binding)
+    )
 
     return spec
 
@@ -754,7 +719,7 @@ def build_builder_report(build_spec: dict, execution_result: dict) -> dict:
         "built_core_targets": [bone["name"] for bone in build_spec["bones"] if bone["name"] in core_target_names],
         "targets_from_source_geometry": source_targets,
         "targets_created_heuristically": created_targets,
-        "preserved_extras_count": len(build_spec.get("extras_preserved", [])),
+        "merged_extra_deform_count": build_spec.get("merged_extra_deform_count", 0),
         "preserved_pelvis_pair": copy.deepcopy(build_spec.get("preserved_pelvis_pair", [])),
         "hidden_source_objects": list(execution_result.get("hidden_source_objects", [])),
         "warnings": list(build_spec.get("warnings", [])),
@@ -782,10 +747,10 @@ def success_message(builder_report: dict, report_path) -> str:
             built, failed, report_path
         )
     core = len(builder_report.get("built_core_targets", []))
-    extras = builder_report.get("preserved_extras_count", 0)
+    merged = builder_report.get("merged_extra_deform_count", 0)
     asset = builder_report.get("asset_name", "")
-    return "ASAM human built: {0} - {1} core targets, {2} extras preserved. Report: {3}".format(
-        asset, core, extras, report_path
+    return "ASAM human built: {0} - {1} core targets, {2} extra deform bones merged into core. Report: {3}".format(
+        asset, core, merged, report_path
     )
 
 
@@ -812,7 +777,7 @@ def print_builder_summary(builder_report: dict, report_path: Path) -> None:
             ", ".join(builder_report["targets_created_heuristically"]) or "(none)"
         )
     )
-    print("Preserved extras count: {0}".format(builder_report["preserved_extras_count"]))
+    print("Extra deform bones merged into core: {0}".format(builder_report.get("merged_extra_deform_count", 0)))
     preserved_pair = builder_report.get("preserved_pelvis_pair", [])
     if preserved_pair:
         print(
