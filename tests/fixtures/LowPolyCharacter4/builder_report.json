@@ -15,11 +15,13 @@
   "duplicated_meshes": [
     {
       "source_mesh_name": "Cube",
-      "generated_mesh_name": "ASAM_Cube",
+      "generated_mesh_name": "Body_LowPolyCharacter4",
       "armature_link": "parent_and_modifier",
       "retargeted_armature_modifiers": [
         "Armature"
       ],
+      "role": "body",
+      "parent": "Grp_Root",
       "vertex_group_remap": {
         "renamed": [
           {
