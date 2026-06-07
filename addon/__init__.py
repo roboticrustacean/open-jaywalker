@@ -76,6 +76,7 @@ def load_post_handler(dummy1, dummy2=None):
             s.synthesized_bones_by_character_csv = ""
             s.show_failed_details = False
             s.show_inert_details = False
+            s.show_source = True
 
 
 def register():

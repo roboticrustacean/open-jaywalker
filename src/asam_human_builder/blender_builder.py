@@ -23,6 +23,8 @@ except ImportError:  # pragma: no cover - Blender script path fallback
     )
 
 
+SOURCE_HIDDEN_MARKER_KEY = "open_jaywalker_source_hidden"
+
 _EXTREMITY_BONES_TO_HIDE = {
     "Full_Thumb_Left",
     "Full_Thumb_Right",
@@ -158,8 +160,27 @@ def _hide_source_objects(bpy_module, source_armature, build_spec) -> List[str]:
             targets.append(mesh)
     for obj in targets:
         obj.hide_set(True)
+        obj[SOURCE_HIDDEN_MARKER_KEY] = True
         hidden.append(obj.name)
     return hidden
+
+
+def show_source_objects(bpy_module) -> int:
+    """Un-hide all source objects hidden by a previous build and remove their marker.
+
+    Returns the number of objects shown.
+    """
+    shown = 0
+    for obj in list(bpy_module.data.objects):
+        if not obj.get(SOURCE_HIDDEN_MARKER_KEY):
+            continue
+        obj.hide_set(False)
+        try:
+            del obj[SOURCE_HIDDEN_MARKER_KEY]
+        except Exception:
+            pass
+        shown += 1
+    return shown
 
 
 def purge_previous_generated_artifacts(bpy_module) -> int:

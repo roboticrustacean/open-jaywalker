@@ -86,7 +86,9 @@ class AddonInterfaceTests(unittest.TestCase):
             built=True,
             synthesized_bones_csv="Full_Fingers_Left",
             synthesized_bones_by_character_csv="char0 (Full_Fingers_Left)",
-            export_dir="some_dir"
+            export_dir="some_dir",
+            show_source=False,
+            show_generated_armature=True,
         )
         mock_context = types.SimpleNamespace(
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
@@ -134,7 +136,8 @@ class AddonInterfaceTests(unittest.TestCase):
             build_failed=0,
             failed_characters_csv="",
             synthesized_bones_csv="",
-            synthesized_bones_by_character_csv=""
+            synthesized_bones_by_character_csv="",
+            show_source=True,
         )
         mock_context = types.SimpleNamespace(
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
@@ -161,7 +164,8 @@ class AddonInterfaceTests(unittest.TestCase):
             self.assertTrue(mock_settings.built)
             self.assertEqual(mock_settings.synthesized_bones_csv, "Full_Fingers_Left, Full_Fingers_Right")
             self.assertEqual(mock_settings.synthesized_bones_by_character_csv, "")
-            
+            self.assertFalse(mock_settings.show_source)
+
             build_op.report.assert_any_call(
                 {'WARNING'},
                 "Synthesized inert bones added for compliance: Full_Fingers_Left, Full_Fingers_Right"
@@ -180,7 +184,8 @@ class AddonInterfaceTests(unittest.TestCase):
             build_failed=0,
             failed_characters_csv="",
             synthesized_bones_csv="",
-            synthesized_bones_by_character_csv=""
+            synthesized_bones_by_character_csv="",
+            show_source=True,
         )
         mock_context = types.SimpleNamespace(
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
@@ -235,7 +240,8 @@ class AddonInterfaceTests(unittest.TestCase):
             build_failed=0,
             failed_characters_csv="",
             synthesized_bones_csv="",
-            synthesized_bones_by_character_csv=""
+            synthesized_bones_by_character_csv="",
+            show_source=True,
         )
         mock_context = types.SimpleNamespace(
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
@@ -459,19 +465,21 @@ class AddonInterfaceTests(unittest.TestCase):
         )
 
         self.state.update_show_generated_armature(mock_settings, mock_context)
-        
+
         mock_generated_armature.hide_set.assert_called_once_with(True)
-        mock_other_object.hide_set.assert_not_called()
+        mock_other_object.hide_set.assert_called_once_with(True)  # generated mesh is now covered
         mock_non_gen_armature.hide_set.assert_not_called()
         mock_dict_gen_armature.hide_set.assert_called_once_with(True)
         mock_dict_non_gen_armature.hide_set.assert_not_called()
-        
+
         mock_generated_armature.hide_set.reset_mock()
+        mock_other_object.hide_set.reset_mock()
         mock_dict_gen_armature.hide_set.reset_mock()
 
         mock_settings.show_generated_armature = True
         self.state.update_show_generated_armature(mock_settings, mock_context)
         mock_generated_armature.hide_set.assert_called_once_with(False)
+        mock_other_object.hide_set.assert_called_once_with(False)
         mock_dict_gen_armature.hide_set.assert_called_once_with(False)
 
         # 2. Test that UI renders the checkbox without crashing
@@ -525,16 +533,50 @@ class AddonInterfaceTests(unittest.TestCase):
             export_gltf=True,
             per_character_export=False,
             show_generated_armature=True,
+            show_source=False,
             show_failed_details=False,
             show_inert_details=False
         )
         ui_context = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=ui_settings))
-        
+
         panel = self.ui.OJ_PT_panel()
         panel.layout = mock_layout
         panel.draw(ui_context)
-        
+
         self.assertIn((ui_settings, "show_generated_armature"), mock_layout.props_drawn)
+        self.assertIn((ui_settings, "show_source"), mock_layout.props_drawn)
+
+    def test_show_source_toggle(self):
+        """update_show_source shows/hides objects stamped with open_jaywalker_source_hidden."""
+        class DictLikeMockObj:
+            def __init__(self, marker_val):
+                self.props = {"open_jaywalker_source_hidden": marker_val}
+                self.hide_set = mock.Mock()
+            def get(self, key, default=None):
+                return self.props.get(key, default)
+
+        marked_arm = DictLikeMockObj(True)
+        marked_mesh = DictLikeMockObj(True)
+        unmarked = DictLikeMockObj(False)
+
+        mock_settings = types.SimpleNamespace(show_source=False)
+        mock_context = types.SimpleNamespace(
+            scene=types.SimpleNamespace(objects=[marked_arm, marked_mesh, unmarked, None])
+        )
+
+        self.state.update_show_source(mock_settings, mock_context)
+
+        marked_arm.hide_set.assert_called_once_with(True)
+        marked_mesh.hide_set.assert_called_once_with(True)
+        unmarked.hide_set.assert_not_called()
+
+        marked_arm.hide_set.reset_mock()
+        marked_mesh.hide_set.reset_mock()
+
+        mock_settings.show_source = True
+        self.state.update_show_source(mock_settings, mock_context)
+        marked_arm.hide_set.assert_called_once_with(False)
+        marked_mesh.hide_set.assert_called_once_with(False)
 
     def test_reset_pipeline_operator(self):
         import tempfile
@@ -565,7 +607,8 @@ class AddonInterfaceTests(unittest.TestCase):
             synthesized_bones_csv="bone1",
             synthesized_bones_by_character_csv="char1 (bone1)",
             show_failed_details=True,
-            show_inert_details=True
+            show_inert_details=True,
+            show_source=False,
         )
         mock_context = types.SimpleNamespace(
             scene=types.SimpleNamespace(open_jaywalker=mock_settings)
@@ -615,6 +658,7 @@ class AddonInterfaceTests(unittest.TestCase):
         self.assertEqual(mock_settings.synthesized_bones_by_character_csv, "")
         self.assertFalse(mock_settings.show_failed_details)
         self.assertFalse(mock_settings.show_inert_details)
+        self.assertTrue(mock_settings.show_source)
 
     def test_load_post_handler_resets_properties(self):
         # We need to test the load_post_handler defined in addon.__init__
@@ -643,7 +687,8 @@ class AddonInterfaceTests(unittest.TestCase):
             synthesized_bones_csv="bone1",
             synthesized_bones_by_character_csv="char1 (bone1)",
             show_failed_details=True,
-            show_inert_details=True
+            show_inert_details=True,
+            show_source=False,
         )
         
         # Set up fake_bpy.context
@@ -676,6 +721,7 @@ class AddonInterfaceTests(unittest.TestCase):
         self.assertEqual(mock_settings.synthesized_bones_by_character_csv, "")
         self.assertFalse(mock_settings.show_failed_details)
         self.assertFalse(mock_settings.show_inert_details)
+        self.assertTrue(mock_settings.show_source)
 
     def test_ui_draw_collapsible_sections_and_reset_button(self):
         class MockLayout:
