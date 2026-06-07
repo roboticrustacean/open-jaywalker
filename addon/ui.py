@@ -3,6 +3,45 @@
 import bpy
 
 
+def _draw_inert_bone_details(layout, s):
+    """Draw the collapsible inert bone warning at the bottom of the panel.
+
+    Placed after export/output sections so expanding it never displaces controls.
+    """
+    if s.is_crowd and s.synthesized_bones_by_character_csv:
+        layout.separator()
+        warn_box = layout.box()
+        warn_box.prop(
+            s, "show_inert_details",
+            text="Inert Bone Details",
+            icon=('TRIA_DOWN' if s.show_inert_details else 'TRIA_RIGHT'),
+            emboss=False,
+        )
+        if s.show_inert_details:
+            inner = warn_box.box()
+            inner.alert = True
+            inner.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+            for line in s.synthesized_bones_by_character_csv.split(" | "):
+                if line:
+                    inner.label(text="   {0}".format(line))
+    elif not s.is_crowd and s.synthesized_bones_csv:
+        layout.separator()
+        warn_box = layout.box()
+        warn_box.prop(
+            s, "show_inert_details",
+            text="Inert Bone Details",
+            icon=('TRIA_DOWN' if s.show_inert_details else 'TRIA_RIGHT'),
+            emboss=False,
+        )
+        if s.show_inert_details:
+            inner = warn_box.box()
+            inner.alert = True
+            inner.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+            for name in s.synthesized_bones_csv.split(", "):
+                if name:
+                    inner.label(text="   - {0}".format(name))
+
+
 class OJ_PT_panel(bpy.types.Panel):
     bl_label = "Open Jaywalker"
     bl_idname = "OJ_PT_panel"
@@ -100,37 +139,9 @@ class OJ_PT_panel(bpy.types.Panel):
                         for cid in s.failed_characters_csv.split(", "):
                             if cid:
                                 det.label(text="   - {0}".format(cid))
-                if s.synthesized_bones_by_character_csv:
-                    res_box.prop(
-                        s, "show_inert_details",
-                        text="Inert Bone Details",
-                        icon=('TRIA_DOWN' if s.show_inert_details else 'TRIA_RIGHT'),
-                        emboss=False,
-                    )
-                    if s.show_inert_details:
-                        warn_box = res_box.box()
-                        warn_box.alert = True
-                        warn_box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
-                        for line in s.synthesized_bones_by_character_csv.split(" | "):
-                            if line:
-                                warn_box.label(text="   {0}".format(line))
             else:
                 if s.build_succeeded > 0:
                     res_col.label(text="Successfully built character.", icon='CHECKMARK')
-                    if s.synthesized_bones_csv:
-                        res_box.prop(
-                            s, "show_inert_details",
-                            text="Inert Bone Details",
-                            icon=('TRIA_DOWN' if s.show_inert_details else 'TRIA_RIGHT'),
-                            emboss=False,
-                        )
-                        if s.show_inert_details:
-                            warn_box = res_box.box()
-                            warn_box.alert = True
-                            warn_box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
-                            for name in s.synthesized_bones_csv.split(", "):
-                                if name:
-                                    warn_box.label(text="   - {0}".format(name))
                 else:
                     res_col.label(text="Build failed.", icon='ERROR')
 
@@ -155,6 +166,9 @@ class OJ_PT_panel(bpy.types.Panel):
                 out_box.operator("open_jaywalker.open_exports", icon='FILEBROWSER', text="Open exports folder")
         elif not s.has_plan:
             layout.label(text="Run the pipeline to generate a plan.")
+
+        if s.built:
+            _draw_inert_bone_details(layout, s)
 
         layout.separator()
         layout.operator("open_jaywalker.reset_pipeline", icon='LOOP_BACK')
