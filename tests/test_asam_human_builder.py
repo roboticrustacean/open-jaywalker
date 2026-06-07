@@ -3839,5 +3839,164 @@ class EyeFingerDispatchTests(unittest.TestCase):
                 {"name": "x", "weighted_vertex_count": 0}]}}]}, [], []))
 
 
+class EyeSpanningRegressionTests(unittest.TestCase):
+    """Regression: synthesized eyes must use the spanning-corrected Head geometry.
+
+    _span_core_chains rewrites Head's tail to point straight up from the neck
+    joint. Eyes resolved before that pass may anchor to a sideways or short
+    source-bone tail, placing them at neck level. After the fix, a re-resolution
+    pass re-anchors eyes to the corrected Head geometry so they land in the upper
+    face area regardless of the source rig's head orientation.
+
+    This class tests through build_armature_spec so the full pass order is
+    exercised — _span_core_chains then the re-resolution, not just
+    _resolve_eye_geometry in isolation.
+    """
+
+    def _build_spec_with_sideways_head(self):
+        """Return a build_armature_spec result for a rig whose source Head bone
+        has a *sideways* tail (same height as the head joint) so that without the
+        re-resolution fix the synthesized eyes would be anchored near neck level.
+
+        Head source geometry:
+          head = [0.0, 0.0, 1.60]   <- neck joint (top of Neck)
+          tail = [0.0, 0.20, 1.60]  <- sideways, same z as head (Mixamo-style)
+
+        After _span_core_chains the Head tail becomes:
+          [0.0, 0.0, 1.60 + default_length("Head")] = approx [0.0, 0.0, 1.76]
+
+        Without the re-resolution fix, Eye.head[2] would be near 1.60 (neck).
+        With the fix, Eye.head[2] should be in the upper 70 % of [neck..crown].
+        """
+        from asam_human_builder.builder import build_armature_spec
+
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+        pm = _placement_metadata()  # up=+z, bbox_height=2.0
+
+        # Give Head a direct_map to a source bone with a *sideways* tail.
+        report["semantic_mapping"]["Head"] = {
+            "source_bone": "Head",
+            "confidence": 0.9,
+            "action": "direct_map",
+            "evidence": {"name": 0.9, "hierarchy": 0.0, "geometry": 0.0,
+                         "source_origin": None, "role": None},
+            "notes": [],
+        }
+        # Eye_Left and Eye_Right remain create_in_builder (synthesized).
+        # All other targets remain create_in_builder with no source bone.
+
+        neck_z = 1.60
+        sideways_tail_z = neck_z  # same height as head = sideways tail
+
+        source_bones = {
+            "Head": {
+                "name": "Head",
+                "parent": "Neck",
+                "head": [0.0, 0.0, neck_z],
+                "tail": [0.0, 0.20, sideways_tail_z],  # sideways, not upward
+                "length": 0.20,
+            },
+        }
+
+        return build_armature_spec(report, plan, source_bones), pm, neck_z
+
+    def test_synthesized_eyes_land_in_upper_face_not_neck_after_spanning(self):
+        """Eyes must be in the upper 70 % of the head, not at neck level."""
+        spec, pm, neck_z = self._build_spec_with_sideways_head()
+
+        bbox_top = pm["bbox_max"][2]   # 2.0
+        # The corrected Head bone extends upward from neck_z by default_length("Head").
+        # bbox_height=2.0, DEFAULT_LENGTH_RATIOS["Head"]=0.08 -> default_length = 0.16
+        # So crown_z ≈ neck_z + 0.16 = 1.76
+        from asam_human_builder.geometry_resolution import DEFAULT_LENGTH_RATIOS
+        expected_head_length = DEFAULT_LENGTH_RATIOS["Head"] * pm["bbox_height"]
+        crown_z = neck_z + expected_head_length  # ~1.76
+
+        upper_threshold = neck_z + 0.70 * (crown_z - neck_z)
+
+        for eye_name in ("Eye_Left", "Eye_Right"):
+            eye_bone = _spec_bone(spec, eye_name)
+            eye_head_z = eye_bone["head"][2]
+
+            self.assertGreater(
+                eye_head_z, upper_threshold,
+                msg="{0} head z={1:.4f} is below upper threshold {2:.4f} (neck_z={3:.4f}, crown_z={4:.4f}); "
+                    "eye appears to be at neck level — re-resolution after spanning is missing".format(
+                        eye_name, eye_head_z, upper_threshold, neck_z, crown_z),
+            )
+            self.assertLessEqual(
+                eye_head_z, crown_z + 1e-6,
+                msg="{0} head z={1:.4f} is above crown {2:.4f}; eye is floating above the head".format(
+                    eye_name, eye_head_z, crown_z),
+            )
+
+    def test_synthesized_eyes_have_eye_anchored_geometry_source(self):
+        """Eye bones without a source mapping must be marked eye_anchored."""
+        spec, _, _ = self._build_spec_with_sideways_head()
+        for eye_name in ("Eye_Left", "Eye_Right"):
+            eye_bone = _spec_bone(spec, eye_name)
+            self.assertEqual(
+                eye_bone["geometry_source"], "eye_anchored",
+                msg="{0} should be eye_anchored but got {1}".format(
+                    eye_name, eye_bone["geometry_source"]),
+            )
+
+    def test_source_mapped_eyes_are_not_re_resolved(self):
+        """An eye that is direct_map (source-mapped) must not be touched by re-resolution."""
+        from asam_human_builder.builder import build_armature_spec
+
+        report = _base_classifier_report()
+        plan = _base_build_plan()
+
+        neck_z = 1.60
+        # Source eye is intentionally placed at a very low position to confirm
+        # it is NOT moved by the re-resolution pass.
+        low_eye_head = [0.10, 0.05, 1.40]  # below neck — unrealistic but detectable
+        low_eye_tail = [0.15, 0.05, 1.40]
+
+        report["semantic_mapping"]["Head"] = {
+            "source_bone": "Head",
+            "confidence": 0.9,
+            "action": "direct_map",
+            "evidence": {"name": 0.9, "hierarchy": 0.0, "geometry": 0.0,
+                         "source_origin": None, "role": None},
+            "notes": [],
+        }
+        report["semantic_mapping"]["Eye_Left"] = {
+            "source_bone": "Eye.L",
+            "confidence": 0.85,
+            "action": "direct_map",
+            "evidence": {"name": 0.85, "hierarchy": 0.0, "geometry": 0.0,
+                         "source_origin": None, "role": None},
+            "notes": [],
+        }
+
+        source_bones = {
+            "Head": {
+                "name": "Head",
+                "parent": "Neck",
+                "head": [0.0, 0.0, neck_z],
+                "tail": [0.0, 0.20, neck_z],  # sideways
+                "length": 0.20,
+            },
+            "Eye.L": {
+                "name": "Eye.L",
+                "parent": "Head",
+                "head": low_eye_head,
+                "tail": low_eye_tail,
+                "length": 0.05,
+            },
+        }
+
+        spec = build_armature_spec(report, plan, source_bones)
+        eye_bone = _spec_bone(spec, "Eye_Left")
+        self.assertEqual(eye_bone["geometry_source"], "source_bone",
+                         "direct_map eye must remain source_bone, not be re-resolved")
+        # head in spec is grp-root-local (origin=[0,0,0]) so matches source directly
+        self.assertAlmostEqual(eye_bone["head"][2], low_eye_head[2], places=6,
+                               msg="source-mapped eye z must be unchanged by re-resolution")
+
+
 if __name__ == "__main__":
     unittest.main()
