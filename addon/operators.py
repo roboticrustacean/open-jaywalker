@@ -27,6 +27,7 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         settings.synthesized_bones_csv = ""
         settings.synthesized_bones_by_character_csv = ""
         settings.show_generated_armature = True
+        settings.show_source = True  # un-hide any source objects from a prior build
 
         prefs = _addon_prefs(context)
         if prefs.output_dir:
@@ -121,6 +122,7 @@ class OJ_OT_build(bpy.types.Operator):
         report_path = asset_dir / "builder_report.json"
         self.report({'INFO'}, success_message(report, report_path))
         settings.built = True
+        settings.show_source = False  # source objects were hidden by the build
 
         if "characters" in report:
             settings.build_succeeded = len(report.get("characters", []))
@@ -292,6 +294,7 @@ class OJ_OT_clean(bpy.types.Operator):
     def execute(self, context):
         removed = purge_previous_generated_artifacts(bpy)
         s = context.scene.open_jaywalker
+        s.show_source = True  # restore source objects before marking as unbuilt
         s.built = False
         s.synthesized_bones_csv = ""
         s.synthesized_bones_by_character_csv = ""
@@ -308,7 +311,8 @@ class OJ_OT_reset_pipeline(bpy.types.Operator):
     def execute(self, context):
         purge_previous_generated_artifacts(bpy)
         s = context.scene.open_jaywalker
-        
+        s.show_source = True  # restore source objects before clearing state
+
         if s.asset_dir:
             path = Path(s.asset_dir)
             if path.exists() and path.is_dir():

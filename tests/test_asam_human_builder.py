@@ -229,6 +229,9 @@ class _FakeProps:
     def __setitem__(self, key, value):
         self._props[key] = value
 
+    def __delitem__(self, key):
+        del self._props[key]
+
     def get(self, key, default=None):
         return self._props.get(key, default)
 
@@ -674,6 +677,42 @@ class AsamHumanBuilderTests(unittest.TestCase):
         hidden2 = _hide_source_objects(bpy_module, source_arm, build_spec)
         self.assertIn("metarig", hidden2)
         self.assertTrue(metarig_obj.hide_get())
+
+    def test_hide_source_objects_stamps_marker(self):
+        """_hide_source_objects stamps SOURCE_HIDDEN_MARKER_KEY on each hidden object."""
+        from asam_human_builder.blender_builder import _hide_source_objects, SOURCE_HIDDEN_MARKER_KEY
+        bpy_module = _FakeBpy()
+        source_arm = bpy_module.add_source_armature("Armature")
+        mesh_data = bpy_module.data.meshes.new("Body")
+        mesh_obj = bpy_module.data.objects.new("Body", mesh_data)
+        build_spec = {"mesh_binding": {"meshes": [{"mesh_name": "Body"}]}}
+        _hide_source_objects(bpy_module, source_arm, build_spec)
+        self.assertTrue(bool(source_arm.get(SOURCE_HIDDEN_MARKER_KEY)))
+        self.assertTrue(bool(mesh_obj.get(SOURCE_HIDDEN_MARKER_KEY)))
+
+    def test_show_source_objects_unhides_and_removes_marker(self):
+        """show_source_objects un-hides all stamped source objects and removes the marker."""
+        from asam_human_builder.blender_builder import show_source_objects, SOURCE_HIDDEN_MARKER_KEY
+        bpy_module = _FakeBpy()
+        arm_data = bpy_module.data.armatures.new("Rig")
+        arm_obj = bpy_module.data.objects.new("Rig", arm_data)
+        arm_obj.hide_set(True)
+        arm_obj[SOURCE_HIDDEN_MARKER_KEY] = True
+        mesh_data = bpy_module.data.meshes.new("Body")
+        mesh_obj = bpy_module.data.objects.new("Body", mesh_data)
+        mesh_obj.hide_set(True)
+        mesh_obj[SOURCE_HIDDEN_MARKER_KEY] = True
+        non_marked = bpy_module.data.objects.new("Other", bpy_module.data.meshes.new("Other"))
+        non_marked.hide_set(True)
+
+        count = show_source_objects(bpy_module)
+
+        self.assertEqual(count, 2)
+        self.assertFalse(arm_obj.hide_get())
+        self.assertFalse(mesh_obj.hide_get())
+        self.assertTrue(non_marked.hide_get())
+        self.assertFalse(bool(arm_obj.get(SOURCE_HIDDEN_MARKER_KEY)))
+        self.assertFalse(bool(mesh_obj.get(SOURCE_HIDDEN_MARKER_KEY)))
 
     def test_grp_root_location_set_to_bbox_ground_center(self):
         """Grp_Root empty's location must equal the source-frame bbox_ground_center."""
