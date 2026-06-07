@@ -14,6 +14,13 @@ class OJAddonPreferences(bpy.types.AddonPreferences):
         default="",
     )
 
+    export_dir: bpy.props.StringProperty(
+        name="Export directory",
+        description="Override where .blend/.glb exports are saved (sets OPEN_JAYWALKER_EXPORT_DIR). Leave blank for default (<asset>/exports/).",
+        subtype='DIR_PATH',
+        default="",
+    )
+
     dev_reload: bpy.props.BoolProperty(
         name="Reload pipeline code on each run (dev)",
         description=(
@@ -62,6 +69,11 @@ class OJAddonPreferences(bpy.types.AddonPreferences):
         layout.prop(self, "output_dir")
         layout.label(
             text="Blank = default <repo>/output (or an existing OPEN_JAYWALKER_OUTPUT_ROOT).",
+            icon='INFO',
+        )
+        layout.prop(self, "export_dir")
+        layout.label(
+            text="Blank = default <asset>/exports/ (or an existing OPEN_JAYWALKER_EXPORT_DIR).",
             icon='INFO',
         )
         layout.prop(self, "dev_reload")

@@ -85,19 +85,20 @@ class AddonInterfaceTests(unittest.TestCase):
             has_plan=True,
             built=True,
             synthesized_bones_csv="Full_Fingers_Left",
-            synthesized_bones_by_character_csv="char0 (Full_Fingers_Left)"
+            synthesized_bones_by_character_csv="char0 (Full_Fingers_Left)",
+            export_dir="some_dir"
         )
         mock_context = types.SimpleNamespace(
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
             preferences=types.SimpleNamespace(addons={
-                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", dev_reload=False))
+                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", export_dir="", dev_reload=False))
             })
         )
         
         with mock.patch("addon.operators._addon_prefs") as mock_prefs, \
              mock.patch("addon.operators.purge_previous_generated_artifacts") as mock_purge, \
              mock.patch("armature_inspector.inspector.inspect_scene", return_value=None):
-            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", dev_reload=False)
+            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", export_dir="", dev_reload=False)
             
             clean_op = self.operators.OJ_OT_clean()
             clean_op.report = mock.Mock()
@@ -125,6 +126,7 @@ class AddonInterfaceTests(unittest.TestCase):
             has_plan=True,
             built=False,
             asset_dir="/x",
+            export_dir="/x/exports",
             export_blend=False,
             export_gltf=True,
             per_character_export=False,
@@ -138,7 +140,7 @@ class AddonInterfaceTests(unittest.TestCase):
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
             window=types.SimpleNamespace(cursor_set=mock.Mock()),
             preferences=types.SimpleNamespace(addons={
-                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", dev_reload=False))
+                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", export_dir="", dev_reload=False))
             })
         )
         
@@ -150,7 +152,7 @@ class AddonInterfaceTests(unittest.TestCase):
         with mock.patch("addon.operators._addon_prefs") as mock_prefs, \
              mock.patch("asam_human_builder.build_runner.run_build", return_value=report_data) as mock_run_build, \
              mock.patch("asam_human_builder.builder.success_message", return_value="ASAM human built"):
-            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", dev_reload=False)
+            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", export_dir="", dev_reload=False)
             
             build_op = self.operators.OJ_OT_build()
             build_op.report = mock.Mock()
@@ -170,6 +172,7 @@ class AddonInterfaceTests(unittest.TestCase):
             has_plan=True,
             built=False,
             asset_dir="/x",
+            export_dir="/x/exports",
             export_blend=False,
             export_gltf=True,
             per_character_export=False,
@@ -183,7 +186,7 @@ class AddonInterfaceTests(unittest.TestCase):
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
             window=types.SimpleNamespace(cursor_set=mock.Mock()),
             preferences=types.SimpleNamespace(addons={
-                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", dev_reload=False))
+                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", export_dir="", dev_reload=False))
             })
         )
         
@@ -204,7 +207,7 @@ class AddonInterfaceTests(unittest.TestCase):
         with mock.patch("addon.operators._addon_prefs") as mock_prefs, \
              mock.patch("asam_human_builder.build_runner.run_build", return_value=report_data) as mock_run_build, \
              mock.patch("asam_human_builder.builder.success_message", return_value="Crowd built"):
-            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", dev_reload=False)
+            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", export_dir="", dev_reload=False)
             
             build_op = self.operators.OJ_OT_build()
             build_op.report = mock.Mock()
@@ -224,6 +227,7 @@ class AddonInterfaceTests(unittest.TestCase):
             has_plan=True,
             built=False,
             asset_dir="/x",
+            export_dir="/x/exports",
             export_blend=False,
             export_gltf=True,
             per_character_export=False,
@@ -237,7 +241,7 @@ class AddonInterfaceTests(unittest.TestCase):
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
             window=types.SimpleNamespace(cursor_set=mock.Mock()),
             preferences=types.SimpleNamespace(addons={
-                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", dev_reload=False))
+                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(output_dir="", export_dir="", dev_reload=False))
             })
         )
         
@@ -259,7 +263,7 @@ class AddonInterfaceTests(unittest.TestCase):
         with mock.patch("addon.operators._addon_prefs") as mock_prefs, \
              mock.patch("asam_human_builder.build_runner.run_build", return_value=report_data) as mock_run_build, \
              mock.patch("asam_human_builder.builder.success_message", return_value="Crowd built"):
-            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", dev_reload=False)
+            mock_prefs.return_value = types.SimpleNamespace(output_dir="C:/tmp", export_dir="", dev_reload=False)
             
             build_op = self.operators.OJ_OT_build()
             build_op.report = mock.Mock()
@@ -308,6 +312,7 @@ class AddonInterfaceTests(unittest.TestCase):
             synthesized_bones_csv="Full_Fingers_Left, Full_Fingers_Right",
             synthesized_bones_by_character_csv="",
             asset_dir="/x",
+            export_dir="/x/exports",
             recommended_armature="Rig",
             mapped=28,
             total=28,
@@ -376,6 +381,7 @@ class AddonInterfaceTests(unittest.TestCase):
             synthesized_bones_csv="",
             synthesized_bones_by_character_csv="",
             asset_dir="/x",
+            export_dir="/x/exports",
             recommended_armature="Rig",
             mapped=28,
             total=28,
@@ -505,6 +511,7 @@ class AddonInterfaceTests(unittest.TestCase):
             synthesized_bones_csv="",
             synthesized_bones_by_character_csv="",
             asset_dir="/x",
+            export_dir="/x/exports",
             recommended_armature="Rig",
             mapped=28,
             total=28,
@@ -542,6 +549,7 @@ class AddonInterfaceTests(unittest.TestCase):
             built=True,
             show_details=True,
             asset_dir=temp_dir,
+            export_dir=temp_dir + "/exports",
             recommended_armature="Rig",
             mapped=15,
             total=28,
@@ -590,6 +598,7 @@ class AddonInterfaceTests(unittest.TestCase):
         self.assertFalse(mock_settings.built)
         self.assertFalse(mock_settings.show_details)
         self.assertEqual(mock_settings.asset_dir, "")
+        self.assertEqual(mock_settings.export_dir, "")
         self.assertEqual(mock_settings.recommended_armature, "")
         self.assertEqual(mock_settings.mapped, 0)
         self.assertEqual(mock_settings.total, 28)
@@ -618,6 +627,7 @@ class AddonInterfaceTests(unittest.TestCase):
             built=True,
             show_details=True,
             asset_dir="/some/path",
+            export_dir="/some/path/exports",
             recommended_armature="Rig",
             mapped=15,
             total=28,
@@ -649,6 +659,7 @@ class AddonInterfaceTests(unittest.TestCase):
         self.assertFalse(mock_settings.built)
         self.assertFalse(mock_settings.show_details)
         self.assertEqual(mock_settings.asset_dir, "")
+        self.assertEqual(mock_settings.export_dir, "")
         self.assertEqual(mock_settings.recommended_armature, "")
         self.assertEqual(mock_settings.mapped, 0)
         self.assertEqual(mock_settings.total, 28)
@@ -706,6 +717,7 @@ class AddonInterfaceTests(unittest.TestCase):
             synthesized_bones_csv="",
             synthesized_bones_by_character_csv="char_01 (Full_Fingers_Left)",
             asset_dir="/x",
+            export_dir="/x/exports",
             recommended_armature="Rig",
             mapped=28,
             total=28,

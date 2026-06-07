@@ -31,6 +31,10 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         prefs = _addon_prefs(context)
         if prefs.output_dir:
             os.environ["OPEN_JAYWALKER_OUTPUT_ROOT"] = bpy.path.abspath(prefs.output_dir)
+        if prefs.export_dir:
+            os.environ["OPEN_JAYWALKER_EXPORT_DIR"] = bpy.path.abspath(prefs.export_dir)
+        elif "OPEN_JAYWALKER_EXPORT_DIR" in os.environ:
+            del os.environ["OPEN_JAYWALKER_EXPORT_DIR"]
 
         if getattr(prefs, "dev_reload", False):
             from . import dev_reload
@@ -53,6 +57,9 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         classifier_report, build_plan, _report_path, _plan_path = write_asset_report(output_dir)
         summary = summarize_plan(classifier_report, build_plan)
 
+        from pipeline_paths import resolve_export_dir
+        asset_name = os.path.basename(str(output_dir))
+        settings.export_dir = str(resolve_export_dir(asset_name, asset_dir=output_dir))
         settings.asset_dir = str(output_dir)
         settings.recommended_armature = summary["recommended_armature"]
         settings.mapped = summary["mapped"]
@@ -95,6 +102,7 @@ class OJ_OT_build(bpy.types.Operator):
         from asam_human_builder.build_runner import run_build
         from asam_human_builder.builder import success_message
         asset_dir = Path(settings.asset_dir)
+        export_dir = Path(settings.export_dir) if settings.export_dir else None
         context.window.cursor_set('WAIT')
         try:
             report = run_build(
@@ -103,6 +111,7 @@ class OJ_OT_build(bpy.types.Operator):
                 export_blend=settings.export_blend,
                 export_gltf=settings.export_gltf,
                 per_character=settings.per_character_export,
+                export_dir=export_dir,
             )
         except Exception as exc:  # surface as an operator error, never crash
             self.report({'ERROR'}, "Build failed: {0}".format(exc))
@@ -169,6 +178,7 @@ class OJ_OT_export_blend(bpy.types.Operator):
             export_crowd_characters_blend,
         )
         asset_dir = Path(settings.asset_dir)
+        export_dir = Path(settings.export_dir) if settings.export_dir else asset_dir
         report_path = asset_dir / "builder_report.json"
         if not report_path.exists():
             self.report({'ERROR'}, "Builder report not found at {0}".format(report_path))
@@ -183,11 +193,11 @@ class OJ_OT_export_blend(bpy.types.Operator):
             return {'CANCELLED'}
         try:
             if settings.is_crowd and settings.per_character_export:
-                paths = export_crowd_characters_blend(bpy, wrapper_name, str(asset_dir))
-                self.report({'INFO'}, "Exported {0} .blend file(s) to {1}/blend/".format(len(paths), asset_dir))
+                paths = export_crowd_characters_blend(bpy, wrapper_name, str(export_dir))
+                self.report({'INFO'}, "Exported {0} .blend file(s) to {1}/blend/".format(len(paths), export_dir))
             else:
                 asset_name = report.get("asset_name", "output")
-                out_path = str(asset_dir / "{0}_asam.blend".format(asset_name))
+                out_path = str(export_dir / "{0}_asam.blend".format(asset_name))
                 export_generated_blend(bpy, wrapper_name, out_path)
                 self.report({'INFO'}, "Exported .blend to {0}".format(out_path))
         except Exception as exc:
@@ -218,6 +228,7 @@ class OJ_OT_export_gltf(bpy.types.Operator):
             export_crowd_characters_gltf,
         )
         asset_dir = Path(settings.asset_dir)
+        export_dir = Path(settings.export_dir) if settings.export_dir else asset_dir
         report_path = asset_dir / "builder_report.json"
         if not report_path.exists():
             self.report({'ERROR'}, "Builder report not found at {0}".format(report_path))
@@ -232,11 +243,11 @@ class OJ_OT_export_gltf(bpy.types.Operator):
             return {'CANCELLED'}
         try:
             if settings.is_crowd and settings.per_character_export:
-                paths = export_crowd_characters_gltf(bpy, wrapper_name, str(asset_dir))
-                self.report({'INFO'}, "Exported {0} .glb file(s) to {1}/glb/".format(len(paths), asset_dir))
+                paths = export_crowd_characters_gltf(bpy, wrapper_name, str(export_dir))
+                self.report({'INFO'}, "Exported {0} .glb file(s) to {1}/glb/".format(len(paths), export_dir))
             else:
                 asset_name = report.get("asset_name", "output")
-                out_path = str(asset_dir / "{0}_asam.glb".format(asset_name))
+                out_path = str(export_dir / "{0}_asam.glb".format(asset_name))
                 export_generated_gltf(bpy, wrapper_name, out_path)
                 self.report({'INFO'}, "Exported .glb to {0}".format(out_path))
         except Exception as exc:
@@ -256,6 +267,20 @@ class OJ_OT_open_output(bpy.types.Operator):
 
     def execute(self, context):
         bpy.ops.wm.path_open(filepath=context.scene.open_jaywalker.asset_dir)
+        return {'FINISHED'}
+
+
+class OJ_OT_open_exports(bpy.types.Operator):
+    bl_idname = "open_jaywalker.open_exports"
+    bl_label = "Open exports folder"
+    bl_description = "Open the .blend/.glb exports folder in the system file browser"
+
+    @classmethod
+    def poll(cls, context):
+        return bool(context.scene.open_jaywalker.export_dir)
+
+    def execute(self, context):
+        bpy.ops.wm.path_open(filepath=context.scene.open_jaywalker.export_dir)
         return {'FINISHED'}
 
 
@@ -299,6 +324,7 @@ class OJ_OT_reset_pipeline(bpy.types.Operator):
         s.built = False
         s.show_details = False
         s.asset_dir = ""
+        s.export_dir = ""
         s.recommended_armature = ""
         s.mapped = 0
         s.total = 28

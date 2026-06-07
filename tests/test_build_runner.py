@@ -19,7 +19,7 @@ class RunBuildTests(unittest.TestCase):
              mock.patch.object(build_runner, "build_armature_in_blender", return_value={"exec": True}) as build_one, \
              mock.patch.object(build_runner, "write_builder_report", return_value=({"asset_name": "A"}, Path("/x/builder_report.json"))), \
              mock.patch.object(build_runner, "print_builder_summary"):
-            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False)
+            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False, export_dir=Path("/x/exports"))
 
         build_one.assert_called_once_with(spec, "BPY")
         # No export requested: report records the flags with None paths.
@@ -41,7 +41,7 @@ class RunBuildTests(unittest.TestCase):
              mock.patch.object(build_runner, "build_crowd_in_blender", return_value={"exec": True}) as build_crowd, \
              mock.patch.object(build_runner, "build_crowd_builder_report", return_value=crowd_report), \
              mock.patch.object(build_runner, "write_crowd_builder_report", return_value=(crowd_report, Path("/x/builder_report.json"))):
-            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False)
+            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False, export_dir=Path("/x/exports"))
 
         build_crowd.assert_called_once_with("Crowd", "Crowd_Humans", [("c0", "SPEC0")], {"source_armature": "Root"}, "BPY")
         self.assertEqual(report, crowd_report)
@@ -62,21 +62,21 @@ class RunBuildExportTests(unittest.TestCase):
     def test_export_blend_calls_export(self):
         for p in self._patch_single():
             p.start(); self.addCleanup(p.stop)
-        with mock.patch.object(build_runner, "export_generated_blend", return_value="/x/A_asam.blend") as export:
-            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=True, export_gltf=False)
+        with mock.patch.object(build_runner, "export_generated_blend", return_value="/x/exports/A_asam.blend") as export:
+            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=True, export_gltf=False, export_dir=Path("/x/exports"))
             export.assert_called_once()
             self.assertTrue(report["export_blend"])
-            self.assertEqual(report["exported_blend_path"], "/x/A_asam.blend")
+            self.assertEqual(report["exported_blend_path"], "/x/exports/A_asam.blend")
             self.assertIsNone(report["export_blend_error"])
 
     def test_export_gltf_calls_export(self):
         for p in self._patch_single():
             p.start(); self.addCleanup(p.stop)
-        with mock.patch.object(build_runner, "export_generated_gltf", return_value="/x/A_asam.glb") as export:
-            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=True)
+        with mock.patch.object(build_runner, "export_generated_gltf", return_value="/x/exports/A_asam.glb") as export:
+            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=True, export_dir=Path("/x/exports"))
             export.assert_called_once()
             self.assertTrue(report["export_gltf"])
-            self.assertEqual(report["exported_gltf_path"], "/x/A_asam.glb")
+            self.assertEqual(report["exported_gltf_path"], "/x/exports/A_asam.glb")
             self.assertIsNone(report["export_gltf_error"])
 
     def test_no_export_skips_both(self):
@@ -84,7 +84,7 @@ class RunBuildExportTests(unittest.TestCase):
             p.start(); self.addCleanup(p.stop)
         with mock.patch.object(build_runner, "export_generated_blend") as blend_export, \
              mock.patch.object(build_runner, "export_generated_gltf") as gltf_export:
-            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False)
+            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False, export_dir=Path("/x/exports"))
             blend_export.assert_not_called()
             gltf_export.assert_not_called()
             self.assertFalse(report["export_blend"])
@@ -96,7 +96,7 @@ class RunBuildExportTests(unittest.TestCase):
         for p in self._patch_single():
             p.start(); self.addCleanup(p.stop)
         with mock.patch.object(build_runner, "export_generated_blend", side_effect=RuntimeError("disk full")):
-            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=True, export_gltf=False)
+            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=True, export_gltf=False, export_dir=Path("/x/exports"))
             self.assertIsNone(report["exported_blend_path"])
             self.assertEqual(report["export_blend_error"], "disk full")
 
@@ -104,7 +104,7 @@ class RunBuildExportTests(unittest.TestCase):
         for p in self._patch_single():
             p.start(); self.addCleanup(p.stop)
         with mock.patch.object(build_runner, "export_generated_gltf", side_effect=RuntimeError("glTF error")):
-            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=True)
+            report = build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=True, export_dir=Path("/x/exports"))
             self.assertIsNone(report["exported_gltf_path"])
             self.assertEqual(report["export_gltf_error"], "glTF error")
 
@@ -112,9 +112,9 @@ class RunBuildExportTests(unittest.TestCase):
         """Verify the new defaults: export_gltf=True, export_blend=False."""
         for p in self._patch_single():
             p.start(); self.addCleanup(p.stop)
-        with mock.patch.object(build_runner, "export_generated_gltf", return_value="/x/A_asam.glb") as gltf_export, \
+        with mock.patch.object(build_runner, "export_generated_gltf", return_value="/x/exports/A_asam.glb") as gltf_export, \
              mock.patch.object(build_runner, "export_generated_blend") as blend_export:
-            report = build_runner.run_build(Path("/x"), bpy="BPY")
+            report = build_runner.run_build(Path("/x"), bpy="BPY", export_dir=Path("/x/exports"))
             gltf_export.assert_called_once()
             blend_export.assert_not_called()
             self.assertTrue(report["export_gltf"])
@@ -146,7 +146,7 @@ class RunBuildPerCharacterExportTests(unittest.TestCase):
                                return_value=["/x/blend/c0.blend", "/x/blend/c1.blend"]) as crowd_blend, \
              mock.patch.object(build_runner, "export_generated_blend") as single_blend:
             report = build_runner.run_build(
-                Path("/x"), bpy="BPY", export_blend=True, export_gltf=False, per_character=True
+                Path("/x"), bpy="BPY", export_blend=True, export_gltf=False, per_character=True, export_dir=Path("/x/exports")
             )
             crowd_blend.assert_called_once()
             single_blend.assert_not_called()
@@ -160,7 +160,7 @@ class RunBuildPerCharacterExportTests(unittest.TestCase):
                                return_value=["/x/glb/c0.glb", "/x/glb/c1.glb"]) as crowd_gltf, \
              mock.patch.object(build_runner, "export_generated_gltf") as single_gltf:
             report = build_runner.run_build(
-                Path("/x"), bpy="BPY", export_blend=False, export_gltf=True, per_character=True
+                Path("/x"), bpy="BPY", export_blend=False, export_gltf=True, per_character=True, export_dir=Path("/x/exports")
             )
             crowd_gltf.assert_called_once()
             single_gltf.assert_not_called()
@@ -183,7 +183,7 @@ class RunBuildPerCharacterExportTests(unittest.TestCase):
         with mock.patch.object(build_runner, "export_generated_gltf", return_value="/x/A_asam.glb") as single_gltf, \
              mock.patch.object(build_runner, "export_crowd_characters_gltf") as crowd_gltf:
             report = build_runner.run_build(
-                Path("/x"), bpy="BPY", export_blend=False, export_gltf=True, per_character=True
+                Path("/x"), bpy="BPY", export_blend=False, export_gltf=True, per_character=True, export_dir=Path("/x/exports")
             )
             single_gltf.assert_called_once()
             crowd_gltf.assert_not_called()
@@ -205,7 +205,7 @@ class RunBuildWarningTests(unittest.TestCase):
                  mock.patch.object(build_runner, "build_armature_in_blender", return_value={"exec": True}), \
                  mock.patch.object(build_runner, "write_builder_report", return_value=(report_data, Path("/x/builder_report.json"))), \
                  mock.patch.object(build_runner, "print_builder_summary"):
-                build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False)
+                build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False, export_dir=Path("/x/exports"))
                 
         output = f.getvalue()
         self.assertIn("WARNING: Synthesized inert bones added for compliance: Full_Fingers_Left, Full_Fingers_Right", output)
@@ -239,11 +239,60 @@ class RunBuildWarningTests(unittest.TestCase):
                  mock.patch.object(build_runner, "build_crowd_in_blender", return_value={"exec": True}), \
                  mock.patch.object(build_runner, "build_crowd_builder_report", return_value=crowd_report), \
                  mock.patch.object(build_runner, "write_crowd_builder_report", return_value=(crowd_report, Path("/x/builder_report.json"))):
-                build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False)
+                build_runner.run_build(Path("/x"), bpy="BPY", export_blend=False, export_gltf=False, export_dir=Path("/x/exports"))
                 
         output = f.getvalue()
         self.assertIn("WARNING: Character 'c0' has synthesized inert bones added for compliance: Full_Fingers_Left", output)
         self.assertIn("WARNING: Character 'c1' has synthesized inert bones added for compliance: Full_Toes_Right", output)
+
+
+class RunBuildExportDirTests(unittest.TestCase):
+    """Tests verifying export_dir routing: exports go to export_dir, not asset_dir."""
+
+    def _patch_single(self):
+        return [
+            mock.patch.object(build_runner, "build_character_specs_from_asset_dir",
+                              return_value={"crowd": False, "asset_name": "A",
+                                            "specs": [{"generated_collection_name": "ASAM_A"}]}),
+            mock.patch.object(build_runner, "build_armature_in_blender", return_value={"exec": True}),
+            mock.patch.object(build_runner, "write_builder_report",
+                              return_value=({"asset_name": "A"}, Path("/x/builder_report.json"))),
+            mock.patch.object(build_runner, "print_builder_summary"),
+        ]
+
+    def test_export_dir_recorded_on_report(self):
+        for p in self._patch_single():
+            p.start(); self.addCleanup(p.stop)
+        with mock.patch.object(build_runner, "export_generated_gltf", return_value="/e/A_asam.glb"):
+            report = build_runner.run_build(
+                Path("/x"), bpy="BPY", export_gltf=True, export_blend=False,
+                export_dir=Path("/e"),
+            )
+        self.assertEqual(report["export_dir"], str(Path("/e").resolve()))
+
+    def test_export_blend_uses_export_dir(self):
+        for p in self._patch_single():
+            p.start(); self.addCleanup(p.stop)
+        with mock.patch.object(build_runner, "export_generated_blend", return_value="ok") as exp:
+            build_runner.run_build(
+                Path("/x"), bpy="BPY", export_blend=True, export_gltf=False,
+                export_dir=Path("/e"),
+            )
+        call_args = exp.call_args
+        filepath = call_args[0][2] if len(call_args[0]) > 2 else call_args[1].get("filepath", call_args[0][2])
+        self.assertIn(str(Path("/e").resolve()), str(Path(filepath).resolve()))
+
+    def test_export_gltf_uses_export_dir(self):
+        for p in self._patch_single():
+            p.start(); self.addCleanup(p.stop)
+        with mock.patch.object(build_runner, "export_generated_gltf", return_value="ok") as exp:
+            build_runner.run_build(
+                Path("/x"), bpy="BPY", export_blend=False, export_gltf=True,
+                export_dir=Path("/e"),
+            )
+        call_args = exp.call_args
+        filepath = call_args[0][2] if len(call_args[0]) > 2 else call_args[1].get("filepath", call_args[0][2])
+        self.assertIn(str(Path("/e").resolve()), str(Path(filepath).resolve()))
 
 
 if __name__ == "__main__":

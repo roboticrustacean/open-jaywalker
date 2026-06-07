@@ -17,6 +17,7 @@ from typing import Sequence
 
 
 ENV_VAR = "OPEN_JAYWALKER_OUTPUT_ROOT"
+EXPORT_ENV_VAR = "OPEN_JAYWALKER_EXPORT_DIR"
 
 # Project root is two parents up from this file: src/pipeline_paths.py -> src/ -> <repo>/.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -43,6 +44,27 @@ def resolve_asset_dir(asset_name: str) -> Path:
     asset_dir = resolve_output_root() / asset_name
     asset_dir.mkdir(parents=True, exist_ok=True)
     return asset_dir
+
+
+def resolve_export_dir(asset_name: str, asset_dir=None) -> Path:
+    """Return the directory where .blend/.glb exports should be written.
+
+    When OPEN_JAYWALKER_EXPORT_DIR is set, exports go flat into that path
+    (no per-asset subdirectory — the caller is responsible for any
+    organisation).  Otherwise the default is ``<asset_dir>/exports/``.
+
+    ``asset_dir`` may be supplied to avoid re-resolving; when *None* it is
+    computed via :func:`resolve_asset_dir`.
+    """
+    override = os.environ.get(EXPORT_ENV_VAR)
+    if override:
+        export_dir = Path(override).expanduser().resolve()
+    else:
+        if asset_dir is None:
+            asset_dir = resolve_asset_dir(asset_name)
+        export_dir = Path(asset_dir).resolve() / "exports"
+    export_dir.mkdir(parents=True, exist_ok=True)
+    return export_dir
 
 
 class MissingPrerequisiteError(Exception):

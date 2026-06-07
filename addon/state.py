@@ -47,6 +47,7 @@ class OJSettings(bpy.types.PropertyGroup):
         update=update_show_generated_armature,
     )
     asset_dir: bpy.props.StringProperty(default="")
+    export_dir: bpy.props.StringProperty(default="")
     recommended_armature: bpy.props.StringProperty(default="")
     mapped: bpy.props.IntProperty(default=0)
     total: bpy.props.IntProperty(default=28)

@@ -40,6 +40,7 @@ _CLASSES = (
     operators.OJ_OT_export_blend,
     operators.OJ_OT_export_gltf,
     operators.OJ_OT_open_output,
+    operators.OJ_OT_open_exports,
     operators.OJ_OT_clean,
     operators.OJ_OT_reset_pipeline,
     ui.OJ_PT_panel,
@@ -58,6 +59,7 @@ def load_post_handler(dummy1, dummy2=None):
             s.built = False
             s.show_details = False
             s.asset_dir = ""
+            s.export_dir = ""
             s.recommended_armature = ""
             s.mapped = 0
             s.total = 28

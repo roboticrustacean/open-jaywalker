@@ -144,9 +144,14 @@ class OJ_PT_panel(bpy.types.Panel):
 
         if s.asset_dir:
             layout.separator()
-            layout.label(text="Output:")
-            layout.label(text=s.asset_dir)
-            layout.operator("open_jaywalker.open_output", icon='FILE_FOLDER')
+            out_box = layout.box()
+            out_box.label(text="Reports:", icon='FILE_FOLDER')
+            out_box.label(text=s.asset_dir)
+            out_box.operator("open_jaywalker.open_output", icon='FILEBROWSER', text="Open reports folder")
+            if s.export_dir:
+                out_box.label(text="Exports:", icon='EXPORT')
+                out_box.label(text=s.export_dir)
+                out_box.operator("open_jaywalker.open_exports", icon='FILEBROWSER', text="Open exports folder")
         elif not s.has_plan:
             layout.label(text="Run the pipeline to generate a plan.")
 

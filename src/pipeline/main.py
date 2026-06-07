@@ -64,8 +64,12 @@ def _stdin_isatty():
 
 
 def _print_build_skipped(asset_dir, build_plan):
+    from pipeline_paths import resolve_export_dir
+    asset_name = asset_dir.name
+    export_dir = resolve_export_dir(asset_name, asset_dir=asset_dir)
     print("\nPlan written. Build NOT run.")
     print("  Reports: {0}".format(asset_dir))
+    print("  Exports: {0}".format(export_dir))
     print("  build_plan.json: {0}".format(os.path.join(str(asset_dir), "build_plan.json")))
     print("  To build: re-run with OPEN_JAYWALKER_AUTO_BUILD=1 (or pass `-- --build`),")
     print("  or run the builder entry: src/asam_human_builder/main.py -- --asset-dir {0}".format(asset_dir))
