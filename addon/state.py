@@ -84,22 +84,12 @@ class OJSettings(bpy.types.PropertyGroup):
         update=update_show_source,
     )
     asset_dir: bpy.props.StringProperty(default="")
-    export_dir: bpy.props.StringProperty(default="")
-    output_root: bpy.props.StringProperty(
-        name="Output folder",
+    export_dir: bpy.props.StringProperty(
+        name="Exports",
         description=(
-            "Where pipeline reports are written for this run (overrides the add-on "
-            "preference). An asset subfolder is created under it. Blank = use the "
-            "add-on preference or the default <repo>/output."
-        ),
-        subtype='DIR_PATH',
-        default="",
-    )
-    export_root: bpy.props.StringProperty(
-        name="Export folder",
-        description=(
-            "Where .blend/.glb exports are saved for this run (overrides the add-on "
-            "preference). Blank = default <asset>/exports/."
+            "Where .blend/.glb exports are written. Pre-filled with the resolved "
+            "default after Run pipeline; edit it before building/exporting to "
+            "redirect this run's exports."
         ),
         subtype='DIR_PATH',
         default="",

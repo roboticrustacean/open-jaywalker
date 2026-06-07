@@ -812,43 +812,14 @@ class AddonInterfaceTests(unittest.TestCase):
         self.assertIn(("Failed characters:", "NONE"), mock_layout.labels)
         self.assertIn(("   - char_01", "NONE"), mock_layout.labels)
 
-    def test_run_pipeline_panel_output_root_overrides_prefs(self):
-        """A per-run output_root/export_root set in the panel wins over add-on prefs."""
-        import os
-        self.addCleanup(lambda: os.environ.pop("OPEN_JAYWALKER_EXPORT_DIR", None))
-        mock_settings = types.SimpleNamespace(
-            has_plan=True, built=True,
-            synthesized_bones_csv="x", synthesized_bones_by_character_csv="y",
-            export_dir="", show_source=False, show_generated_armature=True,
-            output_root="C:/panel_out", export_root="C:/panel_exp",
-        )
-        mock_context = types.SimpleNamespace(
-            scene=types.SimpleNamespace(open_jaywalker=mock_settings),
-            preferences=types.SimpleNamespace(addons={
-                "addon": types.SimpleNamespace(preferences=types.SimpleNamespace(
-                    output_dir="C:/pref_out", export_dir="C:/pref_exp", dev_reload=False))
-            })
-        )
-        with mock.patch("addon.operators._addon_prefs") as mock_prefs, \
-             mock.patch("addon.operators.purge_previous_generated_artifacts"), \
-             mock.patch("armature_inspector.inspector.inspect_scene", return_value=None):
-            mock_prefs.return_value = types.SimpleNamespace(
-                output_dir="C:/pref_out", export_dir="C:/pref_exp", dev_reload=False)
-            run_op = self.operators.OJ_OT_run_pipeline()
-            run_op.report = mock.Mock()
-            run_op.execute(mock_context)
-            self.assertEqual(os.environ.get("OPEN_JAYWALKER_OUTPUT_ROOT"), "C:/panel_out")
-            self.assertEqual(os.environ.get("OPEN_JAYWALKER_EXPORT_DIR"), "C:/panel_exp")
-
-    def test_run_pipeline_falls_back_to_prefs_when_panel_blank(self):
-        """Blank panel pickers fall back to the add-on preference values."""
+    def test_run_pipeline_sets_env_from_prefs(self):
+        """Output/export env vars come from the add-on preferences."""
         import os
         self.addCleanup(lambda: os.environ.pop("OPEN_JAYWALKER_EXPORT_DIR", None))
         mock_settings = types.SimpleNamespace(
             has_plan=True, built=True,
             synthesized_bones_csv="", synthesized_bones_by_character_csv="",
             export_dir="", show_source=False, show_generated_armature=True,
-            output_root="", export_root="",
         )
         mock_context = types.SimpleNamespace(
             scene=types.SimpleNamespace(open_jaywalker=mock_settings),
@@ -868,8 +839,8 @@ class AddonInterfaceTests(unittest.TestCase):
             self.assertEqual(os.environ.get("OPEN_JAYWALKER_OUTPUT_ROOT"), "C:/pref_out")
             self.assertEqual(os.environ.get("OPEN_JAYWALKER_EXPORT_DIR"), "C:/pref_exp")
 
-    def test_ui_draws_output_pickers(self):
-        """The panel draws the per-run output_root and export_root pickers."""
+    def test_ui_export_dir_editable_after_run_and_no_top_pickers(self):
+        """After a run the Exports path is an editable export_dir field; no top pickers."""
         class MockLayout:
             def __init__(self):
                 self.props = []
@@ -890,15 +861,22 @@ class AddonInterfaceTests(unittest.TestCase):
 
         mock_layout = MockLayout()
         s = types.SimpleNamespace(
-            built=False, has_plan=False, is_crowd=False, asset_dir="",
-            output_root="", export_root="",
+            built=False, has_plan=True, is_crowd=False,
+            recommended_armature="Rig", mapped=28, total=28,
+            missing_csv="", missing_by_target_csv="", review_flags_csv="",
+            character_ids_csv="", character_count=0, show_details=False,
+            export_blend=False, export_gltf=True, per_character_export=False,
+            asset_dir="/x", export_dir="/x/exports",
         )
         ctx = types.SimpleNamespace(scene=types.SimpleNamespace(open_jaywalker=s))
         panel = self.ui.OJ_PT_panel()
         panel.layout = mock_layout
         panel.draw(ctx)
-        self.assertIn("output_root", mock_layout.props)
-        self.assertIn("export_root", mock_layout.props)
+        # Exports is now an editable field bound to export_dir.
+        self.assertIn("export_dir", mock_layout.props)
+        # The removed top pickers must not reappear.
+        self.assertNotIn("output_root", mock_layout.props)
+        self.assertNotIn("export_root", mock_layout.props)
 
 if __name__ == "__main__":
     unittest.main()

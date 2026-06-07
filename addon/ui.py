@@ -61,12 +61,6 @@ class OJ_PT_panel(bpy.types.Panel):
             status, icon = "Idle", 'RADIOBUT_OFF'
         layout.label(text="Status: {0}".format(status), icon=icon)
 
-        # Per-run output/export destination (overrides the add-on preferences).
-        dest_box = layout.box()
-        dest_box.label(text="Output folder", icon='FILE_FOLDER')
-        dest_box.prop(s, "output_root", text="")
-        dest_box.prop(s, "export_root", text="Exports")
-
         layout.operator("open_jaywalker.run_pipeline", icon='PLAY')
 
         if s.has_plan:
@@ -168,7 +162,7 @@ class OJ_PT_panel(bpy.types.Panel):
             out_box.operator("open_jaywalker.open_output", icon='FILEBROWSER', text="Open reports folder")
             if s.export_dir:
                 out_box.label(text="Exports:", icon='EXPORT')
-                out_box.label(text=s.export_dir)
+                out_box.prop(s, "export_dir", text="")
                 out_box.operator("open_jaywalker.open_exports", icon='FILEBROWSER', text="Open exports folder")
         elif not s.has_plan:
             layout.label(text="Run the pipeline to generate a plan.")
