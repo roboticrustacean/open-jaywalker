@@ -886,12 +886,24 @@ def export_generated_gltf(bpy_module, wrapper_collection_name: str, filepath: st
     return filepath
 
 
+def _find_grp_root(collection, generated_marker_key: str):
+    """Return the Grp_Root empty from a generated character collection, or None."""
+    for obj in collection.all_objects:
+        if getattr(obj, "type", None) == "EMPTY" and obj.get(generated_marker_key):
+            return obj
+    return None
+
+
 def export_crowd_characters_blend(bpy_module, wrapper_collection_name: str, output_dir: str) -> List[str]:
     """Export each child collection of a crowd wrapper as a separate .blend file.
 
     Iterates over wrapper.children (one per character) and writes each to
     <output_dir>/blend/<character_id>.blend via bpy.data.libraries.write.
     Returns the list of written file paths.
+
+    Each per-character .blend has its Grp_Root at origin (0, 0, 0) — not at the
+    crowd-formation world position — so the exported file is self-contained and
+    usable without the crowd offset. The in-scene location is restored afterwards.
 
     Raises ValueError if the wrapper is absent, not generated, or has no children.
     """
@@ -919,10 +931,18 @@ def export_crowd_characters_blend(bpy_module, wrapper_collection_name: str, outp
         if character_id.startswith(prefix):
             character_id = character_id[len(prefix):]
         filepath = os.path.join(blend_dir, "{0}.blend".format(character_id))
-        # Wrap each character collection in a scene (see _write_collections_with_scene)
-        # so the per-character .blend opens with the human visible, not an empty file.
-        _write_collections_with_scene(bpy_module, [child], filepath)
-        exported.append(filepath)
+        grp_root = _find_grp_root(child, GENERATED_MARKER_KEY)
+        saved_location = list(grp_root.location) if grp_root is not None else None
+        if grp_root is not None:
+            grp_root.location = (0.0, 0.0, 0.0)
+        try:
+            # Wrap each character collection in a scene (see _write_collections_with_scene)
+            # so the per-character .blend opens with the human visible, not an empty file.
+            _write_collections_with_scene(bpy_module, [child], filepath)
+            exported.append(filepath)
+        finally:
+            if grp_root is not None and saved_location is not None:
+                grp_root.location = saved_location
     return exported
 
 
@@ -932,6 +952,10 @@ def export_crowd_characters_gltf(bpy_module, wrapper_collection_name: str, outpu
     Iterates over wrapper.children (one per character), selects its objects,
     and exports to <output_dir>/glb/<character_id>.glb.
     Returns the list of written file paths.
+
+    Each per-character .glb has its Grp_Root at origin (0, 0, 0) — not at the
+    crowd-formation world position — so the exported file is self-contained and
+    usable without the crowd offset. The in-scene location is restored afterwards.
 
     Raises ValueError if the wrapper is absent, not generated, or has no children.
     """
@@ -963,13 +987,21 @@ def export_crowd_characters_gltf(bpy_module, wrapper_collection_name: str, outpu
         if character_id.startswith(prefix):
             character_id = character_id[len(prefix):]
         filepath = os.path.join(glb_dir, "{0}.glb".format(character_id))
-        bpy_module.ops.object.select_all(action='DESELECT')
-        for obj in child.all_objects:
-            obj.select_set(True)
-        bpy_module.ops.export_scene.gltf(
-            filepath=filepath,
-            use_selection=True,
-            export_format='GLB',
-        )
-        exported.append(filepath)
+        grp_root = _find_grp_root(child, GENERATED_MARKER_KEY)
+        saved_location = list(grp_root.location) if grp_root is not None else None
+        if grp_root is not None:
+            grp_root.location = (0.0, 0.0, 0.0)
+        try:
+            bpy_module.ops.object.select_all(action='DESELECT')
+            for obj in child.all_objects:
+                obj.select_set(True)
+            bpy_module.ops.export_scene.gltf(
+                filepath=filepath,
+                use_selection=True,
+                export_format='GLB',
+            )
+            exported.append(filepath)
+        finally:
+            if grp_root is not None and saved_location is not None:
+                grp_root.location = saved_location
     return exported

@@ -2975,6 +2975,52 @@ class ExportCrowdCharactersBlendTests(unittest.TestCase):
             self.assertEqual(len(scenes), 1)
             self.assertIn(child.name, call["scene_links"][scenes[0].name])
 
+    def test_export_crowd_characters_blend_grp_root_at_origin_during_write(self):
+        """Each character's Grp_Root location must be (0,0,0) at the moment of write
+        and restored to its original crowd-formation position afterwards."""
+        import tempfile
+        import os
+        fake_bpy = _FakeBpy()
+        wrapper = fake_bpy.data.collections.new("ASAM_crowd")
+        wrapper[GENERATED_MARKER_KEY] = True
+        wrapper[GENERATED_ASSET_KEY] = "crowd"
+
+        char0 = fake_bpy.data.collections.new("ASAM_crowd_char0")
+        wrapper.children.link(char0)
+
+        # Grp_Root EMPTY with a non-zero crowd-formation position
+        grp_root0 = _FakeObject("Grp_Root_char0")
+        grp_root0[GENERATED_MARKER_KEY] = True
+        grp_root0.location = (5.0, 10.0, 0.0)
+        char0.objects.link(grp_root0)
+
+        # Intercept libraries.write to record Grp_Root location at write time
+        locations_at_write = []
+        inner_libraries = fake_bpy.data.libraries
+
+        class _CapturingLibraries:
+            def __init__(self, inner):
+                self.write_calls = inner.write_calls
+                self._inner = inner
+
+            def write(self, filepath, datablocks, **kwargs):
+                locations_at_write.append(tuple(grp_root0.location))
+                return self._inner.write(filepath, datablocks, **kwargs)
+
+        fake_bpy.data.libraries = _CapturingLibraries(inner_libraries)
+
+        out_dir = tempfile.mkdtemp()
+        export_crowd_characters_blend(fake_bpy, "ASAM_crowd", out_dir)
+
+        # Location must have been (0, 0, 0) at write time
+        self.assertEqual(len(locations_at_write), 1)
+        self.assertEqual(locations_at_write[0], (0.0, 0.0, 0.0))
+
+        # Location must be restored to original crowd-formation position after the call
+        self.assertAlmostEqual(grp_root0.location[0], 5.0)
+        self.assertAlmostEqual(grp_root0.location[1], 10.0)
+        self.assertAlmostEqual(grp_root0.location[2], 0.0)
+
     def test_export_crowd_characters_blend_errors(self):
         fake_bpy = _FakeBpy()
         # Missing collection
@@ -3039,6 +3085,51 @@ class ExportCrowdCharactersGltfTests(unittest.TestCase):
         self.assertEqual(calls[0]["filepath"], expected_char0)
         self.assertTrue(calls[0]["use_selection"])
         self.assertEqual(calls[0]["export_format"], "GLB")
+
+    def test_export_crowd_characters_gltf_grp_root_at_origin_during_export(self):
+        """Each character's Grp_Root location must be (0,0,0) at the moment of export
+        and restored to its original crowd-formation position afterwards."""
+        import tempfile
+        import os
+        fake_bpy = _FakeBpy()
+
+        # Set up mock gltf operator that records Grp_Root location at export time
+        locations_at_export = []
+
+        class _FakeExportSceneOps:
+            def __init__(self):
+                self.calls = []
+            def gltf(self, filepath, use_selection=False, export_format='GLB', **kwargs):
+                # Capture Grp_Root location at the moment of export
+                locations_at_export.append(tuple(grp_root0.location))
+                self.calls.append({"filepath": filepath})
+
+        fake_bpy.ops.export_scene = _FakeExportSceneOps()
+
+        wrapper = fake_bpy.data.collections.new("ASAM_crowd")
+        wrapper[GENERATED_MARKER_KEY] = True
+        wrapper[GENERATED_ASSET_KEY] = "crowd"
+
+        char0 = fake_bpy.data.collections.new("ASAM_crowd_char0")
+        wrapper.children.link(char0)
+
+        # Grp_Root EMPTY with a non-zero crowd-formation position
+        grp_root0 = _FakeObject("Grp_Root_char0")
+        grp_root0[GENERATED_MARKER_KEY] = True
+        grp_root0.location = (5.0, 10.0, 0.0)
+        char0.objects.link(grp_root0)
+
+        out_dir = tempfile.mkdtemp()
+        export_crowd_characters_gltf(fake_bpy, "ASAM_crowd", out_dir)
+
+        # Location must have been (0, 0, 0) at export time
+        self.assertEqual(len(locations_at_export), 1)
+        self.assertEqual(locations_at_export[0], (0.0, 0.0, 0.0))
+
+        # Location must be restored to original crowd-formation position after the call
+        self.assertAlmostEqual(grp_root0.location[0], 5.0)
+        self.assertAlmostEqual(grp_root0.location[1], 10.0)
+        self.assertAlmostEqual(grp_root0.location[2], 0.0)
 
     def test_export_crowd_characters_gltf_errors(self):
         fake_bpy = _FakeBpy()
