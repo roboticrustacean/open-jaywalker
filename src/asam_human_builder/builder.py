@@ -19,6 +19,7 @@ from asam_human_builder.geometry_resolution import (
     _hip_requires_centered_pelvis_pair,
     _offset_point,
     _opposite_name_candidates,
+    _resolve_eye_geometry,
     _resolve_preserved_source_root_extra,
     _resolve_target_geometry,
     _spec_style_side_suffix,
@@ -522,6 +523,29 @@ def _orient_terminal_extremities(resolved_geometry, spec_bones, placement_metada
         _retarget_tail(resolved_geometry, spec_bones, target, new_tail, grp_root_local_origin)
 
 
+def _re_resolve_synthesized_eyes(resolved_geometry, spec_bones, placement_metadata, grp_root_local_origin):
+    """Re-anchor synthesized eyes using the spanning-corrected Head geometry.
+
+    _span_core_chains rewrites Head's tail to point straight up. Eyes resolved
+    before that pass may use a sideways or short source-bone tail as the crown,
+    placing them at neck level. Running this after spanning gives eyes the
+    corrected crown position.
+    """
+    head_geom = resolved_geometry.get("Head")
+    if head_geom is None:
+        return
+    for eye in ("Eye_Left", "Eye_Right"):
+        eye_bone = next((b for b in spec_bones if b["name"] == eye), None)
+        if eye_bone is None:
+            continue
+        if eye_bone.get("geometry_source") != "eye_anchored":
+            continue  # source-mapped eyes are correct as-is
+        new_geom, _, _ = _resolve_eye_geometry(eye, head_geom, placement_metadata)
+        resolved_geometry[eye] = new_geom
+        eye_bone["head"] = _to_grp_root_local(new_geom["head"], grp_root_local_origin)
+        eye_bone["tail"] = _to_grp_root_local(new_geom["tail"], grp_root_local_origin)
+
+
 def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones: Dict[str, dict]) -> dict:
     """
     Build a deterministic ASAM armature creation spec from classifier outputs.
@@ -611,6 +635,9 @@ def build_armature_spec(classifier_report: dict, build_plan: dict, source_bones:
 
     # Span the central chain so the spine renders upright (see _span_core_chains / #57).
     _span_core_chains(resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin)
+    # Re-anchor synthesized eyes to the now-corrected Head geometry so they land in
+    # the upper face rather than at neck level when the source Head had a sideways tail.
+    _re_resolve_synthesized_eyes(resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin)
 
     _orient_terminal_extremities(
         resolved_geometry, spec["bones"], placement_metadata, grp_root_local_origin, bone_parents
