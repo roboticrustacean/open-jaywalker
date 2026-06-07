@@ -612,6 +612,35 @@ def _axis_cross_sign(axis_a, axis_b, axis_c):
     return 1 if ((axis_a + 1) % 3 == axis_b and (axis_b + 1) % 3 == axis_c) else -1
 
 
+def _select_up_index(midpoints, spans, tie_tolerance=0.85):
+    """Pick the up axis, robust to T-posed rigs whose arm span rivals their height.
+
+    The naive rule (largest bounding span = up) breaks when a character holds its
+    arms straight out: the fingertip-to-fingertip span can edge out standing
+    height, so the lateral arm axis wins and the synthesized Root bone ends up
+    horizontal. When two axes are near-tied for largest span, break the tie toward
+    the *grounded* axis: a standing character rests on the floor, so its up axis
+    extends to one side of the origin (min ~= 0) while the side/forward axes
+    straddle it symmetrically. One-sidedness cleanly separates height from arms.
+    """
+    order = sorted(range(3), key=lambda axis: spans[axis], reverse=True)
+    top = order[0]
+    if spans[top] <= 0:
+        return top
+
+    contenders = [axis for axis in order if spans[axis] >= spans[top] * tie_tolerance]
+    if len(contenders) == 1:
+        return top
+
+    def grounding(axis):
+        values = [point[axis] for point in midpoints]
+        low, high = min(values), max(values)
+        span = (high - low) or 1e-9
+        return abs(abs(high) - abs(low)) / span
+
+    return max(contenders, key=lambda axis: (grounding(axis), spans[axis]))
+
+
 def _infer_axis_metadata_from_bones(bones_data):
     """
     Infer semantic forward/side/up axes from bone geometry.
@@ -652,7 +681,7 @@ def _infer_axis_metadata_from_bones(bones_data):
         values = [point[axis] for point in midpoints]
         spans.append(max(values) - min(values))
 
-    up_index = max(range(3), key=lambda axis: spans[axis])
+    up_index = _select_up_index(midpoints, spans)
     remaining_axes = [axis for axis in range(3) if axis != up_index]
 
     left_means = {

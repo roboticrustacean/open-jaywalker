@@ -87,6 +87,42 @@ class ArmatureInspectorMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["forward_axis"]["index"], 0)
         self.assertEqual(metadata["driven_meshes"], ["BodyMesh"])
 
+    def test_tpose_up_axis_resolves_to_grounded_vertical_not_arm_span(self):
+        # Regression for the remy_mixamo T-pose bug: arms extended along X make the
+        # X bounding span slightly exceed standing height (Z), so the naive
+        # "tallest-span axis = up" rule mis-picks X. The character rests on the
+        # floor (feet at Z~=0), so the up axis must still resolve to Z.
+        fake_bpy = types.SimpleNamespace(
+            data=types.SimpleNamespace(filepath="C:/assets/Tpose.blend", objects=[], armatures=[]),
+        )
+        with mock.patch.dict(sys.modules, {"bpy": fake_bpy}):
+            if "inspector" in sys.modules:
+                del sys.modules["inspector"]
+            inspector = importlib.import_module("inspector")
+
+        bones_data = [
+            {"name": "Hips", "head": [0.0, 0.0, 1.00], "tail": [0.0, 0.0, 1.10]},
+            {"name": "Spine", "head": [0.0, 0.0, 1.10], "tail": [0.0, 0.0, 1.40]},
+            {"name": "Neck", "head": [0.0, 0.0, 1.55], "tail": [0.0, 0.0, 1.70]},
+            {"name": "Head", "head": [0.0, 0.0, 1.75], "tail": [0.0, 0.0, 1.90]},
+            # Arms fully extended along X -> X midpoint span (~1.9) edges out the
+            # Z height midpoint span (~1.77): the tie that defeats the naive heuristic.
+            {"name": "LeftArm", "head": [0.10, 0.0, 1.50], "tail": [0.75, 0.0, 1.50]},
+            {"name": "LeftHand", "head": [0.75, 0.0, 1.50], "tail": [1.15, 0.0, 1.50]},
+            {"name": "RightArm", "head": [-0.10, 0.0, 1.50], "tail": [-0.75, 0.0, 1.50]},
+            {"name": "RightHand", "head": [-0.75, 0.0, 1.50], "tail": [-1.15, 0.0, 1.50]},
+            # Legs/feet land on the ground (Z ~= 0): the grounding signal for "up".
+            {"name": "LeftUpLeg", "head": [0.10, 0.0, 1.00], "tail": [0.10, 0.0, 0.50]},
+            {"name": "LeftFoot", "head": [0.10, 0.0, 0.10], "tail": [0.10, 0.15, 0.02]},
+            {"name": "RightUpLeg", "head": [-0.10, 0.0, 1.00], "tail": [-0.10, 0.0, 0.50]},
+            {"name": "RightFoot", "head": [-0.10, 0.0, 0.10], "tail": [-0.10, 0.15, 0.02]},
+        ]
+
+        metadata = inspector.build_armature_placement_metadata(bones_data)
+
+        self.assertEqual(metadata["up_axis"]["index"], 2)
+        self.assertEqual(metadata["up_axis"]["sign"], 1)
+
     def test_build_mesh_binding_no_meshes(self):
         fake_bpy = types.SimpleNamespace(
             data=types.SimpleNamespace(objects=[]),
