@@ -26,8 +26,10 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         settings.built = False
         settings.synthesized_bones_csv = ""
         settings.synthesized_bones_by_character_csv = ""
-        settings.show_generated_armature = True
-        settings.show_source = True  # un-hide any source objects from a prior build
+        settings.show_generated_bones = True
+        settings.show_generated_mesh = True
+        settings.show_source_bones = True  # un-hide any source objects from a prior build
+        settings.show_source_mesh = True
 
         prefs = _addon_prefs(context)
         if prefs.output_dir:
@@ -122,7 +124,8 @@ class OJ_OT_build(bpy.types.Operator):
         report_path = asset_dir / "builder_report.json"
         self.report({'INFO'}, success_message(report, report_path))
         settings.built = True
-        settings.show_source = False  # source objects were hidden by the build
+        settings.show_source_bones = False  # source objects were hidden by the build
+        settings.show_source_mesh = False
 
         if "characters" in report:
             settings.build_succeeded = len(report.get("characters", []))
@@ -294,11 +297,13 @@ class OJ_OT_clean(bpy.types.Operator):
     def execute(self, context):
         removed = purge_previous_generated_artifacts(bpy)
         s = context.scene.open_jaywalker
-        s.show_source = True  # restore source objects before marking as unbuilt
+        s.show_source_bones = True  # restore source objects before marking as unbuilt
+        s.show_source_mesh = True
         s.built = False
         s.synthesized_bones_csv = ""
         s.synthesized_bones_by_character_csv = ""
-        s.show_generated_armature = True
+        s.show_generated_bones = True
+        s.show_generated_mesh = True
         self.report({'INFO'}, "Removed {0} generated object(s)/collection(s).".format(removed))
         return {'FINISHED'}
 
@@ -311,7 +316,8 @@ class OJ_OT_reset_pipeline(bpy.types.Operator):
     def execute(self, context):
         purge_previous_generated_artifacts(bpy)
         s = context.scene.open_jaywalker
-        s.show_source = True  # restore source objects before clearing state
+        s.show_source_bones = True  # restore source objects before clearing state
+        s.show_source_mesh = True
 
         if s.asset_dir:
             path = Path(s.asset_dir)
@@ -345,6 +351,8 @@ class OJ_OT_reset_pipeline(bpy.types.Operator):
         s.synthesized_bones_by_character_csv = ""
         s.show_failed_details = False
         s.show_inert_details = False
-        
+        s.show_generated_bones = True
+        s.show_generated_mesh = True
+
         self.report({'INFO'}, "Pipeline reset: rigs purged, reports cleared, state reset.")
         return {'FINISHED'}

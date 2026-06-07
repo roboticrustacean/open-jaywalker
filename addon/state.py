@@ -3,85 +3,106 @@
 import bpy
 
 
-def update_show_generated_armature(self, context):
-    if context is None:
-        return
+def _iter_objects(context):
+    """Yield non-None objects from the scene, guarding against missing attributes."""
     scene = getattr(context, "scene", None)
     if scene is None:
         return
     objects = getattr(scene, "objects", None)
     if objects is None:
         return
-
-    show = getattr(self, "show_generated_armature", True)
     for obj in objects:
-        if obj is None:
-            continue
-        is_generated = False
-        if hasattr(obj, "get") and callable(obj.get):
-            try:
-                is_generated = bool(obj.get("open_jaywalker_generated"))
-            except Exception:
-                pass
-        if not is_generated:
-            is_generated = bool(getattr(obj, "open_jaywalker_generated", False))
-
-        if is_generated:
-            hide_set = getattr(obj, "hide_set", None)
-            if callable(hide_set):
-                try:
-                    hide_set(not show)
-                except Exception:
-                    pass
+        if obj is not None:
+            yield obj
 
 
-def update_show_source(self, context):
+def _is_flagged(obj, prop_key):
+    """Return True if *obj* carries the given custom property flag."""
+    if hasattr(obj, "get") and callable(obj.get):
+        try:
+            if bool(obj.get(prop_key)):
+                return True
+        except Exception:
+            pass
+    return bool(getattr(obj, prop_key, False))
+
+
+def _set_visibility(obj, show):
+    hide_set = getattr(obj, "hide_set", None)
+    if callable(hide_set):
+        try:
+            hide_set(not show)
+        except Exception:
+            pass
+
+
+def update_show_generated_bones(self, context):
+    """Show/hide generated ARMATURE and EMPTY objects."""
     if context is None:
         return
-    scene = getattr(context, "scene", None)
-    if scene is None:
-        return
-    objects = getattr(scene, "objects", None)
-    if objects is None:
-        return
+    show = getattr(self, "show_generated_bones", True)
+    for obj in _iter_objects(context):
+        if _is_flagged(obj, "open_jaywalker_generated") and obj.type in ("ARMATURE", "EMPTY"):
+            _set_visibility(obj, show)
 
-    show = getattr(self, "show_source", True)
-    for obj in objects:
-        if obj is None:
-            continue
-        is_source = False
-        if hasattr(obj, "get") and callable(obj.get):
-            try:
-                is_source = bool(obj.get("open_jaywalker_source_hidden"))
-            except Exception:
-                pass
-        if not is_source:
-            is_source = bool(getattr(obj, "open_jaywalker_source_hidden", False))
 
-        if is_source:
-            hide_set = getattr(obj, "hide_set", None)
-            if callable(hide_set):
-                try:
-                    hide_set(not show)
-                except Exception:
-                    pass
+def update_show_generated_mesh(self, context):
+    """Show/hide generated MESH objects."""
+    if context is None:
+        return
+    show = getattr(self, "show_generated_mesh", True)
+    for obj in _iter_objects(context):
+        if _is_flagged(obj, "open_jaywalker_generated") and obj.type == "MESH":
+            _set_visibility(obj, show)
+
+
+def update_show_source_bones(self, context):
+    """Show/hide source ARMATURE objects."""
+    if context is None:
+        return
+    show = getattr(self, "show_source_bones", True)
+    for obj in _iter_objects(context):
+        if _is_flagged(obj, "open_jaywalker_source_hidden") and obj.type == "ARMATURE":
+            _set_visibility(obj, show)
+
+
+def update_show_source_mesh(self, context):
+    """Show/hide source MESH objects."""
+    if context is None:
+        return
+    show = getattr(self, "show_source_mesh", True)
+    for obj in _iter_objects(context):
+        if _is_flagged(obj, "open_jaywalker_source_hidden") and obj.type == "MESH":
+            _set_visibility(obj, show)
 
 
 class OJSettings(bpy.types.PropertyGroup):
     has_plan: bpy.props.BoolProperty(default=False)
     built: bpy.props.BoolProperty(default=False)
     show_details: bpy.props.BoolProperty(default=False)
-    show_generated_armature: bpy.props.BoolProperty(
-        name="Show generated",
-        description="Show or hide the generated ASAM rig and meshes in the viewport",
+    show_generated_bones: bpy.props.BoolProperty(
+        name="Show generated bones",
+        description="Show or hide the generated ASAM armature and empties in the viewport",
         default=True,
-        update=update_show_generated_armature,
+        update=update_show_generated_bones,
     )
-    show_source: bpy.props.BoolProperty(
-        name="Show source",
-        description="Show or hide the original source rig and meshes in the viewport",
+    show_generated_mesh: bpy.props.BoolProperty(
+        name="Show generated mesh",
+        description="Show or hide the generated ASAM mesh in the viewport",
         default=True,
-        update=update_show_source,
+        update=update_show_generated_mesh,
+    )
+    show_source_bones: bpy.props.BoolProperty(
+        name="Show source bones",
+        description="Show or hide the original source armature in the viewport",
+        default=True,
+        update=update_show_source_bones,
+    )
+    show_source_mesh: bpy.props.BoolProperty(
+        name="Show source mesh",
+        description="Show or hide the original source mesh in the viewport",
+        default=True,
+        update=update_show_source_mesh,
     )
     asset_dir: bpy.props.StringProperty(default="")
     export_dir: bpy.props.StringProperty(

@@ -6,40 +6,40 @@ import bpy
 def _draw_inert_bone_details(layout, s):
     """Draw the collapsible inert bone warning at the bottom of the panel.
 
-    Placed after export/output sections so expanding it never displaces controls.
+    Placed after Reset/Clean so expanding it never displaces those controls.
     """
     if s.is_crowd and s.synthesized_bones_by_character_csv:
         layout.separator()
-        warn_box = layout.box()
-        warn_box.prop(
+        row = layout.row()
+        row.prop(
             s, "show_inert_details",
             text="Inert Bone Details",
             icon=('TRIA_DOWN' if s.show_inert_details else 'TRIA_RIGHT'),
             emboss=False,
         )
         if s.show_inert_details:
-            inner = warn_box.box()
-            inner.alert = True
-            inner.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+            box = layout.box()
+            box.alert = True
+            box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
             for line in s.synthesized_bones_by_character_csv.split(" | "):
                 if line:
-                    inner.label(text="   {0}".format(line))
+                    box.label(text="   {0}".format(line))
     elif not s.is_crowd and s.synthesized_bones_csv:
         layout.separator()
-        warn_box = layout.box()
-        warn_box.prop(
+        row = layout.row()
+        row.prop(
             s, "show_inert_details",
             text="Inert Bone Details",
             icon=('TRIA_DOWN' if s.show_inert_details else 'TRIA_RIGHT'),
             emboss=False,
         )
         if s.show_inert_details:
-            inner = warn_box.box()
-            inner.alert = True
-            inner.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+            box = layout.box()
+            box.alert = True
+            box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
             for name in s.synthesized_bones_csv.split(", "):
                 if name:
-                    inner.label(text="   - {0}".format(name))
+                    box.label(text="   - {0}".format(name))
 
 
 class OJ_PT_panel(bpy.types.Panel):
@@ -121,8 +121,14 @@ class OJ_PT_panel(bpy.types.Panel):
             res_box = layout.box()
             res_box.label(text="Build Results", icon='INFO')
             res_col = res_box.column(align=True)
-            res_col.prop(s, "show_generated_armature")
-            res_col.prop(s, "show_source")
+            gen_row = res_col.row()
+            gen_row.label(text="Generated:")
+            gen_row.prop(s, "show_generated_bones", text="Bones", toggle=True)
+            gen_row.prop(s, "show_generated_mesh", text="Mesh", toggle=True)
+            src_row = res_col.row()
+            src_row.label(text="Source:")
+            src_row.prop(s, "show_source_bones", text="Bones", toggle=True)
+            src_row.prop(s, "show_source_mesh", text="Mesh", toggle=True)
             if s.is_crowd:
                 res_col.label(text="Succeeded: {0}".format(s.build_succeeded), icon='CHECKMARK')
                 if s.build_failed > 0:
@@ -167,9 +173,9 @@ class OJ_PT_panel(bpy.types.Panel):
         elif not s.has_plan:
             layout.label(text="Run the pipeline to generate a plan.")
 
-        if s.built:
-            _draw_inert_bone_details(layout, s)
-
         layout.separator()
         layout.operator("open_jaywalker.reset_pipeline", icon='LOOP_BACK')
         layout.operator("open_jaywalker.clean", icon='TRASH')
+
+        if s.built:
+            _draw_inert_bone_details(layout, s)
