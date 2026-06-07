@@ -30,10 +30,13 @@ class OJ_OT_run_pipeline(bpy.types.Operator):
         settings.show_source = True  # un-hide any source objects from a prior build
 
         prefs = _addon_prefs(context)
-        if prefs.output_dir:
-            os.environ["OPEN_JAYWALKER_OUTPUT_ROOT"] = bpy.path.abspath(prefs.output_dir)
-        if prefs.export_dir:
-            os.environ["OPEN_JAYWALKER_EXPORT_DIR"] = bpy.path.abspath(prefs.export_dir)
+        # Per-run panel pickers take precedence over the add-on preferences.
+        output_root = getattr(settings, "output_root", "") or prefs.output_dir
+        if output_root:
+            os.environ["OPEN_JAYWALKER_OUTPUT_ROOT"] = bpy.path.abspath(output_root)
+        export_root = getattr(settings, "export_root", "") or prefs.export_dir
+        if export_root:
+            os.environ["OPEN_JAYWALKER_EXPORT_DIR"] = bpy.path.abspath(export_root)
         elif "OPEN_JAYWALKER_EXPORT_DIR" in os.environ:
             del os.environ["OPEN_JAYWALKER_EXPORT_DIR"]
 
