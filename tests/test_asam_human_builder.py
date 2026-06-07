@@ -738,6 +738,27 @@ class AsamHumanBuilderTests(unittest.TestCase):
         self.assertTrue(bool(source_arm.get(SOURCE_HIDDEN_MARKER_KEY)))
         self.assertTrue(bool(mesh_obj.get(SOURCE_HIDDEN_MARKER_KEY)))
 
+    def test_generated_mesh_copy_does_not_inherit_source_hidden_marker(self):
+        """Regression: source_mesh.copy() inherits _props including SOURCE_HIDDEN_MARKER_KEY.
+        _copy_mesh_object must strip the marker so update_show_source_mesh never hides the
+        generated copy when the operator sets show_source_mesh=False after a build."""
+        from asam_human_builder.blender_builder import (
+            _copy_mesh_object,
+            GENERATED_MARKER_KEY,
+            SOURCE_HIDDEN_MARKER_KEY,
+        )
+        bpy_module = _FakeBpy()
+        mesh_data = bpy_module.data.meshes.new("Body")
+        source_mesh = bpy_module.data.objects.new("Body", mesh_data)
+        # Simulate state after a previous build: source mesh carries the hidden marker
+        source_mesh[SOURCE_HIDDEN_MARKER_KEY] = True
+        collection = bpy_module.data.collections.new("ASAM_Test")
+        grp_root = bpy_module.data.objects.new("Grp_Root", None)
+        generated = _copy_mesh_object(bpy_module, source_mesh, "Test", collection, grp_root, "Body_Test")
+        self.assertTrue(bool(generated.get(GENERATED_MARKER_KEY)))
+        self.assertFalse(bool(generated.get(SOURCE_HIDDEN_MARKER_KEY)),
+            "Generated mesh must not inherit SOURCE_HIDDEN_MARKER_KEY from source copy")
+
     def test_show_source_objects_unhides_and_removes_marker(self):
         """show_source_objects un-hides all stamped source objects and removes the marker."""
         from asam_human_builder.blender_builder import show_source_objects, SOURCE_HIDDEN_MARKER_KEY

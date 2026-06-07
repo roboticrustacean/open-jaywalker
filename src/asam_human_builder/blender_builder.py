@@ -507,6 +507,13 @@ def _copy_mesh_object(
     world_matrix = getattr(source_mesh, "matrix_world", None)
     generated_mesh[GENERATED_MARKER_KEY] = True
     generated_mesh[GENERATED_ASSET_KEY] = asset_name
+    # .copy() inherits ALL custom properties from the source, including
+    # SOURCE_HIDDEN_MARKER_KEY when the source was hidden by a prior build.
+    # Remove it so update_show_source_mesh never mistakes this copy for a source object.
+    try:
+        del generated_mesh[SOURCE_HIDDEN_MARKER_KEY]
+    except (KeyError, TypeError):
+        pass
     collection.objects.link(generated_mesh)
     # Parent to Grp_Root (sibling of the armature) per the ASAM geometry-container hierarchy.
     generated_mesh.parent = parent_object
