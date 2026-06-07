@@ -810,6 +810,13 @@ def export_generated_blend(bpy_module, wrapper_collection_name: str, filepath: s
     The source rig/meshes are excluded: bpy.data.libraries.write serializes the given
     datablocks plus their dependencies, not the whole file. Returns the written path.
     Raises ValueError if the wrapper is absent or not a generated collection.
+
+    We write a *temporary scene* with the wrapper collection linked into it, not the bare
+    collection. ``libraries.write({collection})`` only serializes the collection +
+    objects/meshes/armatures it references -- it does NOT write any Scene. A .blend with
+    no scene linking the data opens to an empty active view layer (the objects survive as
+    orphan data but nothing is visible). Linking the wrapper under a scene's master
+    collection makes the generated human show up immediately on reopen.
     """
     wrapper = bpy_module.data.collections.get(wrapper_collection_name)
     if wrapper is None or not bool(wrapper.get(GENERATED_MARKER_KEY)):
@@ -821,8 +828,28 @@ def export_generated_blend(bpy_module, wrapper_collection_name: str, filepath: s
     directory = os.path.dirname(filepath)
     if directory:
         os.makedirs(directory, exist_ok=True)
-    bpy_module.data.libraries.write(filepath, {wrapper}, fake_user=True)
+    _write_collections_with_scene(bpy_module, [wrapper], filepath)
     return filepath
+
+
+def _write_collections_with_scene(bpy_module, collections, filepath: str) -> None:
+    """libraries.write a set of collections wrapped in a temporary scene.
+
+    The scene gives the exported file a populated view layer so it opens non-empty.
+    The temp scene is removed afterwards so the live session is left untouched.
+    """
+    export_scene = bpy_module.data.scenes.new("OpenJaywalkerExport")
+    try:
+        for collection in collections:
+            export_scene.collection.children.link(collection)
+        datablocks = {export_scene}
+        datablocks.update(collections)
+        bpy_module.data.libraries.write(filepath, datablocks, fake_user=True)
+    finally:
+        for collection in collections:
+            if export_scene.collection.children.get(collection.name) is not None:
+                export_scene.collection.children.unlink(collection)
+        bpy_module.data.scenes.remove(export_scene)
 
 
 def export_generated_gltf(bpy_module, wrapper_collection_name: str, filepath: str) -> str:
@@ -892,7 +919,9 @@ def export_crowd_characters_blend(bpy_module, wrapper_collection_name: str, outp
         if character_id.startswith(prefix):
             character_id = character_id[len(prefix):]
         filepath = os.path.join(blend_dir, "{0}.blend".format(character_id))
-        bpy_module.data.libraries.write(filepath, {child}, fake_user=True)
+        # Wrap each character collection in a scene (see _write_collections_with_scene)
+        # so the per-character .blend opens with the human visible, not an empty file.
+        _write_collections_with_scene(bpy_module, [child], filepath)
         exported.append(filepath)
     return exported
 

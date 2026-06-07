@@ -507,10 +507,43 @@ class _FakeViewLayerObjects:
         self._context.object = obj
 
 
+class _FakeScene:
+    def __init__(self, name: str, bpy_module=None):
+        self.name = name
+        self.collection = _FakeCollection("{0}_Root".format(name), bpy_module)
+
+
+class _FakeSceneStore:
+    """List-like scene store: iterable (existing code loops it) plus new()/remove()."""
+
+    def __init__(self, bpy_module=None):
+        self._bpy_module = bpy_module
+        self._scenes = []
+
+    def add(self, scene):
+        self._scenes.append(scene)
+        return scene
+
+    def new(self, name: str):
+        scene = _FakeScene(name, self._bpy_module)
+        self._scenes.append(scene)
+        return scene
+
+    def remove(self, scene):
+        if scene in self._scenes:
+            self._scenes.remove(scene)
+
+    def __iter__(self):
+        return iter(list(self._scenes))
+
+    def __len__(self):
+        return len(self._scenes)
+
+
 class _FakeContext:
     def __init__(self):
         self.object = None
-        self.scene = type("Scene", (), {"collection": _FakeCollection("SceneRoot")})()
+        self.scene = _FakeScene("Scene")
         self.view_layer = type("ViewLayer", (), {})()
         self.view_layer.objects = _FakeViewLayerObjects(self)
 
@@ -537,7 +570,21 @@ class _FakeLibraries:
         self.write_calls = []
 
     def write(self, filepath, datablocks, **kwargs):
-        self.write_calls.append({"filepath": filepath, "datablocks": datablocks, "kwargs": kwargs})
+        # Snapshot each written scene's linked child collections at call time. Real
+        # libraries.write serializes the linkage as it stands now; callers may unlink
+        # afterwards (e.g. temp-scene cleanup), so capturing names here records what the
+        # exported file actually contains.
+        scene_links = {
+            db.name: set(c.name for c in db.collection.children)
+            for db in datablocks
+            if isinstance(db, _FakeScene)
+        }
+        self.write_calls.append({
+            "filepath": filepath,
+            "datablocks": datablocks,
+            "kwargs": kwargs,
+            "scene_links": scene_links,
+        })
 
 
 class _FakeBpy:
@@ -549,7 +596,8 @@ class _FakeBpy:
         self.data.meshes = _FakeMeshStore()
         self.data.collections = _FakeCollectionStore(self)
         self.data.libraries = _FakeLibraries()
-        self.data.scenes = [self.context.scene]
+        self.data.scenes = _FakeSceneStore(self)
+        self.data.scenes.add(self.context.scene)
         # Expose isinstance-able type markers for purge_previous_generated_artifacts
         # to distinguish armature vs mesh data blocks without a parallel type-name
         # lookup. Real bpy exposes these via bpy.types.Armature / bpy.types.Mesh.
@@ -2836,6 +2884,46 @@ class ExportGeneratedBlendTests(unittest.TestCase):
         # fake_user=True keeps the exported collection from being dropped as orphan data.
         self.assertTrue(written["kwargs"].get("fake_user"))
 
+    def test_export_generated_blend_writes_scene_linking_wrapper(self):
+        """Regression: the exported .blend must contain a Scene that links the wrapper
+        collection, otherwise the file opens to an empty view layer (objects exist as
+        orphan data but nothing is visible). Asserts a scene datablock is written and
+        that scene's master collection has the wrapper linked as a child."""
+        import tempfile
+        import os
+        fake_bpy = _FakeBpy()
+        wrapper = fake_bpy.data.collections.new("ASAM_demo")
+        wrapper[GENERATED_MARKER_KEY] = True
+        out = os.path.join(tempfile.mkdtemp(), "demo_asam.blend")
+        export_generated_blend(fake_bpy, "ASAM_demo", out)
+
+        written = fake_bpy.data.libraries.write_calls[0]
+        datablocks = list(written["datablocks"])
+        scenes = [db for db in datablocks if isinstance(db, _FakeScene)]
+        self.assertEqual(
+            len(scenes), 1,
+            "exported .blend must write exactly one Scene so it opens non-empty",
+        )
+        # The wrapper collection must be linked into the written scene at write time.
+        scene_children = written["scene_links"][scenes[0].name]
+        self.assertIn(
+            wrapper.name,
+            scene_children,
+            "the written scene's master collection must link the wrapper collection",
+        )
+
+    def test_export_generated_blend_cleans_up_temp_scene(self):
+        """The temporary export scene must not linger in bpy.data.scenes afterwards."""
+        import tempfile
+        import os
+        fake_bpy = _FakeBpy()
+        wrapper = fake_bpy.data.collections.new("ASAM_demo")
+        wrapper[GENERATED_MARKER_KEY] = True
+        scenes_before = list(fake_bpy.data.scenes)
+        out = os.path.join(tempfile.mkdtemp(), "demo_asam.blend")
+        export_generated_blend(fake_bpy, "ASAM_demo", out)
+        self.assertEqual(list(fake_bpy.data.scenes), scenes_before)
+
     def test_export_generated_blend_refuses_non_generated_collection(self):
         fake_bpy = _FakeBpy()
         fake_bpy.data.collections.new("NotGenerated")  # no generated marker
@@ -2878,10 +2966,14 @@ class ExportCrowdCharactersBlendTests(unittest.TestCase):
         write_calls = fake_bpy.data.libraries.write_calls
         self.assertEqual(len(write_calls), 2)
         
-        # Verify that libraries.write was called with each character collection
-        written_datablocks = [list(call["datablocks"])[0] for call in write_calls]
-        self.assertIn(char0, written_datablocks)
-        self.assertIn(char1, written_datablocks)
+        # Verify that libraries.write was called with each character collection, and that
+        # each write includes a Scene that links the character collection (so the
+        # per-character .blend opens non-empty rather than to a blank view layer).
+        for child in (char0, char1):
+            call = next(c for c in write_calls if child in c["datablocks"])
+            scenes = [db for db in call["datablocks"] if isinstance(db, _FakeScene)]
+            self.assertEqual(len(scenes), 1)
+            self.assertIn(child.name, call["scene_links"][scenes[0].name])
 
     def test_export_crowd_characters_blend_errors(self):
         fake_bpy = _FakeBpy()
