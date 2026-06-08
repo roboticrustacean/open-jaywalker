@@ -20,7 +20,7 @@ def _draw_inert_bone_details(layout, s):
         if s.show_inert_details:
             box = layout.box()
             box.alert = True
-            box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+            box.label(text="Synthesized Inert Bones (unbound):", icon='ERROR')
             for line in s.synthesized_bones_by_character_csv.split(" | "):
                 if line:
                     box.label(text="   {0}".format(line))
@@ -36,7 +36,7 @@ def _draw_inert_bone_details(layout, s):
         if s.show_inert_details:
             box = layout.box()
             box.alert = True
-            box.label(text="Synthesized Inert Bones (unbound):", icon='WARNING')
+            box.label(text="Synthesized Inert Bones (unbound):", icon='ERROR')
             for name in s.synthesized_bones_csv.split(", "):
                 if name:
                     box.label(text="   - {0}".format(name))
