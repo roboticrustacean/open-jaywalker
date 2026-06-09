@@ -193,6 +193,8 @@ class OJ_OT_export_blend(bpy.types.Operator):
         wrapper_name = report.get("wrapper_collection_name")
         if not wrapper_name:
             wrapper_name = report.get("generated_collection_name")
+        if not wrapper_name and report.get("crowd"):
+            wrapper_name = "ASAM_{0}".format(report.get("asset_name", "output"))
         if not wrapper_name:
             self.report({'ERROR'}, "Cannot determine wrapper collection from builder report.")
             return {'CANCELLED'}
@@ -243,6 +245,8 @@ class OJ_OT_export_gltf(bpy.types.Operator):
         wrapper_name = report.get("wrapper_collection_name")
         if not wrapper_name:
             wrapper_name = report.get("generated_collection_name")
+        if not wrapper_name and report.get("crowd"):
+            wrapper_name = "ASAM_{0}".format(report.get("asset_name", "output"))
         if not wrapper_name:
             self.report({'ERROR'}, "Cannot determine wrapper collection from builder report.")
             return {'CANCELLED'}

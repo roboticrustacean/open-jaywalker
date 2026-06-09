@@ -1036,6 +1036,7 @@ def build_crowd_builder_report(
 
     return {
         "asset_name": asset_name,
+        "wrapper_collection_name": wrapper_collection_name(asset_name),
         "crowd": True,
         "character_decomposition_summary": {
             "source_armature": decomposition.get("source_armature"),

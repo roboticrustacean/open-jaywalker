@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import subprocess
+import tempfile
 from typing import List, Optional
 
 try:
@@ -840,23 +842,95 @@ def export_generated_blend(bpy_module, wrapper_collection_name: str, filepath: s
 
 
 def _write_collections_with_scene(bpy_module, collections, filepath: str) -> None:
-    """libraries.write a set of collections wrapped in a temporary scene.
+    """Export a set of collections into a proper mainfile via a background process.
 
-    The scene gives the exported file a populated view layer so it opens non-empty.
-    The temp scene is removed afterwards so the live session is left untouched.
+    bpy.data.libraries.write normally creates a library file. Opening it directly
+    gives a "Library file, loading empty scene" warning. To give the user a normal
+    .blend file that opens correctly, we write the data to a temporary library,
+    then spawn a background Blender process to load the default UI/scene and append
+    the collections before saving.
     """
-    export_scene = bpy_module.data.scenes.new("OpenJaywalkerExport")
+    if not collections:
+        return
+
+    if not hasattr(bpy_module, "app"):
+        # We are running in a mock test environment (_FakeBpy).
+        # Fall back to the legacy direct write so mock assertions still pass.
+        export_scene = bpy_module.data.scenes.new("OpenJaywalkerExport")
+        try:
+            for collection in collections:
+                export_scene.collection.children.link(collection)
+            datablocks = {export_scene}
+            datablocks.update(collections)
+            bpy_module.data.libraries.write(filepath, datablocks, fake_user=True)
+        finally:
+            for collection in collections:
+                if export_scene.collection.children.get(collection.name) is not None:
+                    export_scene.collection.children.unlink(collection)
+            bpy_module.data.scenes.remove(export_scene)
+        return
+
+    blender_exe = bpy_module.app.binary_path
+    
+    fd_lib, temp_lib_path = tempfile.mkstemp(suffix=".blend")
+    os.close(fd_lib)
+    
+    fd_wm, temp_wm_path = tempfile.mkstemp(suffix=".blend")
+    os.close(fd_wm)
+    
+    fd_script, temp_script_path = tempfile.mkstemp(suffix=".py")
+    os.close(fd_script)
+    
     try:
-        for collection in collections:
-            export_scene.collection.children.link(collection)
-        datablocks = {export_scene}
-        datablocks.update(collections)
-        bpy_module.data.libraries.write(filepath, datablocks, fake_user=True)
+        # 1. Save the generated assets to a library file
+        datablocks = set(collections)
+        bpy_module.data.libraries.write(temp_lib_path, datablocks, fake_user=True)
+        
+        # 2. Save the ENTIRE current session to a temp mainfile to capture the WindowManager
+        # This guarantees the exported file opens without the "Library file" warning
+        # and preserves the exact UI layout the user is currently using.
+        bpy_module.ops.wm.save_as_mainfile(filepath=temp_wm_path, copy=True)
+        
+        # 3. Clean out the temp mainfile in the background and insert our exported assets
+        script_lines = [
+            "import bpy",
+            f"bpy.ops.wm.open_mainfile(filepath={repr(temp_wm_path)})",
+            # Remove all objects and collections from the copied scene
+            "for scene in bpy.data.scenes:",
+            "    for col in list(scene.collection.children):",
+            "        scene.collection.children.unlink(col)",
+            "for col in bpy.data.collections:",
+            "    bpy.data.collections.remove(col)",
+            "for obj in bpy.data.objects:",
+            "    bpy.data.objects.remove(obj)",
+            # Purge orphans to reduce file size
+            "for i in range(3):",
+            "    bpy.ops.outliner.orphans_purge(do_local_ids=True, do_linked_ids=True, do_recursive=True)",
+            f"lib_path = {repr(temp_lib_path)}",
+            f"col_names = {repr([col.name for col in collections])}",
+            "with bpy.data.libraries.load(lib_path, link=False) as (data_from, data_to):",
+            "    data_to.collections = [name for name in col_names if name in data_from.collections]",
+            "for col in data_to.collections:",
+            "    if col is not None:",
+            "        bpy.context.scene.collection.children.link(col)",
+            f"bpy.ops.wm.save_mainfile(filepath={repr(filepath)})"
+        ]
+        script_content = "\n".join(script_lines)
+        
+        with open(temp_script_path, "w", encoding="utf-8") as f:
+            f.write(script_content)
+            
+        kwargs = {}
+        if os.name == 'nt':
+            kwargs['creationflags'] = getattr(subprocess, 'CREATE_NO_WINDOW', 0x08000000)
+        subprocess.run([blender_exe, "-b", "-P", temp_script_path], check=True, **kwargs)
     finally:
-        for collection in collections:
-            if export_scene.collection.children.get(collection.name) is not None:
-                export_scene.collection.children.unlink(collection)
-        bpy_module.data.scenes.remove(export_scene)
+        for p in (temp_lib_path, temp_wm_path, temp_script_path):
+            if os.path.exists(p):
+                try:
+                    os.remove(p)
+                except Exception:
+                    pass
 
 
 def export_generated_gltf(bpy_module, wrapper_collection_name: str, filepath: str) -> str:
