@@ -3473,6 +3473,32 @@ class WeightMergePlanTests(unittest.TestCase):
         self.assertNotIn("Floating", merges)
         self.assertEqual(spec["weight_merges"], sorted(spec["weight_merges"], key=lambda m: (m["source"], m["target"])))
 
+    def test_self_named_mapped_bones_are_not_merged_away(self):
+        """Regression (1000idles / 3ds Max Biped): a source bone whose name equals its
+        ASAM target (Neck->Neck, Head->Head) is a real mapping and must be preserved,
+        never folded into a differently-named mapped ancestor (Upper_Spine). Its own
+        orphan children still merge into it. Mixamo/Rigify dodge this because their source
+        bones (mixamorig:Head, DEF-spine.006) differ from the ASAM target names."""
+        report = _base_classifier_report()
+        report["semantic_mapping"]["Upper_Spine"].update(
+            {"source_bone": "Spine3", "action": "direct_map", "confidence": 0.95})
+        report["semantic_mapping"]["Neck"].update(
+            {"source_bone": "Neck", "action": "direct_map", "confidence": 0.95})
+        report["semantic_mapping"]["Head"].update(
+            {"source_bone": "Head", "action": "direct_map", "confidence": 0.95})
+        b = _bone
+        source_bones = {
+            "Spine3": b("Spine3", None, (0, 0, 1.3), (0, 0, 1.4)),
+            "Neck": b("Neck", "Spine3", (0, 0, 1.4), (0, 0, 1.5)),
+            "Head": b("Head", "Neck", (0, 0, 1.5), (0, 0, 1.7)),
+            "Jaw": b("Jaw", "Head", (0, 0.05, 1.6), (0, 0.1, 1.6)),  # orphan child of Head
+        }
+        spec = build_armature_spec(report, _base_build_plan(), source_bones)
+        merges = {m["source"]: m["target"] for m in spec["weight_merges"]}
+        self.assertNotIn("Neck", merges)  # self-mapped: preserved, not -> Upper_Spine
+        self.assertNotIn("Head", merges)  # self-mapped: preserved, not -> Upper_Spine
+        self.assertEqual(merges.get("Jaw"), "Head")  # orphan merges into Head, not spine
+
 
 def _minimal_report_and_plan(extra_mapping: dict):
     """Return a valid (classifier_report, build_plan) pair with extra_mapping overlaid.

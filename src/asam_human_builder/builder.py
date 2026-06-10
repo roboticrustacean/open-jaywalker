@@ -432,11 +432,17 @@ def _compute_weight_merges(spec_bones, source_bones):
     for bone in spec_bones:
         source_name = bone.get("source_bone")
         target_name = bone.get("name")
+        # NB: self-named mappings (source_name == target_name, e.g. a 3ds Max Biped
+        # "Head"->ASAM "Head") MUST be included. source_to_target doubles as the set of
+        # "source bones that are a real mapping"; excluding a self-named bone would make
+        # the walk below treat it as an orphan and merge its weights into a
+        # differently-named ancestor (Upper_Spine), deleting the Head/Neck groups so the
+        # bone can no longer deform the mesh. The remap planner skips identity *renames*
+        # separately; this set is not about renames.
         if (
             source_name
             and target_name
             and bone.get("geometry_source") in SOURCE_NAMED_GEOMETRY_SOURCES
-            and source_name != target_name
         ):
             source_to_target.setdefault(source_name, target_name)
 
