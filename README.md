@@ -35,21 +35,61 @@ wiki page has the verified end-to-end recipe plus the scale and texture caveats.
 The pipeline ships as an installable Blender add-on, **Open Jaywalker**, which is
 the simplest way to run it interactively.
 
-1. Build the add-on zip from the repo root:
-   ```powershell
-   python tools/build_addon.py
-   ```
-   This produces `dist/open_jaywalker-<version>.zip`.
-2. In Blender, go to **Edit ▸ Preferences ▸ Add-ons ▸ Install…** and select that
-   zip, then enable **Open Jaywalker**.
-3. Open your humanoid `.blend`, open the **Open Jaywalker** tab in the 3D Viewport
-   sidebar (press `N`), and use **Run pipeline → (review the plan summary) →
-   Build**.
+📺 **Video walkthrough:** https://youtu.be/kR923TMq4zc
+
+#### Install
+
+1. **Download the add-on zip.** Get `open_jaywalker-<version>.zip` from the
+   [latest release](https://github.com/roboticrustacean/open-jaywalker/releases/latest).
+   _(Alternatively, build it yourself from the repo root with
+   `python tools/build_addon.py`, which writes `dist/open_jaywalker-<version>.zip`.)_
+2. In Blender, open **Edit ▸ Preferences ▸ Add-ons**.
+3. Click **Install from Disk…** (on older Blender, the **Install…** button), select
+   the downloaded zip, and confirm.
+4. Tick the checkbox next to **Open Jaywalker** to enable it.
+5. Open your humanoid `.blend`, then in the 3D Viewport press `N` to open the
+   sidebar and select the **Open Jaywalker** tab.
 
 > **Install the built zip, not the repo `addon/` folder.** The `addon/` sources
 > alone do not contain the bundled pipeline packages — those are assembled in only
-> by `tools/build_addon.py`. Pointing Blender at the repo `addon/` directory yields
-> a non-functional add-on.
+> by `tools/build_addon.py` (and shipped in the released zip). Pointing Blender at
+> the repo `addon/` directory yields a non-functional add-on.
+
+#### Use it — the panel, button by button
+
+The panel runs the pipeline top to bottom. A **Status** line at the top tracks
+progress: *Idle → Plan ready → Built*.
+
+1. **Run pipeline** — inspects the scene, classifies the skeleton against the 28
+   ASAM core targets, and writes the plan. It deliberately stops here (a *build
+   gate*) so you can review before anything is built.
+2. **Plan** summary (appears after running):
+   - **Primary rig** — the binding-decisive armature the classifier selected (the
+     one that actually skins the mesh).
+   - **Mapped: X/Y** — how many core targets were mapped directly (green check, or
+     a red warning when some are missing and will be synthesized).
+   - **Crowd: N characters** — for crowd assets, how many characters were
+     decomposed.
+   - **Details** (expandable) — missing targets, review flags (e.g.
+     `multiple_roots`, `side_conflict`), and, for crowds, the per-character list.
+3. **Export .blend / Export .glb** (and, for crowds, **Per-character export**) —
+   toggles that export automatically right after a build.
+4. **Build** — constructs the ASAM human(s): a `Grp_Root` container, the generated
+   28-target armature, and the rebound mesh, leaving the source rig untouched. For
+   crowds it builds one human per character (fan-out).
+5. **Build Results** (after building):
+   - **Generated: Bones / Mesh** and **Source: Bones / Mesh** — visibility toggles
+     for before/after comparison and per-character isolation.
+   - **Succeeded / Failed** counts for crowds, with an expandable **Failed
+     Details** list.
+6. **Export** — on-demand **.blend** / **.glb** buttons (plus **Per-character
+   export** for crowds) to write out the generated result.
+7. **Reports / Exports** — shows the output folder paths, with **Open reports
+   folder** / **Open exports folder** buttons and an editable export directory.
+8. **Reset** — clears the current plan/build state to start over.
+9. **Clean** — removes the generated collection(s) from the scene.
+10. **Inert Bone Details** (shown when applicable) — an expandable list of
+    synthesized, unbound (inert) bones, surfaced transparently rather than hidden.
 
 ### Developer & Headless Workflows
 
