@@ -20,7 +20,7 @@
         "target": "Neck"
       },
       {
-        "source": "head",
+        "source": "DEF-spine.006",
         "target": "Head"
       },
       {
@@ -476,12 +476,6 @@
     },
     {
       "bone_name": "DEF-spine.005",
-      "reason": "supporting_chain_detail",
-      "origin": "primary",
-      "role": "deform"
-    },
-    {
-      "bone_name": "DEF-spine.006",
       "reason": "supporting_chain_detail",
       "origin": "primary",
       "role": "deform"

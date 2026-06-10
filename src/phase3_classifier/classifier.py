@@ -235,6 +235,8 @@ BONE_CONVENTIONS: Dict[str, BoneConvention] = {
             "com": frozenset({"root"}),
             "pelvis": frozenset({"hip"}),
             "spine": frozenset({"lower_spine", "upper_spine"}),
+            "neck": frozenset({"neck"}),
+            "head": frozenset({"head"}),
             "clavicle": frozenset({"shoulder"}),
             "upperarm": frozenset({"upper_arm"}),
             "forearm": frozenset({"lower_arm"}),
@@ -875,6 +877,14 @@ def _score_target_candidate(target_name: str, bone: BoneInfo, context: dict, nam
     structural_score = _structural_evidence(target_name, bone, context)
 
     w_name, w_struct, w_geom = _confidence_weights(name_quality, bone.origin)
+
+    if family in {"neck", "head"} and name_score == 0.0:
+        if "spine" in bone.family_tags and structural_score >= 0.5:
+            # Rigify names neck/head bones under 'spine' prefix (e.g. DEF-spine.006).
+            # The structural skeleton correctly identifies them. We inject a synthetic
+            # name score to let them beat 'head' or 'neck' control bones.
+            name_score = 0.82
+
     confidence = round(_clamp((w_name * name_score) + (w_struct * structural_score) + (w_geom * geometry_score)), 3)
 
     if confidence < 0.10 and name_score < 0.20:

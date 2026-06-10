@@ -86,30 +86,182 @@ def _is_connected_subtree(bone_names: List[str], parent_by_name: Dict[str, Optio
             continue
         reached.add(current)
         stack.extend(children[current])
-    return reached == members
+def _bone_centroid(bone_names: List[str], bones: List[dict]) -> Tuple[float, float, float]:
+    """Compute the spatial centroid of a set of bones using their head and tail coordinates."""
+    points = []
+    for bone in bones:
+        if bone["name"] in bone_names:
+            if "head" in bone:
+                points.append(bone["head"])
+            if "tail" in bone:
+                points.append(bone["tail"])
+    if not points:
+        return (0.0, 0.0, 0.0)
+    return (
+        sum(p[0] for p in points) / len(points),
+        sum(p[1] for p in points) / len(points),
+        sum(p[2] for p in points) / len(points)
+    )
 
+def _distance(p1: Tuple[float, float, float], p2: Tuple[float, float, float]) -> float:
+    return math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))
 
 def detect_characters(bones: List[dict]) -> Tuple[List[CharacterGroup], List[str]]:
-    """Return accepted character groups and the shared (prefix-less) bone names."""
+    """Return accepted character groups and the shared bone names, using graph connectivity."""
     parent_by_name = {bone["name"]: bone.get("parent") for bone in bones}
     grouped = group_bones_by_prefix(bones)
 
-    shared = sorted(grouped.get(None, []))
-    characters: List[CharacterGroup] = []
+    char_data = []
+    strays: List[List[str]] = []
+    
+    # 1. Process prefix-identified groups first
     for prefix, names in grouped.items():
-        if prefix is None or len(names) < MIN_CHARACTER_BONES:
+        if prefix is None:
             continue
-        name_set = set(names)
-        ordered = [bone["name"] for bone in bones if bone["name"] in name_set]
-        characters.append(
-            CharacterGroup(
-                character_id=prefix,
-                prefix=prefix,
-                bone_names=ordered,
-                connected=_is_connected_subtree(ordered, parent_by_name),
-            )
-        )
+        if len(names) >= MIN_CHARACTER_BONES:
+            name_set = set(names)
+            ordered = [bone["name"] for bone in bones if bone["name"] in name_set]
+            char_data.append({
+                "id": prefix,
+                "prefix": prefix,
+                "bones": ordered,
+                "connected": _is_connected_subtree(ordered, parent_by_name)
+            })
+        else:
+            strays.append(names)
+
+    # 2. Process prefix-less bones using graph connectivity
+    prefixless_bones = grouped.get(None, [])
+    members = set(prefixless_bones)
+    neighbors = {name: [] for name in members}
+    for name in members:
+        parent = parent_by_name.get(name)
+        if parent in members:
+            neighbors[name].append(parent)
+            neighbors[parent].append(name)
+            
+    visited = set()
+    for name in sorted(members):
+        if name not in visited:
+            comp = []
+            stack = [name]
+            while stack:
+                curr = stack.pop()
+                if curr not in visited:
+                    visited.add(curr)
+                    comp.append(curr)
+                    stack.extend(neighbors[curr])
+            
+            if len(comp) >= MIN_CHARACTER_BONES:
+                comp_set = set(comp)
+                roots = [n for n in comp if parent_by_name.get(n) not in comp_set]
+                roots.sort()
+                root_bone = roots[0] if roots else sorted(comp)[0]
+                ordered = [bone["name"] for bone in bones if bone["name"] in comp_set]
+                char_data.append({
+                    "id": root_bone,
+                    "prefix": "",
+                    "bones": ordered,
+                    "connected": True
+                })
+            else:
+                strays.append(comp)
+
+    # 2b. Spatially cluster main components
+    # Handles constraint-based deform rigs where limbs are disconnected in the hierarchy
+    merged_char_data = []
+    if char_data:
+        spatial_adj = {i: [] for i in range(len(char_data))}
+        for i in range(len(char_data)):
+            c1 = _bone_centroid(char_data[i]["bones"], bones)
+            p1 = char_data[i]["prefix"]
+            for j in range(i + 1, len(char_data)):
+                c2 = _bone_centroid(char_data[j]["bones"], bones)
+                p2 = char_data[j]["prefix"]
+                # Only merge if within 2.5m AND prefixes do not conflict
+                if _distance(c1, c2) < 2.5 and (not p1 or not p2 or p1 == p2):
+                    spatial_adj[i].append(j)
+                    spatial_adj[j].append(i)
+                    
+        spatial_visited = set()
+        for i in range(len(char_data)):
+            if i not in spatial_visited:
+                cluster_indices = []
+                stack = [i]
+                while stack:
+                    curr = stack.pop()
+                    if curr not in spatial_visited:
+                        spatial_visited.add(curr)
+                        cluster_indices.append(curr)
+                        stack.extend(spatial_adj[curr])
+                
+                base_char = char_data[cluster_indices[0]]
+                for j in cluster_indices[1:]:
+                    base_char["bones"].extend(char_data[j]["bones"])
+                    base_char["connected"] = base_char["connected"] and char_data[j]["connected"]
+                    if char_data[j]["prefix"] and not base_char["prefix"]:
+                        base_char["prefix"] = char_data[j]["prefix"]
+                        base_char["id"] = char_data[j]["id"]
+                merged_char_data.append(base_char)
+        char_data = merged_char_data
+
+    # 3. Spatially merge strays into the nearest character, IF they don't bridge multiple characters
+    shared: List[str] = []
+    
+    bone_to_char_idx = {}
+    for idx, c in enumerate(char_data):
+        for b in c["bones"]:
+            bone_to_char_idx[b] = idx
+
+    for comp in strays:
+        if not char_data:
+            shared.extend(comp)
+            continue
+            
+        connected_char_indices = set()
+        for stray_bone in comp:
+            parent = parent_by_name.get(stray_bone)
+            if parent in bone_to_char_idx:
+                connected_char_indices.add(bone_to_char_idx[parent])
+            for b_name, b_parent in parent_by_name.items():
+                if b_parent == stray_bone and b_name in bone_to_char_idx:
+                    connected_char_indices.add(bone_to_char_idx[b_name])
+                    
+        if len(connected_char_indices) > 1:
+            shared.extend(comp)
+            continue
+
+        centroid = _bone_centroid(comp, bones)
+        best_idx = -1
+        best_dist = float('inf')
+        
+        if len(connected_char_indices) == 1:
+            best_idx = list(connected_char_indices)[0]
+            best_dist = 0.0
+        else:
+            for idx, char in enumerate(char_data):
+                char_centroid = _bone_centroid(char["bones"], bones)
+                dist = _distance(centroid, char_centroid)
+                if dist < best_dist:
+                    best_dist = dist
+                    best_idx = idx
+                
+        if best_dist <= 2.0 and best_idx != -1:
+            ordered_comp = [b["name"] for b in bones if b["name"] in comp]
+            char_data[best_idx]["bones"].extend(ordered_comp)
+        else:
+            shared.extend(comp)
+
+    characters = [
+        CharacterGroup(
+            character_id=c["id"],
+            prefix=c["prefix"],
+            bone_names=c["bones"],
+            connected=c["connected"]
+        ) for c in char_data
+    ]
     characters.sort(key=lambda group: group.character_id)
+    shared.sort()
     return characters, shared
 
 
@@ -179,17 +331,25 @@ def build_character_view(primary_data: dict, group: CharacterGroup, mesh_binding
     )
 
 
-def _mesh_owner_prefix(mesh: dict, known_prefixes: set) -> Optional[str]:
-    """Pick the character prefix that owns the majority of weighted vertices."""
+def _mesh_owner_character(mesh: dict, groups: List[CharacterGroup]) -> Optional[str]:
+    """Pick the character_id that owns the majority of weighted vertices."""
     weights: Dict[str, int] = {}
+    
+    bone_to_char = {}
+    for group in groups:
+        for bone_name in group.bone_names:
+            bone_to_char[bone_name] = group.character_id
+            
     per_group = mesh.get("vertex_group_stats", {}).get("per_group", [])
     for entry in per_group:
-        prefix = derive_character_prefix(entry["name"])
-        if prefix in known_prefixes:
-            weights[prefix] = weights.get(prefix, 0) + int(entry.get("weighted_vertex_count", 0))
+        bone_name = entry["name"]
+        char_id = bone_to_char.get(bone_name)
+        if char_id:
+            weights[char_id] = weights.get(char_id, 0) + int(entry.get("weighted_vertex_count", 0))
+            
     if not weights:
         return None
-    return max(sorted(weights), key=lambda prefix: weights[prefix])
+    return max(sorted(weights), key=lambda cid: weights[cid])
 
 
 def _strip_mesh_binding(mesh: dict, prefix: str) -> dict:
@@ -208,18 +368,21 @@ def assign_meshes_to_characters(
     source_armature_name: Optional[str],
 ) -> Tuple[Dict[str, dict], List[str]]:
     """Return {character_id: mesh_binding} and a list of unassignable mesh names."""
-    known = {group.prefix for group in groups}
+    id_to_prefix = {group.character_id: group.prefix for group in groups}
+    
     per_char: Dict[str, dict] = {
         group.character_id: {"armature_object_name": source_armature_name, "meshes": []}
         for group in groups
     }
     unassigned: List[str] = []
     for mesh in (mesh_binding or {}).get("meshes", []):
-        owner = _mesh_owner_prefix(mesh, known)
-        if owner is None:
+        owner_id = _mesh_owner_character(mesh, groups)
+        if owner_id is None:
             unassigned.append(mesh["mesh_name"])
             continue
-        per_char[owner]["meshes"].append(_strip_mesh_binding(mesh, owner))
+        
+        prefix = id_to_prefix[owner_id]
+        per_char[owner_id]["meshes"].append(_strip_mesh_binding(mesh, prefix))
     return per_char, sorted(unassigned)
 
 

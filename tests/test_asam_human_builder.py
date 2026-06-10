@@ -1089,7 +1089,7 @@ class AsamHumanBuilderTests(unittest.TestCase):
         # so no skin weight is lost (spine subdivisions, twist bones, baked-in hair).
         merges = {m["source"]: m["target"] for m in build_spec["weight_merges"]}
         core = set(CORE_TARGETS)
-        for src in ("DEF-spine.006", "DEF-spine.002", "DEF-forearm.L.001", "Hair_Front"):
+        for src in ("DEF-spine.002", "DEF-forearm.L.001", "Hair_Front"):
             self.assertIn(src, merges, "{0} weights must be consolidated".format(src))
             self.assertIn(merges[src], core, "{0} must merge into a core bone".format(src))
 
