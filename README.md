@@ -1,8 +1,8 @@
 ## open-jaywalker
 Rule-Based Pedestrian 3D Asset Pipeline for Traffic Simulations
 
-open-jaywalker takes arbitrary off-the-shelf humanoid rigs — any rigging
-convention (Rigify, 3ds Max Biped, Mixamo, …), single-character or crowd — and
+open-jaywalker takes arbitrary off-the-shelf humanoid rigs of any rigging
+convention (Rigify, 3ds Max Biped, Mixamo, …), single-character or crowd, and
 deterministically converts them into
 [ASAM OpenMATERIAL](https://asam-ev.github.io/OpenMATERIAL-3D/asamopenmaterial/latest/specification/07_geometry/object-human/human-index.html)-compliant
 humans: both the **rig** and the **skinned mesh**, correct and self-consistent.
@@ -15,7 +15,7 @@ the compliant rig and rebinds the mesh from that plan.
 ### Documentation
 
 Full design and reference docs live in the
-[project wiki](https://github.com/roboticrustacean/open-jaywalker/wiki) —
+[project wiki](https://github.com/roboticrustacean/open-jaywalker/wiki):
 see [Architecture](https://github.com/roboticrustacean/open-jaywalker/wiki/Architecture)
 (data flow, the three reports, extraction schema, add-on/build workflow) and
 [Skeleton Classification Rules](https://github.com/roboticrustacean/open-jaywalker/wiki/Skeleton-Classification-Rules)
@@ -51,44 +51,44 @@ the simplest way to run it interactively.
    sidebar and select the **Open Jaywalker** tab.
 
 > **Install the built zip, not the repo `addon/` folder.** The `addon/` sources
-> alone do not contain the bundled pipeline packages — those are assembled in only
+> alone do not contain the bundled pipeline packages: those are assembled in only
 > by `tools/build_addon.py` (and shipped in the released zip). Pointing Blender at
 > the repo `addon/` directory yields a non-functional add-on.
 
-#### Use it — the panel, button by button
+#### Use it: the panel, button by button
 
 The panel runs the pipeline top to bottom. A **Status** line at the top tracks
 progress: *Idle → Plan ready → Built*.
 
-1. **Run pipeline** — inspects the scene, classifies the skeleton against the 28
+1. **Run pipeline**: inspects the scene, classifies the skeleton against the 28
    ASAM core targets, and writes the plan. It deliberately stops here (a *build
    gate*) so you can review before anything is built.
 2. **Plan** summary (appears after running):
-   - **Primary rig** — the binding-decisive armature the classifier selected (the
+   - **Primary rig**: the binding-decisive armature the classifier selected (the
      one that actually skins the mesh).
-   - **Mapped: X/Y** — how many core targets were mapped directly (green check, or
-     a red warning when some are missing and will be synthesized).
-   - **Crowd: N characters** — for crowd assets, how many characters were
+   - **Mapped: X/Y** counts how many core targets were mapped directly (green
+     check, or a red warning when some are missing and will be synthesized).
+   - **Crowd: N characters** reports, for crowd assets, how many characters were
      decomposed.
-   - **Details** (expandable) — missing targets, review flags (e.g.
+   - **Details** (expandable): missing targets, review flags (e.g.
      `multiple_roots`, `side_conflict`), and, for crowds, the per-character list.
-3. **Export .blend / Export .glb** (and, for crowds, **Per-character export**) —
+3. **Export .blend / Export .glb** (and, for crowds, **Per-character export**):
    toggles that export automatically right after a build.
-4. **Build** — constructs the ASAM human(s): a `Grp_Root` container, the generated
+4. **Build**: constructs the ASAM human(s), a `Grp_Root` container, the generated
    28-target armature, and the rebound mesh, leaving the source rig untouched. For
    crowds it builds one human per character (fan-out).
 5. **Build Results** (after building):
-   - **Generated: Bones / Mesh** and **Source: Bones / Mesh** — visibility toggles
-     for before/after comparison and per-character isolation.
+   - **Generated: Bones / Mesh** and **Source: Bones / Mesh** are visibility
+     toggles for before/after comparison and per-character isolation.
    - **Succeeded / Failed** counts for crowds, with an expandable **Failed
      Details** list.
-6. **Export** — on-demand **.blend** / **.glb** buttons (plus **Per-character
+6. **Export**: on-demand **.blend** / **.glb** buttons (plus **Per-character
    export** for crowds) to write out the generated result.
-7. **Reports / Exports** — shows the output folder paths, with **Open reports
+7. **Reports / Exports**: shows the output folder paths, with **Open reports
    folder** / **Open exports folder** buttons and an editable export directory.
-8. **Reset** — clears the current plan/build state to start over.
-9. **Clean** — removes the generated collection(s) from the scene.
-10. **Inert Bone Details** (shown when applicable) — an expandable list of
+8. **Reset**: clears the current plan/build state to start over.
+9. **Clean**: removes the generated collection(s) from the scene.
+10. **Inert Bone Details** (shown when applicable): an expandable list of
     synthesized, unbound (inert) bones, surfaced transparently rather than hidden.
 
 ### Developer & Headless Workflows
@@ -182,7 +182,7 @@ This split workflow is useful when you want to:
 
 Pipeline outputs land in `output/<asset>/` at the repo root. Set the
 `OPEN_JAYWALKER_OUTPUT_ROOT` environment variable to redirect that root
-elsewhere — handy when scripting or running automated tests that should
+elsewhere: handy when scripting or running automated tests that should
 not touch the canonical location.
 
 #### Phase 3 Offline Classifier
