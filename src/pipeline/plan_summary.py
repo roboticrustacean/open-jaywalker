@@ -28,9 +28,16 @@ def summarize_plan(classifier_report: dict, build_plan: dict) -> dict:
     is_crowd, character_count.
     """
     total = len(CORE_TARGETS)
-    missing = list(classifier_report.get("missing_targets", []))
     characters = build_plan.get("characters") or []
     missing_by_target = _aggregate_missing_by_target(classifier_report.get("characters") or [])
+    if characters:
+        # Crowd: the top-level missing_targets describes the whole undecomposed
+        # armature analyzed as one body, which is meaningless here. Report against
+        # the per-character decomposition instead -- a target counts as missing if
+        # any character lacks it (so the headline matches the per-character build).
+        missing = [entry["target"] for entry in missing_by_target]
+    else:
+        missing = list(classifier_report.get("missing_targets", []))
     return {
         "missing_by_target": missing_by_target,
         "recommended_armature": classifier_report.get("recommended_primary_armature", ""),

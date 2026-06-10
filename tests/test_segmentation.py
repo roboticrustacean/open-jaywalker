@@ -37,6 +37,18 @@ class PrefixDerivationTests(unittest.TestCase):
         self.assertIsNone(derive_character_prefix("_rootJoint"))
         self.assertIsNone(derive_character_prefix("Pelvis"))
 
+    def test_whole_name_alpha_digit_is_not_a_character_prefix(self):
+        # Regression (Mixamo): an alpha-digit run that IS the entire name is an
+        # ordinary numbered bone (Spine2, fingers), not a per-character namespace.
+        # Treating it as a prefix removes it from the connectivity graph and
+        # fragments a single skeleton into bogus "characters".
+        self.assertIsNone(derive_character_prefix("Spine1"))
+        self.assertIsNone(derive_character_prefix("Spine2"))
+        self.assertIsNone(derive_character_prefix("mixamorig:Spine2"))
+        self.assertIsNone(derive_character_prefix("LeftHandMiddle1"))
+        # A genuine prefix still carries a role token after the index.
+        self.assertEqual(derive_character_prefix("Female000Spine2_017"), "Female000")
+
     def test_strip_prefix_exposes_role_token(self):
         self.assertEqual(strip_character_prefix("Female000Pelvis_093", "Female000"), "Pelvis")
         self.assertEqual(strip_character_prefix("Female000Spine0_01385", "Female000"), "Spine0")
@@ -122,6 +134,26 @@ class DetectCharactersTests(unittest.TestCase):
         groups, _ = detect_characters(bones)
         self.assertEqual(len(groups), 1)
         self.assertFalse(groups[0].connected)
+
+    def test_single_skeleton_with_numbered_bones_is_one_character(self):
+        # Regression (Mixamo remy_mixamo): a single, fully connected skeleton whose
+        # bones carry trailing digits (Spine1, Spine2, finger chains) must not be
+        # split into multiple "characters". The numbered bones previously broke the
+        # connectivity graph, severing Neck/Head from the spine.
+        bones = [
+            {"name": "mixamorig:Hips", "parent": None},
+            {"name": "mixamorig:Spine", "parent": "mixamorig:Hips"},
+            {"name": "mixamorig:Spine1", "parent": "mixamorig:Spine"},
+            {"name": "mixamorig:Spine2", "parent": "mixamorig:Spine1"},
+            {"name": "mixamorig:Neck", "parent": "mixamorig:Spine2"},
+            {"name": "mixamorig:Head", "parent": "mixamorig:Neck"},
+            {"name": "mixamorig:LeftHand", "parent": "mixamorig:Spine2"},
+            {"name": "mixamorig:LeftHandIndex1", "parent": "mixamorig:LeftHand"},
+            {"name": "mixamorig:LeftHandIndex2", "parent": "mixamorig:LeftHandIndex1"},
+        ]
+        groups, _ = detect_characters(bones)
+        self.assertEqual(len(groups), 1)
+        self.assertTrue(groups[0].connected)
 
 
 class BuildCharacterViewTests(unittest.TestCase):

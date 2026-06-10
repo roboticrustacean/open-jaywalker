@@ -26,9 +26,20 @@ def _strip_namespace(bone_name: str) -> str:
 
 
 def derive_character_prefix(bone_name: str) -> Optional[str]:
-    """Return the per-character prefix (e.g. 'Female000') or None if absent."""
-    match = _PREFIX_RE.match(_strip_namespace(bone_name))
-    return match.group(1) if match else None
+    """Return the per-character prefix (e.g. 'Female000') or None if absent.
+
+    A character prefix namespaces a whole character, so a role token must follow
+    it ('Female000' + 'Pelvis_093'). When the alpha-digit run is the *entire*
+    name -- e.g. 'Spine2', 'LeftHandMiddle1' on a Mixamo rig -- it is an ordinary
+    numbered bone, not a per-character namespace. Returning a prefix for those
+    would pull them out of the connectivity graph and fragment a single skeleton
+    into bogus characters, so we treat them as prefix-less (None).
+    """
+    stripped = _strip_namespace(bone_name)
+    match = _PREFIX_RE.match(stripped)
+    if not match or match.end() == len(stripped):
+        return None
+    return match.group(1)
 
 
 def strip_character_prefix(bone_name: str, prefix: str) -> str:

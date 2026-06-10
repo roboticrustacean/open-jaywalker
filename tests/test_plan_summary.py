@@ -53,6 +53,40 @@ class SummarizePlanTests(unittest.TestCase):
             [{"target": "Eye_Left", "count": 3}, {"target": "Lower_Spine", "count": 2}],
         )
 
+    def test_crowd_mapped_count_reflects_per_character_not_undecomposed_armature(self):
+        # Regression (1000idles): the headline "Mapped: X/28" for a crowd must come
+        # from the per-character decomposition, not from the top-level missing_targets
+        # (which is the whole undecomposed crowd armature analyzed as one body and is
+        # meaningless for a crowd). Each character here maps 22/28 (missing 6), so the
+        # summary must report 22 -- not 28 - 12 = 16 from the top-level list.
+        report = {
+            "recommended_primary_armature": "Object_4",
+            "missing_targets": [
+                "Lower_Spine", "Upper_Spine", "Eye_Left", "Eye_Right",
+                "Hand_Left", "Full_Thumb_Left", "Full_Fingers_Left", "Hand_Right",
+                "Full_Thumb_Right", "Full_Fingers_Right", "Foot_Left", "Foot_Right",
+            ],
+            "review_flags": [],
+            "characters": [
+                {
+                    "character_id": f"Female{i:03d}",
+                    "missing_targets": [
+                        "Eye_Left", "Eye_Right", "Full_Thumb_Left",
+                        "Full_Fingers_Left", "Full_Thumb_Right", "Full_Fingers_Right",
+                    ],
+                }
+                for i in range(3)
+            ],
+        }
+        plan = {"characters": [{"character_id": f"Female{i:03d}"} for i in range(3)]}
+        summary = summarize_plan(report, plan)
+        self.assertTrue(summary["is_crowd"])
+        self.assertEqual(summary["mapped"], 22)
+        self.assertEqual(sorted(summary["missing_targets"]), [
+            "Eye_Left", "Eye_Right", "Full_Fingers_Left",
+            "Full_Fingers_Right", "Full_Thumb_Left", "Full_Thumb_Right",
+        ])
+
     def test_crowd_summary_uses_character_count(self):
         report, _plan = self._load()
         crowd_plan = {"characters": [{"character_id": "c0"}, {"character_id": "c1"}]}
